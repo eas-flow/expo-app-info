@@ -118,3 +118,62 @@ describe('mapWithConcurrency', () => {
     expect(results).toEqual([]);
   });
 });
+
+describe('fetchAccountPlan', () => {
+  const planResponse = {
+    data: {
+      account: {
+        byId: {
+          id: 'acc-1',
+          subscription: {
+            id: 'sub-1',
+            planId: 'production',
+            name: 'Production',
+            status: 'active',
+            trialEnd: null,
+            concurrencies: { total: 2, ios: 1, android: 1 },
+          },
+          billingPeriod: { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },
+        },
+      },
+    },
+  };
+
+  it('returns the subscription and billing period', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchAccountPlan('acc-1')).resolves.toEqual({
+      subscription: planResponse.data.account.byId.subscription,
+      billingPeriod: planResponse.data.account.byId.billingPeriod,
+    });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ accountId: 'acc-1' });
+  });
+
+  it('returns nulls when the account exposes no subscription', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { account: { byId: { id: 'acc-1', subscription: null, billingPeriod: null } } },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchAccountPlan('acc-1')).resolves.toEqual({
+      subscription: null,
+      billingPeriod: null,
+    });
+  });
+
+  it('throws ApiError when the account lacks billing permission', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ errors: [{ message: 'Entity not authorized: Account[acc-1]' }] })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchAccountPlan('acc-1')).rejects.toThrow(ApiError);
+  });
+});

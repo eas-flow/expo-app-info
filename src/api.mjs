@@ -26,6 +26,19 @@ export const Q_BUILDS = `query LatestBuilds($appId: String!) {
   } }
 }`;
 
+// Billing-scoped fields. A token without billing permission on the account
+// gets a GraphQL error here rather than data, so the CLI queries this
+// separately and degrades to "-" instead of failing the whole run.
+export const Q_ACCOUNT_PLAN = `query AccountPlan($accountId: String!) {
+  account { byId(accountId: $accountId) { id
+    subscription {
+      id planId name status trialEnd
+      concurrencies { total ios android }
+    }
+    billingPeriod { start end }
+  } }
+}`;
+
 /**
  * Creates a client bound to one API URL / auth header set. Keeping this a
  * factory (rather than module-scoped state) means tests can spin up an
@@ -72,7 +85,20 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     return [...app.ios, ...app.android];
   }
 
-  return { gql, fetchAccounts, fetchApps, fetchLatestBuilds };
+  /**
+   * Subscription + current billing period for one account. Throws like every
+   * other method here; the caller decides whether a missing plan is fatal
+   * (it isn't — see src/cli.mjs, which renders "-" and keeps going).
+   */
+  async function fetchAccountPlan(accountId) {
+    const account = (await gql(Q_ACCOUNT_PLAN, { accountId })).account.byId;
+    return {
+      subscription: account?.subscription ?? null,
+      billingPeriod: account?.billingPeriod ?? null,
+    };
+  }
+
+  return { gql, fetchAccounts, fetchApps, fetchLatestBuilds, fetchAccountPlan };
 }
 
 /** Run `task` over `items` with a bounded number of in-flight requests. */
