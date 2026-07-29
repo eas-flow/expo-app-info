@@ -110,8 +110,27 @@ const usageEntryNoPlan = {
 describe('toUsageDisplayRows', () => {
   it('maps an account with a plan to display strings, summing builds across platforms', () => {
     expect(toUsageDisplayRows([usageEntry])).toEqual([
-      ['myorg', 'Production', 'active', '3', '34', '2026-07-01 → 2026-08-01'],
+      ['myorg', 'Production', 'active', '3', '34', '2026-07-01 → 2026-07-31'],
     ]);
+  });
+
+  it("shows the last inclusive day of the period, not the API's exclusive end", () => {
+    // billingPeriod.end from the API is the instant the *next* period
+    // starts (2026-08-01T00:00:00Z for a July period) — the table should
+    // read "→ 2026-07-31", not "→ 2026-08-01".
+    const row = toUsageDisplayRows([usageEntry])[0];
+    expect(row[5]).toBe('2026-07-01 → 2026-07-31');
+  });
+
+  it('handles a period end that is not exactly midnight', () => {
+    const row = toUsageDisplayRows([
+      {
+        ...usageEntry,
+        periodStart: '2026-07-15T09:00:00.000Z',
+        periodEnd: '2026-08-15T09:00:00.000Z',
+      },
+    ])[0];
+    expect(row[5]).toBe('2026-07-15 → 2026-08-14');
   });
 
   it('shows "-" for every unavailable plan field', () => {

@@ -355,7 +355,7 @@ describe('run --usage', () => {
     expect(output).toContain('PLAN');
     expect(output).toContain('Production');
     expect(output).toContain('BUILDS');
-    expect(output).toContain('2026-07-01 → 2026-08-01');
+    expect(output).toContain('2026-07-01 → 2026-07-31');
     expect(output).not.toContain('SLUG');
   });
 

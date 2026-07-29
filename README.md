@@ -67,13 +67,16 @@ npx expo-app-info --usage
 ┌─────────┬────────────┬────────┬─────────────┬────────┬─────────────────────────┐
 │ ACCOUNT │ PLAN       │ STATUS │ CONCURRENCY │ BUILDS │ PERIOD                  │
 ├─────────┼────────────┼────────┼─────────────┼────────┼─────────────────────────┤
-│ myorg   │ Production │ active │ 3           │ 34     │ 2026-07-01 → 2026-08-01 │
+│ myorg   │ Production │ active │ 3           │ 34     │ 2026-07-01 → 2026-07-31 │
 └─────────┴────────────┴────────┴─────────────┴────────┴─────────────────────────┘
 ```
 
 `BUILDS` is the sum of both platforms for the current billing period; pass
 `--platform ios` or `--platform android` to see just that platform's count
-(and its own concurrency) instead.
+(and its own concurrency) instead. `PERIOD` shows the last calendar day the
+period actually covers — the API's own `billingPeriod.end` is exclusive (the
+instant the *next* period starts), which would otherwise print as
+"2026-07-01 → 2026-08-01" for a period that is entirely July.
 
 ## Authentication
 
@@ -105,14 +108,14 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 With `--usage`, one row per account instead:
 
-| Column        | Source                                                                  |
-| ------------- | ------------------------------------------------------------------------ |
-| `ACCOUNT`     | Accounts the authenticated actor belongs to                              |
-| `PLAN`        | `subscription.name` (e.g. Free / Production / Enterprise)                |
-| `STATUS`      | Subscription status as Expo reports it (`active`, `trialing`, …)         |
-| `CONCURRENCY` | Build concurrency included in the plan; per platform with `--platform`   |
-| `BUILDS`      | Builds run this billing period, from EAS's own usage metrics (not counted locally); summed across platforms, or per platform with `--platform` |
-| `PERIOD`      | Current EAS **billing** period — not the calendar month                  |
+| Column        | Source                                                                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`     | Accounts the authenticated actor belongs to                                                                                                                          |
+| `PLAN`        | `subscription.name` (e.g. Free / Production / Enterprise)                                                                                                            |
+| `STATUS`      | Subscription status as Expo reports it (`active`, `trialing`, …)                                                                                                     |
+| `CONCURRENCY` | Build concurrency included in the plan; per platform with `--platform`                                                                                               |
+| `BUILDS`      | Builds run this billing period, from EAS's own usage metrics (not counted locally); summed across platforms, or per platform with `--platform`                       |
+| `PERIOD`      | Current EAS **billing** period — not the calendar month. The table shows the last inclusive day; `--json`/`--csv` `periodEnd` keeps the API's raw (exclusive) value. |
 
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
