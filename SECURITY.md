@@ -41,6 +41,26 @@ any of them should be reported as a security issue:
 > compatibility guarantee. Do not point it at an untrusted host — doing so sends
 > your token there.
 
+## Dependencies
+
+`expo-app-info` ships with **zero runtime dependencies** — the published
+package (`bin/`, `src/`) contains only first-party code, so there is no
+transitive supply chain to audit at install time.
+
+Development-only tooling (Vitest, Biome, Changesets) is listed under
+`devDependencies` and is never included in the published tarball — see
+`files` in `package.json` and `npm pack --dry-run` to verify. Dependabot
+(`.github/dependabot.yml`) keeps these, and the GitHub Actions used in CI,
+up to date.
+
+## CI secrets
+
+The only secret used by CI is `EXPO_TOKEN`, stored as a repository secret
+and used exclusively by the weekly API canary workflow
+(`.github/workflows/api-canary.yml`) to smoke-test against the real EAS API.
+It is never printed in logs (see "How this CLI handles your access token"
+above) and is not available to workflows triggered from forks.
+
 ## Scope
 
 Out of scope: vulnerabilities in the EAS API itself, and issues that require an
