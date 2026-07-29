@@ -37,4 +37,4 @@ jobs:
 
       # No NODE_AUTH_TOKEN: publish authenticates via OIDC through the
       # Trusted Publisher configuration on the npm package page (see issue #2).
-      - run: npm publish --access public
+      - run: npm publish --provenance --access public
