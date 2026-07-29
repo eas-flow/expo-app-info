@@ -25,6 +25,40 @@ describe('gql (via createApiClient)', () => {
     await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 500/);
   });
 
+  it('surfaces the GraphQL error message when a 400 response has one, instead of a bare status', async () => {
+    // The EAS API returns validation errors (e.g. a missing required
+    // argument) as HTTP 400 with a normal { errors: [...] } GraphQL body,
+    // not just as a transport-level failure. The real message must win.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse(
+          { errors: [{ message: '"date": Field is required' }] },
+          { status: 400, ok: false }
+        )
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).rejects.toThrow(/Field is required/);
+  });
+
+  it('falls back to a bare HTTP status when a non-2xx body has no errors array', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 400, ok: false }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 400/);
+  });
+
+  it('throws ApiError when a non-2xx response body is not valid JSON', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 502,
+      ok: false,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON');
+      },
+    });
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 502/);
+  });
+
   it('throws ApiError when the response has a GraphQL errors array', async () => {
     const fetchImpl = vi
       .fn()
@@ -120,6 +154,8 @@ describe('mapWithConcurrency', () => {
 });
 
 describe('fetchAccountPlan', () => {
+  const NOW = new Date('2026-07-15T00:00:00.000Z');
+
   const planResponse = {
     data: {
       account: {
@@ -134,35 +170,82 @@ describe('fetchAccountPlan', () => {
             concurrencies: { total: 2, ios: 1, android: 1 },
           },
           billingPeriod: { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },
+          usageMetrics: {
+            byBillingPeriod: {
+              planMetrics: [
+                {
+                  serviceMetric: 'BUILDS',
+                  metricType: 'BUILD',
+                  value: 34,
+                  platformBreakdown: { ios: { value: 23 }, android: { value: 11 } },
+                },
+                {
+                  serviceMetric: 'LOCAL_BUILDS',
+                  metricType: 'BUILD',
+                  value: 2,
+                  platformBreakdown: { ios: { value: 1 }, android: { value: 1 } },
+                },
+              ],
+            },
+          },
         },
       },
     },
   };
 
-  it('returns the subscription and billing period', async () => {
+  it('returns the subscription, billing period, and per-platform build counts', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchAccountPlan('acc-1')).resolves.toEqual({
+    await expect(client.fetchAccountPlan('acc-1', { now: NOW })).resolves.toEqual({
       subscription: planResponse.data.account.byId.subscription,
       billingPeriod: planResponse.data.account.byId.billingPeriod,
+      buildsByPlatform: { ios: 23, android: 11 },
     });
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(body.variables).toEqual({ accountId: 'acc-1' });
+    expect(body.variables).toEqual({ accountId: 'acc-1', now: NOW.toISOString() });
   });
 
-  it('returns nulls when the account exposes no subscription', async () => {
+  it('defaults `now` to the current time when not given', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAccountPlan('acc-1');
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(() => new Date(body.variables.now).toISOString()).not.toThrow();
+  });
+
+  it('only reads the BUILDS metric, ignoring LOCAL_BUILDS and other services', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const result = await client.fetchAccountPlan('acc-1', { now: NOW });
+    expect(result.buildsByPlatform).toEqual({ ios: 23, android: 11 });
+  });
+
+  it('returns nulls when the account exposes no subscription or usage metrics', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
-        data: { account: { byId: { id: 'acc-1', subscription: null, billingPeriod: null } } },
+        data: {
+          account: {
+            byId: {
+              id: 'acc-1',
+              subscription: null,
+              billingPeriod: null,
+              usageMetrics: { byBillingPeriod: { planMetrics: [] } },
+            },
+          },
+        },
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchAccountPlan('acc-1')).resolves.toEqual({
+    await expect(client.fetchAccountPlan('acc-1', { now: NOW })).resolves.toEqual({
       subscription: null,
       billingPeriod: null,
+      buildsByPlatform: null,
     });
   });
 
@@ -174,6 +257,6 @@ describe('fetchAccountPlan', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchAccountPlan('acc-1')).rejects.toThrow(ApiError);
+    await expect(client.fetchAccountPlan('acc-1', { now: NOW })).rejects.toThrow(ApiError);
   });
 });

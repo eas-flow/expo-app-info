@@ -29,13 +29,33 @@ export const Q_BUILDS = `query LatestBuilds($appId: String!) {
 // Billing-scoped fields. A token without billing permission on the account
 // gets a GraphQL error here rather than data, so the CLI queries this
 // separately and degrades to "-" instead of failing the whole run.
-export const Q_ACCOUNT_PLAN = `query AccountPlan($accountId: String!) {
+//
+// `billingPeriod` takes a required `date` and returns whichever billing
+// period contains it — passing "now" gets the current one. The same date is
+// reused for `byBillingPeriod` so both fields describe the same window.
+//
+// Per-platform build counts live under
+// `usageMetrics.byBillingPeriod(...).planMetrics[].platformBreakdown`, found
+// by walking `EstimatedUsage` in the schema — NOT via `filterParams` on
+// `metricsForServiceMetric`, which accepts (and silently ignores) any key.
+// See scripts/probe-usage.mjs and issue #15 for how this was confirmed.
+export const Q_ACCOUNT_PLAN = `query AccountPlan($accountId: String!, $now: DateTime!) {
   account { byId(accountId: $accountId) { id
     subscription {
       id planId name status trialEnd
       concurrencies { total ios android }
     }
-    billingPeriod { start end }
+    billingPeriod(date: $now) { start end }
+    usageMetrics {
+      byBillingPeriod(date: $now, service: BUILDS) {
+        planMetrics {
+          serviceMetric
+          metricType
+          value
+          platformBreakdown { ios { value } android { value } }
+        }
+      }
+    }
   } }
 }`;
 
@@ -55,12 +75,24 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     if (res.status === 401 || res.status === 403) {
       throw new ApiError('Authentication failed (401/403). The token or session may have expired.');
     }
-    if (!res.ok) throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
 
-    const json = await res.json();
+    // This API (like many GraphQL servers) returns a non-2xx status — 400 in
+    // particular — for query validation errors, not only for transport
+    // failures. Read the body before giving up on a non-2xx response so
+    // `errors[].message` (the actually useful part) isn't discarded in favor
+    // of a bare status code.
+    let json;
+    try {
+      json = await res.json();
+    } catch {
+      throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
+    }
+
     if (json.errors?.length) {
       throw new ApiError(`GraphQL error: ${json.errors.map((e) => e.message).join(', ')}`);
     }
+    if (!res.ok) throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
+
     return json.data;
   }
 
@@ -86,15 +118,30 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
   }
 
   /**
-   * Subscription + current billing period for one account. Throws like every
-   * other method here; the caller decides whether a missing plan is fatal
-   * (it isn't — see src/cli.mjs, which renders "-" and keeps going).
+   * Subscription, current billing period, and this-period build counts per
+   * platform, for one account. Throws like every other method here; the
+   * caller decides whether a missing plan is fatal (it isn't — see
+   * src/cli.mjs, which renders "-" and keeps going).
+   *
+   * `now` is a parameter (default `new Date()`) so callers can pin the
+   * billing-period lookup to a fixed instant in tests.
    */
-  async function fetchAccountPlan(accountId) {
-    const account = (await gql(Q_ACCOUNT_PLAN, { accountId })).account.byId;
+  async function fetchAccountPlan(accountId, { now = new Date() } = {}) {
+    const account = (await gql(Q_ACCOUNT_PLAN, { accountId, now: now.toISOString() })).account.byId;
+
+    const buildMetric = account?.usageMetrics?.byBillingPeriod?.planMetrics?.find(
+      (m) => m.serviceMetric === 'BUILDS'
+    );
+
     return {
       subscription: account?.subscription ?? null,
       billingPeriod: account?.billingPeriod ?? null,
+      buildsByPlatform: buildMetric?.platformBreakdown
+        ? {
+            ios: buildMetric.platformBreakdown.ios?.value ?? null,
+            android: buildMetric.platformBreakdown.android?.value ?? null,
+          }
+        : null,
     };
   }
 
