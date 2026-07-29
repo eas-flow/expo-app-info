@@ -28,7 +28,7 @@ describe('run', () => {
 
   it('prints the package version for --version', async () => {
     await run(['--version']);
-    expect(logSpy).toHaveBeenCalledWith('0.1.0');
+    expect(logSpy).toHaveBeenCalledWith('0.2.0');
   });
 
   it('rejects with CliError for an unknown option', async () => {
