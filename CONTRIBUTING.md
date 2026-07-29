@@ -61,16 +61,17 @@ the PR template's Verification checklist.
 
 ## Releasing (maintainers)
 
-This repo uses [Changesets](https://github.com/changesets/changesets) to
-track version bumps and generate `CHANGELOG.md`:
+This repo uses [Changesets](https://github.com/changesets/changesets) for
+version bumping (changelog generation is disabled — GitHub Releases are the
+source of truth for release notes, see `.github/RELEASE_TEMPLATE.md`):
 
 ```bash
 npx changeset          # describe your change, pick a bump type
 ```
 
 Add a changeset in the same PR as the change it describes. When it's time to
-release, run `npx changeset version` to bump `package.json` and update
-`CHANGELOG.md`, commit that, merge to `main`, then tag and push:
+release, run `npx changeset version` to bump `package.json`, commit that,
+merge to `main`, then tag and push:
 
 ```bash
 git tag vX.Y.Z && git push origin vX.Y.Z
