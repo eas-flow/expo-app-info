@@ -105,14 +105,14 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 With `--usage`, one row per account instead:
 
-| Column        | Source                                                                  |
-| ------------- | ------------------------------------------------------------------------ |
-| `ACCOUNT`     | Accounts the authenticated actor belongs to                              |
-| `PLAN`        | `subscription.name` (e.g. Free / Production / Enterprise)                |
-| `STATUS`      | Subscription status as Expo reports it (`active`, `trialing`, …)         |
-| `CONCURRENCY` | Build concurrency included in the plan; per platform with `--platform`   |
+| Column        | Source                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`     | Accounts the authenticated actor belongs to                                                                                                    |
+| `PLAN`        | `subscription.name` (e.g. Free / Production / Enterprise)                                                                                      |
+| `STATUS`      | Subscription status as Expo reports it (`active`, `trialing`, …)                                                                               |
+| `CONCURRENCY` | Build concurrency included in the plan; per platform with `--platform`                                                                         |
 | `BUILDS`      | Builds run this billing period, from EAS's own usage metrics (not counted locally); summed across platforms, or per platform with `--platform` |
-| `PERIOD`      | Current EAS **billing** period — not the calendar month                  |
+| `PERIOD`      | Current EAS **billing** period — not the calendar month                                                                                        |
 
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
