@@ -1,0 +1,85 @@
+name: Bug report
+description: Report something that isn't working as expected
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill out the sections
+        below as completely as you can — this CLI talks to an **unofficial,
+        unversioned** EAS API, so reproduction details matter a lot.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including the exact command you ran.
+      placeholder: |
+        Ran `npx expo-app-info` and got ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: cli-version
+    attributes:
+      label: expo-app-info version
+      description: Output of `npx expo-app-info --version`
+      placeholder: "0.1.1"
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Output of `node --version`
+      placeholder: "v22.x.x"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: token-type
+    attributes:
+      label: EXPO_TOKEN type
+      description: >
+        A robot token can only see the account that issued it. If you're only
+        seeing one account when you expect more, that is very likely the
+        cause — see the README's "On robot tokens" note before filing.
+      options:
+        - Personal access token
+        - Robot token
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: >
+        Paste the full terminal output. **Do not paste your EXPO_TOKEN** — the
+        CLI never prints it, but double-check before pasting.
+      render: shell
+    validations:
+      required: false

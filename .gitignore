@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Package artifacts
+*.tgz
+
+# Test / coverage output
+coverage/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp

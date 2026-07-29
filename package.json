@@ -1,0 +1,47 @@
+{
+  "name": "expo-app-info",
+  "version": "0.1.0",
+  "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
+  "keywords": [
+    "expo",
+    "eas",
+    "eas-cli",
+    "react-native",
+    "cli",
+    "npx",
+    "version",
+    "app-version",
+    "build",
+    "build-number",
+    "monorepo",
+    "devtools"
+  ],
+  "license": "MIT",
+  "author": "it0 (https://github.com/eas-flow/expo-app-info)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eas-flow/expo-app-info.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eas-flow/expo-app-info/issues"
+  },
+  "homepage": "https://github.com/eas-flow/expo-app-info#readme",
+  "type": "module",
+  "bin": {
+    "expo-app-info": "bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/cli.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
