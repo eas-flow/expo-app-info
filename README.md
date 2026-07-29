@@ -49,6 +49,14 @@ npm install -g expo-app-info
 expo-app-info
 ```
 
+Filter to one account or platform, or switch the output format for scripts:
+
+```bash
+npx expo-app-info --account myorg --platform ios
+npx expo-app-info --json  > apps.json
+npx expo-app-info --csv   > apps.csv
+```
+
 ## Authentication
 
 A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
@@ -77,6 +85,44 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
+## Filtering
+
+- `--account <name>` — only this account (exact match, case-insensitive against the `ACCOUNT` column). Apps in other accounts are never fetched.
+- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform.
+
+## Machine-readable output (`--json` / `--csv`)
+
+Both emit one entry per row shown in the table, with raw values instead of display strings — `null` (JSON) / an empty cell (CSV) where the table shows `-`, and a full ISO 8601 timestamp (`lastBuildAt`) instead of a relative date:
+
+```bash
+$ npx expo-app-info --json
+[
+  {
+    "account": "myorg",
+    "app": "Storefront",
+    "slug": "storefront",
+    "platform": "ios",
+    "version": "3.2.1",
+    "build": "41",
+    "lastBuildAt": "2026-07-26T09:12:00.000Z"
+  }
+]
+```
+
+```bash
+$ npx expo-app-info --csv
+account,app,slug,platform,version,build,lastBuildAt
+myorg,Storefront,storefront,ios,3.2.1,41,2026-07-26T09:12:00.000Z
+```
+
+`--json` and `--csv` are mutually exclusive, and both can be combined with `--account` / `--platform`.
+
+## Output stability
+
+The default table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release.
+
+`--json` and `--csv` are for scripts and follow semver: existing fields are never renamed or removed, and their meaning never changes, without a major version bump. New fields may be added in a minor release; scripts should ignore fields they don't recognize.
+
 ## How it works
 
 Three GraphQL queries against `https://api.expo.dev/graphql`:
@@ -89,8 +135,8 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
 ## Roadmap
 
-- [ ] `--json` / `--csv` output for CI and spreadsheets
-- [ ] `--account` / `--platform` filters
+- [x] `--json` / `--csv` output for CI and spreadsheets
+- [x] `--account` / `--platform` filters
 - [ ] Diff against local `app.json` to surface version drift between source and shipped builds
 - [ ] Show the latest submitted store version alongside the build version
 
@@ -105,6 +151,10 @@ The EAS GraphQL API is **not officially documented or versioned**. Field names w
 The `EXPO_TOKEN` is never read from `argv`, never written to disk, and never
 printed. See [SECURITY.md](./SECURITY.md) for the full policy and for how to
 report a vulnerability privately.
+
+## Contributing
+
+Bug reports and PRs are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, test/lint commands, and release process. This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md).
 
 ## License
 
