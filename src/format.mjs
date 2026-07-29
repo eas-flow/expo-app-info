@@ -15,6 +15,8 @@ export const USAGE_FIELDS = [
   'concurrencyTotal',
   'concurrencyIos',
   'concurrencyAndroid',
+  'buildsIos',
+  'buildsAndroid',
   'periodStart',
   'periodEnd',
 ];
@@ -34,8 +36,10 @@ export function toDisplayRows(entries, { now } = {}) {
 
 /**
  * Usage table rows: display strings, "-" for null/missing, dates as YYYY-MM-DD.
- * With `platform` set, the concurrency column reports that platform's own
- * concurrency instead of the account total.
+ * With `platform` set, CONCURRENCY and BUILDS report that platform's own
+ * number. Without it, CONCURRENCY is the account-level total (not a sum —
+ * that's what EAS enforces) and BUILDS is the sum of both platforms' counts
+ * for the period.
  */
 export function toUsageDisplayRows(entries, { platform = null } = {}) {
   const concurrencyField =
@@ -52,8 +56,17 @@ export function toUsageDisplayRows(entries, { platform = null } = {}) {
     e[concurrencyField] === null || e[concurrencyField] === undefined
       ? '-'
       : String(e[concurrencyField]),
+    buildsCell(e, platform),
     e.periodStart && e.periodEnd ? `${isoDate(e.periodStart)} → ${isoDate(e.periodEnd)}` : '-',
   ]);
+}
+
+function buildsCell(entry, platform) {
+  const { buildsIos, buildsAndroid } = entry;
+  if (buildsIos === null || buildsIos === undefined) return '-';
+  if (platform === 'ios') return String(buildsIos);
+  if (platform === 'android') return String(buildsAndroid);
+  return String(buildsIos + buildsAndroid);
 }
 
 /** Header for the concurrency column, which depends on the --platform filter. */
@@ -61,6 +74,13 @@ export function usageConcurrencyHeader(platform = null) {
   if (platform === 'ios') return 'CONCURRENCY (IOS)';
   if (platform === 'android') return 'CONCURRENCY (ANDROID)';
   return 'CONCURRENCY';
+}
+
+/** Header for the builds column, which depends on the --platform filter. */
+export function usageBuildsHeader(platform = null) {
+  if (platform === 'ios') return 'BUILDS (IOS)';
+  if (platform === 'android') return 'BUILDS (ANDROID)';
+  return 'BUILDS';
 }
 
 /** ISO 8601 timestamp → YYYY-MM-DD, for the human table only. */

@@ -10,6 +10,7 @@ import {
   toDisplayRows,
   toUsageDisplayRows,
   USAGE_FIELDS,
+  usageBuildsHeader,
   usageConcurrencyHeader,
 } from './format.mjs';
 import { dim, renderTable } from './render.mjs';
@@ -47,10 +48,10 @@ export const HELP = `
     local app.json. Apps that have never been built show "-" in the table (and
     null in --json/--csv).
 
-    --usage prints one row per account (plan, build concurrency, billing
-    period) instead of one row per app. Plan data is billing-scoped: a token
-    without billing permission on an account shows "-" there rather than
-    failing the run.
+    --usage prints one row per account (plan, build concurrency, build
+    counts per platform for the current billing period) instead of one row
+    per app. Plan data is billing-scoped: a token without billing permission
+    on an account shows "-" there rather than failing the run.
 `;
 
 export function parseArgs(argv) {
@@ -240,7 +241,8 @@ export async function run(argv = process.argv.slice(2)) {
 }
 
 /**
- * `--usage`: one row per account (plan, build concurrency, billing period).
+ * `--usage`: one row per account (plan, build concurrency, build counts per
+ * platform, billing period).
  *
  * Plan fields are billing-scoped, so a token without billing permission on an
  * account gets a GraphQL error for that account only. That is not fatal: the
@@ -264,6 +266,7 @@ async function runUsage(client, accounts, opts) {
 
     const subscription = plan?.subscription ?? null;
     const period = plan?.billingPeriod ?? null;
+    const builds = plan?.buildsByPlatform ?? null;
 
     entries.push({
       account: account.name,
@@ -273,6 +276,8 @@ async function runUsage(client, accounts, opts) {
       concurrencyTotal: subscription?.concurrencies?.total ?? null,
       concurrencyIos: subscription?.concurrencies?.ios ?? null,
       concurrencyAndroid: subscription?.concurrencies?.android ?? null,
+      buildsIos: builds?.ios ?? null,
+      buildsAndroid: builds?.android ?? null,
       periodStart: period?.start ?? null,
       periodEnd: period?.end ?? null,
     });
@@ -295,9 +300,20 @@ async function runUsage(client, accounts, opts) {
 
   console.log(
     renderTable(
-      ['ACCOUNT', 'PLAN', 'STATUS', usageConcurrencyHeader(opts.platform), 'PERIOD'],
+      [
+        'ACCOUNT',
+        'PLAN',
+        'STATUS',
+        usageConcurrencyHeader(opts.platform),
+        usageBuildsHeader(opts.platform),
+        'PERIOD',
+      ],
       toUsageDisplayRows(entries, { platform: opts.platform })
     )
   );
-  console.log(dim(`\n  ${entries.length} account(s). PERIOD = current EAS billing period.`));
+  console.log(
+    dim(
+      `\n  ${entries.length} account(s). BUILDS/PERIOD = this account's current EAS billing period.`
+    )
+  );
 }

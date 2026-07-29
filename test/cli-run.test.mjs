@@ -310,6 +310,18 @@ describe('run --usage', () => {
             concurrencies: { total: 3, ios: 2, android: 1 },
           },
           billingPeriod: { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },
+          usageMetrics: {
+            byBillingPeriod: {
+              planMetrics: [
+                {
+                  serviceMetric: 'BUILDS',
+                  metricType: 'BUILD',
+                  value: 34,
+                  platformBreakdown: { ios: { value: 23 }, android: { value: 11 } },
+                },
+              ],
+            },
+          },
         },
       },
     },
@@ -342,6 +354,7 @@ describe('run --usage', () => {
     const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
     expect(output).toContain('PLAN');
     expect(output).toContain('Production');
+    expect(output).toContain('BUILDS');
     expect(output).toContain('2026-07-01 → 2026-08-01');
     expect(output).not.toContain('SLUG');
   });
@@ -366,6 +379,8 @@ describe('run --usage', () => {
         concurrencyTotal: 3,
         concurrencyIos: 2,
         concurrencyAndroid: 1,
+        buildsIos: 23,
+        buildsAndroid: 11,
         periodStart: '2026-07-01T00:00:00.000Z',
         periodEnd: '2026-08-01T00:00:00.000Z',
       },
@@ -384,7 +399,10 @@ describe('run --usage', () => {
 
     const csv = logSpy.mock.calls[0][0];
     expect(csv.split('\n')[0]).toBe(
-      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,periodStart,periodEnd'
+      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,buildsIos,buildsAndroid,periodStart,periodEnd'
+    );
+    expect(csv.split('\n')[1]).toBe(
+      'myorg,Production,production,active,3,2,1,23,11,2026-07-01T00:00:00.000Z,2026-08-01T00:00:00.000Z'
     );
   });
 
@@ -410,6 +428,8 @@ describe('run --usage', () => {
         concurrencyTotal: null,
         concurrencyIos: null,
         concurrencyAndroid: null,
+        buildsIos: null,
+        buildsAndroid: null,
         periodStart: null,
         periodEnd: null,
       },
@@ -429,5 +449,21 @@ describe('run --usage', () => {
 
     const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
     expect(output).toContain('CONCURRENCY (IOS)');
+    expect(output).toContain('BUILDS (IOS)');
+  });
+
+  it('sums both platforms into BUILDS when --platform is not set', async () => {
+    const responses = [accountsResponse, planResponse];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage']);
+
+    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    // ios: 23 + android: 11 = 34
+    expect(output).toContain('34');
   });
 });
