@@ -106,6 +106,10 @@ The `EXPO_TOKEN` is never read from `argv`, never written to disk, and never
 printed. See [SECURITY.md](./SECURITY.md) for the full policy and for how to
 report a vulnerability privately.
 
+## Contributing
+
+Bug reports and PRs are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, test/lint commands, and release process. This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md).
+
 ## License
 
 MIT
