@@ -28,6 +28,13 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+      # Separate step so a break in the billing-scoped queries is
+      # distinguishable from a break in the app/build queries above.
+      - name: Run --usage against the live EAS API
+        run: node bin/cli.mjs --usage
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: File an issue on failure
         if: failure()
         uses: actions/github-script@v9

@@ -286,3 +286,184 @@ describe('run', () => {
     expect(logSpy).toHaveBeenCalledWith('No apps found.');
   });
 });
+
+describe('run --usage', () => {
+  let logSpy;
+  let errorSpy;
+  let originalToken;
+
+  const accountsResponse = jsonResponse({
+    data: { meActor: { accounts: [{ id: 'acc-1', name: 'myorg' }] } },
+  });
+
+  const planResponse = jsonResponse({
+    data: {
+      account: {
+        byId: {
+          id: 'acc-1',
+          subscription: {
+            id: 'sub-1',
+            planId: 'production',
+            name: 'Production',
+            status: 'active',
+            trialEnd: null,
+            concurrencies: { total: 3, ios: 2, android: 1 },
+          },
+          billingPeriod: { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },
+          usageMetrics: {
+            byBillingPeriod: {
+              planMetrics: [
+                {
+                  serviceMetric: 'BUILDS',
+                  metricType: 'BUILD',
+                  value: 34,
+                  platformBreakdown: { ios: { value: 23 }, android: { value: 11 } },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  });
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    originalToken = process.env.EXPO_TOKEN;
+    process.env.EXPO_TOKEN = 'test-token';
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+    vi.unstubAllGlobals();
+    if (originalToken === undefined) delete process.env.EXPO_TOKEN;
+    else process.env.EXPO_TOKEN = originalToken;
+  });
+
+  it('prints one row per account and never fetches apps or builds', async () => {
+    const responses = [accountsResponse, planResponse];
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--usage']);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(output).toContain('PLAN');
+    expect(output).toContain('Production');
+    expect(output).toContain('BUILDS');
+    expect(output).toContain('2026-07-01 → 2026-07-31');
+    expect(output).not.toContain('SLUG');
+  });
+
+  it('emits the usage fields for --json', async () => {
+    const responses = [accountsResponse, planResponse];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage', '--json']);
+
+    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
+    expect(parsed).toEqual([
+      {
+        account: 'myorg',
+        plan: 'Production',
+        planId: 'production',
+        status: 'active',
+        concurrencyTotal: 3,
+        concurrencyIos: 2,
+        concurrencyAndroid: 1,
+        buildsIos: 23,
+        buildsAndroid: 11,
+        periodStart: '2026-07-01T00:00:00.000Z',
+        periodEnd: '2026-08-01T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('emits the usage header for --csv', async () => {
+    const responses = [accountsResponse, planResponse];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage', '--csv']);
+
+    const csv = logSpy.mock.calls[0][0];
+    expect(csv.split('\n')[0]).toBe(
+      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,buildsIos,buildsAndroid,periodStart,periodEnd'
+    );
+    expect(csv.split('\n')[1]).toBe(
+      'myorg,Production,production,active,3,2,1,23,11,2026-07-01T00:00:00.000Z,2026-08-01T00:00:00.000Z'
+    );
+  });
+
+  it('keeps the row and warns on stderr when the token lacks billing permission', async () => {
+    const responses = [
+      accountsResponse,
+      jsonResponse({ errors: [{ message: 'Entity not authorized: Account[acc-1]' }] }),
+    ];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage', '--json']);
+
+    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual([
+      {
+        account: 'myorg',
+        plan: null,
+        planId: null,
+        status: null,
+        concurrencyTotal: null,
+        concurrencyIos: null,
+        concurrencyAndroid: null,
+        buildsIos: null,
+        buildsAndroid: null,
+        periodStart: null,
+        periodEnd: null,
+      },
+    ]);
+    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('plan unavailable');
+  });
+
+  it('reports the platform concurrency when combined with --platform', async () => {
+    const responses = [accountsResponse, planResponse];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage', '--platform', 'ios']);
+
+    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(output).toContain('CONCURRENCY (IOS)');
+    expect(output).toContain('BUILDS (IOS)');
+  });
+
+  it('sums both platforms into BUILDS when --platform is not set', async () => {
+    const responses = [accountsResponse, planResponse];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage']);
+
+    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    // ios: 23 + android: 11 = 34
+    expect(output).toContain('34');
+  });
+});

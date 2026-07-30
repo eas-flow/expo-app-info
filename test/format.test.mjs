@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatCSV, formatJSON, toDisplayRows } from '../src/format.mjs';
+import {
+  formatCSV,
+  formatJSON,
+  toDisplayRows,
+  toUsageDisplayRows,
+  USAGE_FIELDS,
+  usageBuildsHeader,
+  usageConcurrencyHeader,
+} from '../src/format.mjs';
 
 const withBuild = {
   account: 'myorg',
@@ -68,5 +76,121 @@ describe('formatCSV', () => {
 
   it('writes just the header row for an empty array', () => {
     expect(formatCSV([])).toBe('account,app,slug,platform,version,build,lastBuildAt');
+  });
+});
+
+const usageEntry = {
+  account: 'myorg',
+  plan: 'Production',
+  planId: 'production',
+  status: 'active',
+  concurrencyTotal: 3,
+  concurrencyIos: 2,
+  concurrencyAndroid: 1,
+  buildsIos: 23,
+  buildsAndroid: 11,
+  periodStart: '2026-07-01T00:00:00.000Z',
+  periodEnd: '2026-08-01T00:00:00.000Z',
+};
+
+const usageEntryNoPlan = {
+  account: 'other',
+  plan: null,
+  planId: null,
+  status: null,
+  concurrencyTotal: null,
+  concurrencyIos: null,
+  concurrencyAndroid: null,
+  buildsIos: null,
+  buildsAndroid: null,
+  periodStart: null,
+  periodEnd: null,
+};
+
+describe('toUsageDisplayRows', () => {
+  it('maps an account with a plan to display strings, summing builds across platforms', () => {
+    expect(toUsageDisplayRows([usageEntry])).toEqual([
+      ['myorg', 'Production', 'active', '3', '34', '2026-07-01 → 2026-07-31'],
+    ]);
+  });
+
+  it("shows the last inclusive day of the period, not the API's exclusive end", () => {
+    // billingPeriod.end from the API is the instant the *next* period
+    // starts (2026-08-01T00:00:00Z for a July period) — the table should
+    // read "→ 2026-07-31", not "→ 2026-08-01".
+    const row = toUsageDisplayRows([usageEntry])[0];
+    expect(row[5]).toBe('2026-07-01 → 2026-07-31');
+  });
+
+  it('handles a period end that is not exactly midnight', () => {
+    const row = toUsageDisplayRows([
+      {
+        ...usageEntry,
+        periodStart: '2026-07-15T09:00:00.000Z',
+        periodEnd: '2026-08-15T09:00:00.000Z',
+      },
+    ])[0];
+    expect(row[5]).toBe('2026-07-15 → 2026-08-14');
+  });
+
+  it('shows "-" for every unavailable plan field', () => {
+    expect(toUsageDisplayRows([usageEntryNoPlan])).toEqual([['other', '-', '-', '-', '-', '-']]);
+  });
+
+  it('reports the platform concurrency and build count when --platform is set', () => {
+    const iosRow = toUsageDisplayRows([usageEntry], { platform: 'ios' })[0];
+    expect(iosRow[3]).toBe('2');
+    expect(iosRow[4]).toBe('23');
+
+    const androidRow = toUsageDisplayRows([usageEntry], { platform: 'android' })[0];
+    expect(androidRow[3]).toBe('1');
+    expect(androidRow[4]).toBe('11');
+  });
+
+  it('renders a zero concurrency as "0", not "-"', () => {
+    const row = toUsageDisplayRows([{ ...usageEntry, concurrencyTotal: 0 }])[0];
+    expect(row[3]).toBe('0');
+  });
+
+  it('renders a zero build count as "0", not "-"', () => {
+    const row = toUsageDisplayRows([{ ...usageEntry, buildsIos: 0, buildsAndroid: 0 }])[0];
+    expect(row[4]).toBe('0');
+  });
+
+  it('shows "-" when only one end of the billing period is known', () => {
+    const row = toUsageDisplayRows([{ ...usageEntry, periodEnd: null }])[0];
+    expect(row[5]).toBe('-');
+  });
+});
+
+describe('usageConcurrencyHeader', () => {
+  it('labels the column per platform filter', () => {
+    expect(usageConcurrencyHeader(null)).toBe('CONCURRENCY');
+    expect(usageConcurrencyHeader('ios')).toBe('CONCURRENCY (IOS)');
+    expect(usageConcurrencyHeader('android')).toBe('CONCURRENCY (ANDROID)');
+  });
+});
+
+describe('usageBuildsHeader', () => {
+  it('labels the column per platform filter', () => {
+    expect(usageBuildsHeader(null)).toBe('BUILDS');
+    expect(usageBuildsHeader('ios')).toBe('BUILDS (IOS)');
+    expect(usageBuildsHeader('android')).toBe('BUILDS (ANDROID)');
+  });
+});
+
+describe('formatCSV with USAGE_FIELDS', () => {
+  it('emits the usage header and raw values', () => {
+    const csv = formatCSV([usageEntry], USAGE_FIELDS);
+    expect(csv.split('\n')[0]).toBe(
+      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,buildsIos,buildsAndroid,periodStart,periodEnd'
+    );
+    expect(csv.split('\n')[1]).toBe(
+      'myorg,Production,production,active,3,2,1,23,11,2026-07-01T00:00:00.000Z,2026-08-01T00:00:00.000Z'
+    );
+  });
+
+  it('emits empty cells for a row with no plan data', () => {
+    expect(formatCSV([usageEntryNoPlan], USAGE_FIELDS).split('\n')[1]).toBe('other,,,,,,,,,,');
   });
 });

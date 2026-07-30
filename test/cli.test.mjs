@@ -8,9 +8,23 @@ const DEFAULTS = {
   csv: false,
   account: null,
   platform: null,
+  usage: false,
 };
 
 describe('parseArgs', () => {
+  it('parses --usage', () => {
+    expect(parseArgs(['--usage'])).toEqual({ ...DEFAULTS, usage: true });
+  });
+
+  it('parses --usage combined with --json and --account', () => {
+    expect(parseArgs(['--usage', '--json', '--account', 'myorg'])).toEqual({
+      ...DEFAULTS,
+      usage: true,
+      json: true,
+      account: 'myorg',
+    });
+  });
+
   it('parses -h', () => {
     expect(parseArgs(['-h'])).toEqual({ ...DEFAULTS, help: true });
   });

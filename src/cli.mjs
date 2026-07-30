@@ -3,8 +3,16 @@
 // catches and converts those into a printed message + exit code.
 
 import { readFileSync } from 'node:fs';
-import { createApiClient, mapWithConcurrency } from './api.mjs';
-import { formatCSV, formatJSON, toDisplayRows } from './format.mjs';
+import { ApiError, createApiClient, mapWithConcurrency } from './api.mjs';
+import {
+  formatCSV,
+  formatJSON,
+  toDisplayRows,
+  toUsageDisplayRows,
+  USAGE_FIELDS,
+  usageBuildsHeader,
+  usageConcurrencyHeader,
+} from './format.mjs';
 import { dim, renderTable } from './render.mjs';
 
 export class CliError extends Error {}
@@ -26,6 +34,7 @@ export const HELP = `
     --csv                   Output as CSV instead of a table
     --account <name>        Only show this account (exact match, case-insensitive)
     --platform <platform>   Only show "ios" or "android" builds
+    --usage                 Show account plan/usage instead of the app list
 
   Authentication
     EXPO_TOKEN environment variable only. Create a personal access token at
@@ -38,6 +47,11 @@ export const HELP = `
     VERSION / BUILD come from the latest *successful* EAS build, not from your
     local app.json. Apps that have never been built show "-" in the table (and
     null in --json/--csv).
+
+    --usage prints one row per account (plan, build concurrency, build
+    counts per platform for the current billing period) instead of one row
+    per app. Plan data is billing-scoped: a token without billing permission
+    on an account shows "-" there rather than failing the run.
 `;
 
 export function parseArgs(argv) {
@@ -48,6 +62,7 @@ export function parseArgs(argv) {
     csv: false,
     account: null,
     platform: null,
+    usage: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -61,6 +76,8 @@ export function parseArgs(argv) {
       opts.json = true;
     } else if (arg === '--csv') {
       opts.csv = true;
+    } else if (arg === '--usage') {
+      opts.usage = true;
     } else if (arg === '--account') {
       opts.account = requireValue(argv, ++i, '--account');
     } else if (arg.startsWith('--account=')) {
@@ -150,6 +167,11 @@ export async function run(argv = process.argv.slice(2)) {
     }
   }
 
+  if (opts.usage) {
+    await runUsage(client, accounts, opts);
+    return;
+  }
+
   const entries = [];
   for (const account of accounts) {
     progress(`Fetching apps in ${account.name}…`);
@@ -216,4 +238,82 @@ export async function run(argv = process.argv.slice(2)) {
     )
   );
   console.log(dim(`\n  ${filtered.length} row(s). VERSION/BUILD = latest successful EAS build.`));
+}
+
+/**
+ * `--usage`: one row per account (plan, build concurrency, build counts per
+ * platform, billing period).
+ *
+ * Plan fields are billing-scoped, so a token without billing permission on an
+ * account gets a GraphQL error for that account only. That is not fatal: the
+ * row is still printed with "-" in the plan columns, and the reason is
+ * reported on stderr so it stays out of --json/--csv output.
+ */
+async function runUsage(client, accounts, opts) {
+  const entries = [];
+  const warnings = [];
+
+  for (const account of accounts) {
+    progress(`Fetching plan for ${account.name}…`);
+
+    let plan = null;
+    try {
+      plan = await client.fetchAccountPlan(account.id);
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+      warnings.push(`${account.name}: ${err.message}`);
+    }
+
+    const subscription = plan?.subscription ?? null;
+    const period = plan?.billingPeriod ?? null;
+    const builds = plan?.buildsByPlatform ?? null;
+
+    entries.push({
+      account: account.name,
+      plan: subscription?.name ?? null,
+      planId: subscription?.planId ?? null,
+      status: subscription?.status ?? null,
+      concurrencyTotal: subscription?.concurrencies?.total ?? null,
+      concurrencyIos: subscription?.concurrencies?.ios ?? null,
+      concurrencyAndroid: subscription?.concurrencies?.android ?? null,
+      buildsIos: builds?.ios ?? null,
+      buildsAndroid: builds?.android ?? null,
+      periodStart: period?.start ?? null,
+      periodEnd: period?.end ?? null,
+    });
+  }
+
+  clearProgress();
+
+  for (const warning of warnings) {
+    console.error(dim(`  ! plan unavailable — ${warning}`));
+  }
+
+  if (opts.json) {
+    console.log(formatJSON(entries));
+    return;
+  }
+  if (opts.csv) {
+    console.log(formatCSV(entries, USAGE_FIELDS));
+    return;
+  }
+
+  console.log(
+    renderTable(
+      [
+        'ACCOUNT',
+        'PLAN',
+        'STATUS',
+        usageConcurrencyHeader(opts.platform),
+        usageBuildsHeader(opts.platform),
+        'PERIOD',
+      ],
+      toUsageDisplayRows(entries, { platform: opts.platform })
+    )
+  );
+  console.log(
+    dim(
+      `\n  ${entries.length} account(s). BUILDS/PERIOD = this account's current EAS billing period.`
+    )
+  );
 }

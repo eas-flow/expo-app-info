@@ -6,6 +6,21 @@ import { relativeDate } from './render.mjs';
 
 const FIELDS = ['account', 'app', 'slug', 'platform', 'version', 'build', 'lastBuildAt'];
 
+/** `--usage`: one entry per account instead of one per app/platform. */
+export const USAGE_FIELDS = [
+  'account',
+  'plan',
+  'planId',
+  'status',
+  'concurrencyTotal',
+  'concurrencyIos',
+  'concurrencyAndroid',
+  'buildsIos',
+  'buildsAndroid',
+  'periodStart',
+  'periodEnd',
+];
+
 /** Table rows: display strings, "-" for null/missing, relative dates. */
 export function toDisplayRows(entries, { now } = {}) {
   return entries.map((e) => [
@@ -19,6 +34,78 @@ export function toDisplayRows(entries, { now } = {}) {
   ]);
 }
 
+/**
+ * Usage table rows: display strings, "-" for null/missing, dates as YYYY-MM-DD.
+ * With `platform` set, CONCURRENCY and BUILDS report that platform's own
+ * number. Without it, CONCURRENCY is the account-level total (not a sum —
+ * that's what EAS enforces) and BUILDS is the sum of both platforms' counts
+ * for the period.
+ */
+export function toUsageDisplayRows(entries, { platform = null } = {}) {
+  const concurrencyField =
+    platform === 'ios'
+      ? 'concurrencyIos'
+      : platform === 'android'
+        ? 'concurrencyAndroid'
+        : 'concurrencyTotal';
+
+  return entries.map((e) => [
+    e.account,
+    e.plan ?? '-',
+    e.status ?? '-',
+    e[concurrencyField] === null || e[concurrencyField] === undefined
+      ? '-'
+      : String(e[concurrencyField]),
+    buildsCell(e, platform),
+    e.periodStart && e.periodEnd
+      ? `${isoDate(e.periodStart)} → ${isoDate(inclusiveEnd(e.periodEnd))}`
+      : '-',
+  ]);
+}
+
+function buildsCell(entry, platform) {
+  const { buildsIos, buildsAndroid } = entry;
+  if (buildsIos === null || buildsIos === undefined) return '-';
+  if (platform === 'ios') return String(buildsIos);
+  if (platform === 'android') return String(buildsAndroid);
+  return String(buildsIos + buildsAndroid);
+}
+
+/** Header for the concurrency column, which depends on the --platform filter. */
+export function usageConcurrencyHeader(platform = null) {
+  if (platform === 'ios') return 'CONCURRENCY (IOS)';
+  if (platform === 'android') return 'CONCURRENCY (ANDROID)';
+  return 'CONCURRENCY';
+}
+
+/** Header for the builds column, which depends on the --platform filter. */
+export function usageBuildsHeader(platform = null) {
+  if (platform === 'ios') return 'BUILDS (IOS)';
+  if (platform === 'android') return 'BUILDS (ANDROID)';
+  return 'BUILDS';
+}
+
+/** ISO 8601 timestamp → YYYY-MM-DD, for the human table only. */
+function isoDate(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '-' : d.toISOString().slice(0, 10);
+}
+
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * EAS's `billingPeriod.end` is an *exclusive* boundary — the instant the
+ * next period starts (e.g. a July period ends at 2026-08-01T00:00:00Z), not
+ * the last moment of the period. Displayed as-is that reads like "runs into
+ * August" for a period that is entirely July, so the human table shows the
+ * last day the period actually covers instead: `end` minus one day. Only
+ * cosmetic — `--json`/`--csv` still emit the raw, unmodified `periodEnd`.
+ */
+function inclusiveEnd(iso) {
+  return new Date(new Date(iso).getTime() - ONE_DAY_MS).toISOString();
+}
+
 /** `--json`: an array of entries, raw values (null, ISO 8601 dates). */
 export function formatJSON(entries) {
   return JSON.stringify(entries, null, 2);
@@ -29,11 +116,14 @@ function csvEscape(value) {
   return /["\n,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-/** `--csv`: header row + one row per entry, raw values (empty cell for null). */
-export function formatCSV(entries) {
-  const lines = [FIELDS.join(',')];
+/**
+ * `--csv`: header row + one row per entry, raw values (empty cell for null).
+ * `fields` is a parameter so `--usage` can reuse this with its own columns.
+ */
+export function formatCSV(entries, fields = FIELDS) {
+  const lines = [fields.join(',')];
   for (const e of entries) {
-    lines.push(FIELDS.map((f) => csvEscape(e[f])).join(','));
+    lines.push(fields.map((f) => csvEscape(e[f])).join(','));
   }
   return lines.join('\n');
 }
