@@ -11,14 +11,14 @@
 ```
 $ npx expo-app-info
 
-┌─────────┬──────────────┬──────────────┬──────────┬─────────┬───────┬────────────┐
-│ ACCOUNT │ APP          │ SLUG         │ PLATFORM │ VERSION │ BUILD │ LAST BUILD │
-├─────────┼──────────────┼──────────────┼──────────┼─────────┼───────┼────────────┤
-│ myorg   │ Storefront   │ storefront   │ ios      │ 3.2.1   │ 41    │ 3d ago     │
-│ myorg   │ Storefront   │ storefront   │ android  │ 3.2.0   │ 38    │ 1mo ago    │
-│ myorg   │ Field Ops    │ field-ops    │ ios      │ 1.4.0   │ 12    │ 2mo ago    │
-│ myorg   │ Prototype    │ prototype    │ -        │ -       │ -     │ -          │
-└─────────┴──────────────┴──────────────┴──────────┴─────────┴───────┴────────────┘
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
+│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:05:02 │
+│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ 2026/05/28-18:40:11 │
+│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -                   │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
 ```
 
 ## Why
@@ -56,6 +56,30 @@ npx expo-app-info --account myorg --platform ios
 npx expo-app-info --json  > apps.json
 npx expo-app-info --csv   > apps.csv
 ```
+
+Show more than just the latest build per platform:
+
+```bash
+npx expo-app-info --history 5
+```
+
+```
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.0   │ 40    │ 2026/06/30-14:05:02 │
+│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:03:47 │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
+```
+
+`--history <N>` (1–100, default: 1) prints the `N` most recent **successful**
+builds per platform as separate rows instead of collapsing each app/platform
+down to a single row. Rows are always newest-first by build date — sorted on
+the client, not just trusted from the API's response order, since that
+order isn't documented anywhere. It works with `--account`, `--platform`,
+`--json`, and `--csv`, but cannot be combined with `--usage`. `--history 1`
+prints exactly the same output as leaving the flag off entirely.
 
 Or ask about the account itself rather than its apps:
 
@@ -104,7 +128,7 @@ This is deliberately the only option. The token is never read from `argv` and ne
 | `PLATFORM`     | `ios` / `android`                                          |
 | `VERSION`      | `appVersion` of the latest **successful** build            |
 | `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode) |
-| `LAST BUILD`   | When that build finished                                   |
+| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)      |
 
 With `--usage`, one row per account instead:
 
@@ -123,6 +147,7 @@ With `--usage`, one row per account instead:
 
 - `--account <name>` — only this account (exact match, case-insensitive against the `ACCOUNT` column). Apps in other accounts are never fetched.
 - `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it switches `CONCURRENCY` and `BUILDS` to that platform's own numbers instead of the account total / cross-platform sum.
+- `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage`.
 
 ## Machine-readable output (`--json` / `--csv`)
 
@@ -165,7 +190,7 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 1. `meActor { accounts }` — every account the token can see
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(filter: { platform, status: FINISHED })` — latest build per platform
+3. `app.byId(...).builds(limit, filter: { platform, status: FINISHED })` — the `N` most recent builds per platform (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
@@ -176,6 +201,7 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 - [x] `--json` / `--csv` output for CI and spreadsheets
 - [x] `--account` / `--platform` filters
 - [x] `--usage`: subscription plan, build concurrency, and monthly build counts per platform ([#15](https://github.com/eas-flow/expo-app-info/issues/15))
+- [x] `--history <N>`: show the N most recent builds per platform, not just the latest ([#17](https://github.com/eas-flow/expo-app-info/issues/17))
 - [ ] Diff against local `app.json` to surface version drift between source and shipped builds
 - [ ] Show the latest submitted store version alongside the build version
 

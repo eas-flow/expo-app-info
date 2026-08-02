@@ -2,7 +2,7 @@
 // supported output formats. Kept separate from src/render.mjs, which only
 // knows about the human-oriented table.
 
-import { relativeDate } from './render.mjs';
+import { formatBuildDate } from './render.mjs';
 
 const FIELDS = ['account', 'app', 'slug', 'platform', 'version', 'build', 'lastBuildAt'];
 
@@ -21,8 +21,8 @@ export const USAGE_FIELDS = [
   'periodEnd',
 ];
 
-/** Table rows: display strings, "-" for null/missing, relative dates. */
-export function toDisplayRows(entries, { now } = {}) {
+/** Table rows: display strings, "-" for null/missing, absolute build dates. */
+export function toDisplayRows(entries) {
   return entries.map((e) => [
     e.account,
     e.app,
@@ -30,7 +30,7 @@ export function toDisplayRows(entries, { now } = {}) {
     e.platform ?? '-',
     e.version ?? '-',
     e.build ?? '-',
-    relativeDate(e.lastBuildAt, now),
+    formatBuildDate(e.lastBuildAt),
   ]);
 }
 
