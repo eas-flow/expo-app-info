@@ -28,10 +28,21 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Separate step so a break in the billing-scoped queries is
-      # distinguishable from a break in the app/build queries above.
+      # --usage (issue #18) no longer queries subscription/billingPeriod at
+      # all — it pages app.byId(...).builds(offset, limit, filter) per app
+      # and buckets client-side by UTC calendar month. Separate step so a
+      # break in that pagination shape is distinguishable from a break in
+      # the plain app/build queries above.
       - name: Run --usage against the live EAS API
         run: node bin/cli.mjs --usage
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # --month widens --usage's pagination window (up to 12 months) rather
+      # than changing query shape, but a separate step still catches an
+      # unexpected error/timeout from the deeper paging on its own.
+      - name: Run --usage --month 6 against the live EAS API
+        run: node bin/cli.mjs --usage --month 6
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 

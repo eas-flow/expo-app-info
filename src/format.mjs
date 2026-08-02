@@ -6,20 +6,17 @@ import { formatBuildDate } from './render.mjs';
 
 const FIELDS = ['account', 'app', 'slug', 'platform', 'version', 'build', 'lastBuildAt'];
 
-/** `--usage`: one entry per account instead of one per app/platform. */
-export const USAGE_FIELDS = [
-  'account',
-  'plan',
-  'planId',
-  'status',
-  'concurrencyTotal',
-  'concurrencyIos',
-  'concurrencyAndroid',
-  'buildsIos',
-  'buildsAndroid',
-  'periodStart',
-  'periodEnd',
-];
+/**
+ * `--usage`: one entry per account *per UTC calendar month* (issue #18),
+ * instead of one per app/platform or one per account. `buildsIos`/
+ * `buildsAndroid` are "successful build" counts counted client-side from
+ * finished builds via the API — not EAS's own billing/usage metric (which
+ * can't be sliced into arbitrary calendar ranges). No plan/status/
+ * concurrency fields here; those moved to `--plan` (issue #19) since they
+ * are "current" facts that would otherwise be repeated identically across
+ * every month's row.
+ */
+export const USAGE_FIELDS = ['account', 'buildsIos', 'buildsAndroid', 'periodStart', 'periodEnd'];
 
 /**
  * `--plan`: one entry per account, current subscription only (no billing
@@ -61,58 +58,57 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {})
 }
 
 /**
- * Usage table rows: display strings, "-" for null/missing, dates as YYYY-MM-DD.
- * With `platform` set, CONCURRENCY and BUILDS report that platform's own
- * number. Without it, CONCURRENCY is the account-level total (not a sum —
- * that's what EAS enforces) and BUILDS is the sum of both platforms' counts
- * for the period. `accountDisplayNames` is the same cosmetic, table-only
- * slug -> Display name lookup described on `toDisplayRows` (issue #22).
+ * Usage table rows: one row per account per UTC calendar month (issue #18).
+ * `[account, period, ...buildCells]` — `buildCells` is one or two columns
+ * depending on `platform` (both iOS and Android by default, narrowed to one
+ * with `--platform`), mirroring `usageBuildsHeaders` below so header/cell
+ * order always line up. `accountDisplayNames` is the same cosmetic,
+ * table-only slug -> Display name lookup described on `toDisplayRows`
+ * (issue #22). `now` (default current time) decides which row, if any, is
+ * the still-in-progress current month for the `(today)` marker below.
  */
 export function toUsageDisplayRows(
   entries,
-  { platform = null, accountDisplayNames = new Map() } = {}
+  { platform = null, accountDisplayNames = new Map(), now = new Date() } = {}
 ) {
-  const concurrencyField =
-    platform === 'ios'
-      ? 'concurrencyIos'
-      : platform === 'android'
-        ? 'concurrencyAndroid'
-        : 'concurrencyTotal';
-
-  return entries.map((e) => [
-    accountDisplayNames.get(e.account) ?? e.account,
-    e.plan ?? '-',
-    e.status ?? '-',
-    e[concurrencyField] === null || e[concurrencyField] === undefined
-      ? '-'
-      : String(e[concurrencyField]),
-    buildsCell(e, platform),
-    e.periodStart && e.periodEnd
-      ? `${isoDate(e.periodStart)} → ${isoDate(inclusiveEnd(e.periodEnd))}`
-      : '-',
-  ]);
+  return entries.map((e) => {
+    const row = [accountDisplayNames.get(e.account) ?? e.account, periodCell(e, now)];
+    if (platform !== 'android') row.push(cellOrDash(e.buildsIos));
+    if (platform !== 'ios') row.push(cellOrDash(e.buildsAndroid));
+    return row;
+  });
 }
 
-function buildsCell(entry, platform) {
-  const { buildsIos, buildsAndroid } = entry;
-  if (buildsIos === null || buildsIos === undefined) return '-';
-  if (platform === 'ios') return String(buildsIos);
-  if (platform === 'android') return String(buildsAndroid);
-  return String(buildsIos + buildsAndroid);
+function cellOrDash(value) {
+  return value === null || value === undefined ? '-' : String(value);
 }
 
-/** Header for the concurrency column, which depends on the --platform filter. */
-export function usageConcurrencyHeader(platform = null) {
-  if (platform === 'ios') return 'CONCURRENCY (IOS)';
-  if (platform === 'android') return 'CONCURRENCY (ANDROID)';
-  return 'CONCURRENCY';
+/**
+ * `START → END` for a month's row, where END is `(today)` for the current,
+ * still-in-progress month (so it doesn't read like a confirmed final count
+ * for a month that hasn't finished yet) and the usual inclusive last day
+ * (`periodEnd` minus a day, since that boundary is exclusive) otherwise.
+ */
+function periodCell(entry, now) {
+  if (!entry.periodStart || !entry.periodEnd) return '-';
+  const startMs = new Date(entry.periodStart).getTime();
+  const endMs = new Date(entry.periodEnd).getTime();
+  const nowMs = now.getTime();
+  const isCurrent = nowMs >= startMs && nowMs < endMs;
+  const end = isCurrent ? '(today)' : isoDate(inclusiveEnd(entry.periodEnd));
+  return `${isoDate(entry.periodStart)} → ${end}`;
 }
 
-/** Header for the builds column, which depends on the --platform filter. */
-export function usageBuildsHeader(platform = null) {
-  if (platform === 'ios') return 'BUILDS (IOS)';
-  if (platform === 'android') return 'BUILDS (ANDROID)';
-  return 'BUILDS';
+/**
+ * Header(s) for the successful-builds column(s), which depend on the
+ * --platform filter: both iOS and Android by default (two columns), or just
+ * one when narrowed. Returns an array so callers can spread it directly into
+ * a header list next to however many cells `toUsageDisplayRows` produced.
+ */
+export function usageBuildsHeaders(platform = null) {
+  if (platform === 'ios') return ['SUCCESSFUL BUILDS (IOS)'];
+  if (platform === 'android') return ['SUCCESSFUL BUILDS (AND)'];
+  return ['SUCCESSFUL BUILDS (IOS)', 'SUCCESSFUL BUILDS (AND)'];
 }
 
 /**
@@ -120,7 +116,7 @@ export function usageBuildsHeader(platform = null) {
  * `--usage`, PLAN ID is shown as its own column (there's no billing period
  * or build count column to compete for space with), and CONCURRENCY reports
  * all three numbers (total/ios/android) at once unless `--platform` narrows
- * it to one, mirroring the `--usage` convention in `usageConcurrencyHeader`.
+ * it to one.
  * `accountDisplayNames` is the same cosmetic, table-only slug -> Display
  * name lookup described on `toDisplayRows` (issue #22).
  */
