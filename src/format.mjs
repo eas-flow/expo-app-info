@@ -2,7 +2,7 @@
 // supported output formats. Kept separate from src/render.mjs, which only
 // knows about the human-oriented table.
 
-import { relativeDate } from './render.mjs';
+import { formatBuildDate } from './render.mjs';
 
 const FIELDS = ['account', 'app', 'slug', 'platform', 'version', 'build', 'lastBuildAt'];
 
@@ -21,16 +21,25 @@ export const USAGE_FIELDS = [
   'periodEnd',
 ];
 
-/** Table rows: display strings, "-" for null/missing, relative dates. */
-export function toDisplayRows(entries, { now } = {}) {
+/**
+ * Table rows: display strings, "-" for null/missing, absolute build dates.
+ *
+ * `accountDisplayNames` (account slug -> EAS "Display name") is an optional
+ * cosmetic, table-only lookup (issue #22): when given and it has an entry
+ * for a row's account, the human table shows that instead of the slug. This
+ * never touches `e.account` itself or any other field, so --json/--csv
+ * (which pass entries straight to formatJSON/formatCSV, not through this
+ * function) keep emitting the slug unconditionally.
+ */
+export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {}) {
   return entries.map((e) => [
-    e.account,
+    accountDisplayNames.get(e.account) ?? e.account,
     e.app,
     e.slug,
     e.platform ?? '-',
     e.version ?? '-',
     e.build ?? '-',
-    relativeDate(e.lastBuildAt, now),
+    formatBuildDate(e.lastBuildAt),
   ]);
 }
 
@@ -39,9 +48,13 @@ export function toDisplayRows(entries, { now } = {}) {
  * With `platform` set, CONCURRENCY and BUILDS report that platform's own
  * number. Without it, CONCURRENCY is the account-level total (not a sum —
  * that's what EAS enforces) and BUILDS is the sum of both platforms' counts
- * for the period.
+ * for the period. `accountDisplayNames` is the same cosmetic, table-only
+ * slug -> Display name lookup described on `toDisplayRows` (issue #22).
  */
-export function toUsageDisplayRows(entries, { platform = null } = {}) {
+export function toUsageDisplayRows(
+  entries,
+  { platform = null, accountDisplayNames = new Map() } = {}
+) {
   const concurrencyField =
     platform === 'ios'
       ? 'concurrencyIos'
@@ -50,7 +63,7 @@ export function toUsageDisplayRows(entries, { platform = null } = {}) {
         : 'concurrencyTotal';
 
   return entries.map((e) => [
-    e.account,
+    accountDisplayNames.get(e.account) ?? e.account,
     e.plan ?? '-',
     e.status ?? '-',
     e[concurrencyField] === null || e[concurrencyField] === undefined

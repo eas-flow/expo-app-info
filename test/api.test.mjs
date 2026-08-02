@@ -76,6 +76,30 @@ describe('gql (via createApiClient)', () => {
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
     await expect(client.fetchAccounts()).resolves.toEqual([{ id: '1', name: 'acme' }]);
   });
+
+  it('forwards displayName when the API returns one (issue #22)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { meActor: { accounts: [{ id: '1', name: 'acme', displayName: 'Acme Corp' }] } },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).resolves.toEqual([
+      { id: '1', name: 'acme', displayName: 'Acme Corp' },
+    ]);
+  });
+
+  it('forwards a null displayName as-is when the account has none set', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { meActor: { accounts: [{ id: '1', name: 'acme', displayName: null }] } },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).resolves.toEqual([
+      { id: '1', name: 'acme', displayName: null },
+    ]);
+  });
 });
 
 describe('fetchApps', () => {
@@ -119,6 +143,139 @@ describe('fetchApps', () => {
       { id: 'a2', name: 'App Two', slug: 'app-two' },
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('fetchBuilds', () => {
+  it('defaults to limit 1 and merges ios/android builds into one array', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-01T00:00:00.000Z',
+                },
+              ],
+              android: [
+                {
+                  platform: 'ANDROID',
+                  appVersion: '3.2.0',
+                  appBuildVersion: '38',
+                  createdAt: '2026-06-01T00:00:00.000Z',
+                },
+              ],
+            },
+          },
+        },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const builds = await client.fetchBuilds('app-1');
+
+    expect(builds).toEqual([
+      {
+        platform: 'IOS',
+        appVersion: '3.2.1',
+        appBuildVersion: '41',
+        createdAt: '2026-07-01T00:00:00.000Z',
+      },
+      {
+        platform: 'ANDROID',
+        appVersion: '3.2.0',
+        appBuildVersion: '38',
+        createdAt: '2026-06-01T00:00:00.000Z',
+      },
+    ]);
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ appId: 'app-1', limit: 1 });
+  });
+
+  it('passes a custom limit through to the GraphQL variables', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ data: { app: { byId: { id: 'app-1', ios: [], android: [] } } } })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchBuilds('app-1', { limit: 5 });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ appId: 'app-1', limit: 5 });
+  });
+
+  it('returns an empty array when the app has no finished builds on either platform', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ data: { app: { byId: { id: 'app-1', ios: [], android: [] } } } })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchBuilds('app-1')).resolves.toEqual([]);
+  });
+
+  it('sorts each platform by createdAt descending regardless of the order the API returns them in (issue #17)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              // Deliberately out of order, to prove the client does not
+              // just trust the API's response order.
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '1.0.0',
+                  appBuildVersion: '10',
+                  createdAt: '2026-05-01T00:00:00.000Z',
+                },
+                {
+                  platform: 'IOS',
+                  appVersion: '3.0.0',
+                  appBuildVersion: '30',
+                  createdAt: '2026-07-01T00:00:00.000Z',
+                },
+                {
+                  platform: 'IOS',
+                  appVersion: '2.0.0',
+                  appBuildVersion: '20',
+                  createdAt: '2026-06-01T00:00:00.000Z',
+                },
+              ],
+              android: [
+                {
+                  platform: 'ANDROID',
+                  appVersion: '1.0.0',
+                  appBuildVersion: '5',
+                  createdAt: '2026-04-01T00:00:00.000Z',
+                },
+                {
+                  platform: 'ANDROID',
+                  appVersion: '2.0.0',
+                  appBuildVersion: '6',
+                  createdAt: '2026-06-15T00:00:00.000Z',
+                },
+              ],
+            },
+          },
+        },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const builds = await client.fetchBuilds('app-1', { limit: 3 });
+
+    expect(builds.map((b) => b.appBuildVersion)).toEqual(['30', '20', '10', '6', '5']);
   });
 });
 

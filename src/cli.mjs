@@ -19,6 +19,14 @@ export class CliError extends Error {}
 
 const CONCURRENCY = 8;
 const PLATFORMS = ['ios', 'android'];
+// Sanity cap on --history; the EAS API has no documented max, this just
+// keeps a typo like --history 99999 from hammering the API for one app.
+// Confirmed against the live API via scripts/probe-history.mjs (issue #17):
+// `builds(limit: 100)` is accepted with no GraphQL error, and the API's own
+// order was already newest-first for the account tested (the client-side
+// sort in fetchBuilds still runs regardless, since that order isn't
+// documented as guaranteed).
+const MAX_HISTORY = 100;
 
 export const HELP = `
   expo-app-info — List every Expo (EAS) app with its latest build version per platform.
@@ -32,9 +40,10 @@ export const HELP = `
     -v, --version           Show version
     --json                  Output as JSON instead of a table
     --csv                   Output as CSV instead of a table
-    --account <name>        Only show this account (exact match, case-insensitive)
     --platform <platform>   Only show "ios" or "android" builds
     --usage                 Show account plan/usage instead of the app list
+    --history <N>           Show the N most recent builds per platform instead of just
+                             the latest (1-100). Cannot be combined with --usage.
 
   Authentication
     EXPO_TOKEN environment variable only. Create a personal access token at
@@ -44,9 +53,21 @@ export const HELP = `
     your shell history or the process list.
 
   Notes
+    ACCOUNT shows the account's EAS "Display name" when one is set, falling
+    back to its unique slug otherwise. This is cosmetic (table only) —
+    --json/--csv always emit the slug in the \`account\` field, since scripts
+    may rely on it as a unique identifier.
+
     VERSION / BUILD come from the latest *successful* EAS build, not from your
     local app.json. Apps that have never been built show "-" in the table (and
     null in --json/--csv).
+
+    --history <N> lists the N most recent successful builds per platform as
+    separate rows (newest first, sorted by build date regardless of the order
+    the API returns them in), instead of collapsing each app/platform down to
+    a single latest-build row. The BUILD DATE column header applies whether
+    or not --history is set, since a row is not necessarily the "last" build
+    once more than one is shown.
 
     --usage prints one row per account (plan, build concurrency, build
     counts per platform for the current billing period) instead of one row
@@ -60,9 +81,9 @@ export function parseArgs(argv) {
     version: false,
     json: false,
     csv: false,
-    account: null,
     platform: null,
     usage: false,
+    history: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -78,14 +99,14 @@ export function parseArgs(argv) {
       opts.csv = true;
     } else if (arg === '--usage') {
       opts.usage = true;
-    } else if (arg === '--account') {
-      opts.account = requireValue(argv, ++i, '--account');
-    } else if (arg.startsWith('--account=')) {
-      opts.account = arg.slice('--account='.length);
     } else if (arg === '--platform') {
       opts.platform = requireValue(argv, ++i, '--platform');
     } else if (arg.startsWith('--platform=')) {
       opts.platform = arg.slice('--platform='.length);
+    } else if (arg === '--history') {
+      opts.history = requireValue(argv, ++i, '--history');
+    } else if (arg.startsWith('--history=')) {
+      opts.history = arg.slice('--history='.length);
     } else {
       throw new CliError(`Unknown option: ${arg}\n  Run \`expo-app-info --help\` to see usage.`);
     }
@@ -103,6 +124,20 @@ export function parseArgs(argv) {
       );
     }
     opts.platform = normalized;
+  }
+
+  if (opts.history !== null) {
+    const parsed = Number(opts.history);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_HISTORY) {
+      throw new CliError(
+        `Invalid --history value: "${opts.history}". Expected an integer between 1 and ${MAX_HISTORY}.`
+      );
+    }
+    opts.history = parsed;
+
+    if (opts.usage) {
+      throw new CliError('--history cannot be combined with --usage.');
+    }
   }
 
   return opts;
@@ -156,19 +191,17 @@ export async function run(argv = process.argv.slice(2)) {
   const client = createApiClient({ apiUrl, authHeaders });
 
   progress('Fetching accounts…');
-  let accounts = await client.fetchAccounts();
+  const accounts = await client.fetchAccounts();
   if (accounts.length === 0) throw new CliError('No accounts found for this token.');
 
-  if (opts.account !== null) {
-    const wanted = opts.account.toLowerCase();
-    accounts = accounts.filter((a) => a.name.toLowerCase() === wanted);
-    if (accounts.length === 0) {
-      throw new CliError(`No account matching "${opts.account}" found.`);
-    }
-  }
+  // Table-only, cosmetic mapping of account slug -> EAS "Display name"
+  // (issue #22). --json/--csv keep emitting the slug (`account.name`)
+  // unconditionally — see toDisplayRows/toUsageDisplayRows in format.mjs.
+  // Falls back to the slug itself when displayName is null/unset.
+  const accountDisplayNames = new Map(accounts.map((a) => [a.name, a.displayName || a.name]));
 
   if (opts.usage) {
-    await runUsage(client, accounts, opts);
+    await runUsage(client, accounts, opts, accountDisplayNames);
     return;
   }
 
@@ -179,7 +212,7 @@ export async function run(argv = process.argv.slice(2)) {
 
     let done = 0;
     const buildsPerApp = await mapWithConcurrency(apps, CONCURRENCY, async (app) => {
-      const builds = await client.fetchLatestBuilds(app.id);
+      const builds = await client.fetchBuilds(app.id, { limit: opts.history ?? 1 });
       progress(`${account.name}: ${++done}/${apps.length} apps…`);
       return builds;
     });
@@ -233,11 +266,19 @@ export async function run(argv = process.argv.slice(2)) {
 
   console.log(
     renderTable(
-      ['ACCOUNT', 'APP', 'SLUG', 'PLATFORM', 'VERSION', 'BUILD', 'LAST BUILD'],
-      toDisplayRows(filtered)
+      ['ACCOUNT', 'APP', 'SLUG', 'PLATFORM', 'VERSION', 'BUILD', 'BUILD DATE'],
+      toDisplayRows(filtered, { accountDisplayNames })
     )
   );
-  console.log(dim(`\n  ${filtered.length} row(s). VERSION/BUILD = latest successful EAS build.`));
+  // The effective count is what matters here, not whether --history was
+  // typed: `--history 1` must read identically to not passing the flag at
+  // all, since it produces the exact same query and the exact same rows.
+  const effectiveHistory = opts.history ?? 1;
+  const footerNote =
+    effectiveHistory > 1
+      ? `VERSION/BUILD = latest ${effectiveHistory} successful EAS builds per platform, newest first.`
+      : 'VERSION/BUILD = latest successful EAS build.';
+  console.log(dim(`\n  ${filtered.length} row(s). ${footerNote}`));
 }
 
 /**
@@ -249,7 +290,7 @@ export async function run(argv = process.argv.slice(2)) {
  * row is still printed with "-" in the plan columns, and the reason is
  * reported on stderr so it stays out of --json/--csv output.
  */
-async function runUsage(client, accounts, opts) {
+async function runUsage(client, accounts, opts, accountDisplayNames) {
   const entries = [];
   const warnings = [];
 
@@ -308,7 +349,7 @@ async function runUsage(client, accounts, opts) {
         usageBuildsHeader(opts.platform),
         'PERIOD',
       ],
-      toUsageDisplayRows(entries, { platform: opts.platform })
+      toUsageDisplayRows(entries, { platform: opts.platform, accountDisplayNames })
     )
   );
   console.log(

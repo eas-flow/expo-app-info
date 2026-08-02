@@ -4,7 +4,12 @@
 
 export class ApiError extends Error {}
 
-export const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name } } }`;
+// `displayName` is fetched alongside the unique `name` slug so the CLI can
+// show a friendlier name in the human table (issue #22) while keeping `name`
+// as the value --json/--csv emit and that used to back --account filtering
+// (removed in the same change — see issue #22). It is nullable — not every
+// account has one set.
+export const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
 
 export const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   account { byId(accountId: $accountId) { id
@@ -15,12 +20,12 @@ export const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
-export const Q_BUILDS = `query LatestBuilds($appId: String!) {
+export const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ios: builds(offset: 0, limit: 1, filter: { platform: IOS, status: FINISHED }) {
+    ios: builds(offset: 0, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
       platform appVersion appBuildVersion createdAt
     }
-    android: builds(offset: 0, limit: 1, filter: { platform: ANDROID, status: FINISHED }) {
+    android: builds(offset: 0, limit: $limit, filter: { platform: ANDROID, status: FINISHED }) {
       platform appVersion appBuildVersion createdAt
     }
   } }
@@ -112,9 +117,21 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     }
   }
 
-  async function fetchLatestBuilds(appId) {
-    const app = (await gql(Q_BUILDS, { appId })).app.byId;
-    return [...app.ios, ...app.android];
+  /**
+   * Up to `limit` most recent *successful* (FINISHED) builds per platform,
+   * newest first, merged into one array (ios entries first, then android).
+   * `limit` defaults to 1 to preserve the "latest build per platform"
+   * behavior most callers want.
+   *
+   * The API's own ordering for `builds(offset, limit)` is not documented, so
+   * each platform's slice is sorted by `createdAt` descending here rather
+   * than trusted as-is — with `limit: 1` a wrong order never showed up, but
+   * it would with `limit > 1` (see issue #17).
+   */
+  async function fetchBuilds(appId, { limit = 1 } = {}) {
+    const app = (await gql(Q_BUILDS, { appId, limit })).app.byId;
+    const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return [...[...app.ios].sort(byNewest), ...[...app.android].sort(byNewest)];
   }
 
   /**
@@ -145,7 +162,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     };
   }
 
-  return { gql, fetchAccounts, fetchApps, fetchLatestBuilds, fetchAccountPlan };
+  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchAccountPlan };
 }
 
 /** Run `task` over `items` with a bounded number of in-flight requests. */

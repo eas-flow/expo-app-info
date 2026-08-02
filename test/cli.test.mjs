@@ -6,9 +6,9 @@ const DEFAULTS = {
   version: false,
   json: false,
   csv: false,
-  account: null,
   platform: null,
   usage: false,
+  history: null,
 };
 
 describe('parseArgs', () => {
@@ -16,12 +16,11 @@ describe('parseArgs', () => {
     expect(parseArgs(['--usage'])).toEqual({ ...DEFAULTS, usage: true });
   });
 
-  it('parses --usage combined with --json and --account', () => {
-    expect(parseArgs(['--usage', '--json', '--account', 'myorg'])).toEqual({
+  it('parses --usage combined with --json', () => {
+    expect(parseArgs(['--usage', '--json'])).toEqual({
       ...DEFAULTS,
       usage: true,
       json: true,
-      account: 'myorg',
     });
   });
 
@@ -66,18 +65,6 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--json', '--csv'])).toThrow(/cannot be used together/);
   });
 
-  it('parses --account with a space-separated value', () => {
-    expect(parseArgs(['--account', 'myorg'])).toEqual({ ...DEFAULTS, account: 'myorg' });
-  });
-
-  it('parses --account=value', () => {
-    expect(parseArgs(['--account=myorg'])).toEqual({ ...DEFAULTS, account: 'myorg' });
-  });
-
-  it('throws when --account has no value', () => {
-    expect(() => parseArgs(['--account'])).toThrow(/--account requires a value/);
-  });
-
   it('parses --platform and lowercases it', () => {
     expect(parseArgs(['--platform', 'IOS'])).toEqual({ ...DEFAULTS, platform: 'ios' });
   });
@@ -92,5 +79,60 @@ describe('parseArgs', () => {
 
   it('throws when --platform has no value', () => {
     expect(() => parseArgs(['--platform'])).toThrow(/--platform requires a value/);
+  });
+
+  it('parses --history with a space-separated value as a number', () => {
+    expect(parseArgs(['--history', '5'])).toEqual({ ...DEFAULTS, history: 5 });
+  });
+
+  it('parses --history=value', () => {
+    expect(parseArgs(['--history=10'])).toEqual({ ...DEFAULTS, history: 10 });
+  });
+
+  it('parses --history 1 (the same as the default behavior, but explicit)', () => {
+    expect(parseArgs(['--history', '1'])).toEqual({ ...DEFAULTS, history: 1 });
+  });
+
+  it('throws when --history has no value', () => {
+    expect(() => parseArgs(['--history'])).toThrow(/--history requires a value/);
+  });
+
+  it('throws on a non-numeric --history value', () => {
+    expect(() => parseArgs(['--history', 'abc'])).toThrow(/Invalid --history value/);
+  });
+
+  it('throws on a zero or negative --history value', () => {
+    expect(() => parseArgs(['--history', '0'])).toThrow(/Invalid --history value/);
+    expect(() => parseArgs(['--history', '-1'])).toThrow(/Invalid --history value/);
+  });
+
+  it('throws on a non-integer --history value', () => {
+    expect(() => parseArgs(['--history', '2.5'])).toThrow(/Invalid --history value/);
+  });
+
+  it('throws when --history exceeds the max of 100', () => {
+    expect(() => parseArgs(['--history', '101'])).toThrow(/Invalid --history value/);
+  });
+
+  it('accepts --history at the max of 100', () => {
+    expect(parseArgs(['--history', '100'])).toEqual({ ...DEFAULTS, history: 100 });
+  });
+
+  it('throws when --history is combined with --usage', () => {
+    expect(() => parseArgs(['--usage', '--history', '5'])).toThrow(
+      /--history cannot be combined with --usage/
+    );
+  });
+
+  it('combines --history with --platform', () => {
+    expect(parseArgs(['--history', '3', '--platform', 'ios'])).toEqual({
+      ...DEFAULTS,
+      history: 3,
+      platform: 'ios',
+    });
+  });
+
+  it('throws CliError on --account, which was removed (issue #22 — Account.displayName in the table replaced the need for filtering by slug for now)', () => {
+    expect(() => parseArgs(['--account', 'myorg'])).toThrow(/Unknown option: --account/);
   });
 });
