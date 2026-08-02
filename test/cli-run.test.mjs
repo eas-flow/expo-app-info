@@ -278,17 +278,19 @@ describe('run', () => {
     );
   });
 
-  it('--account filters accounts before fetching apps for the others', async () => {
+  it('rejects with CliError for the removed --account option (issue #22)', async () => {
+    process.env.EXPO_TOKEN = 'test-token';
+    await expect(run(['--account', 'myorg'])).rejects.toThrow(/Unknown option: --account/);
+  });
+
+  it('shows the account display name in the table when the account has one set (issue #22)', async () => {
     process.env.EXPO_TOKEN = 'test-token';
 
     const responses = [
       jsonResponse({
         data: {
           meActor: {
-            accounts: [
-              { id: 'acc-1', name: 'myorg' },
-              { id: 'acc-2', name: 'other' },
-            ],
+            accounts: [{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }],
           },
         },
       }),
@@ -306,7 +308,22 @@ describe('run', () => {
         },
       }),
       jsonResponse({
-        data: { app: { byId: { id: 'app-1', ios: [], android: [] } } },
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-20T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
       }),
     ];
 
@@ -314,23 +331,116 @@ describe('run', () => {
     const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
     vi.stubGlobal('fetch', fetchImpl);
 
-    await run(['--account', 'MYORG']);
+    await run([]);
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-    const secondCallBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
-    expect(secondCallBody.variables.accountId).toBe('acc-1');
+    const tableOutput = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(tableOutput).toContain('My Organization');
   });
 
-  it('rejects with CliError when --account matches nothing', async () => {
+  it('falls back to the account slug in the table when displayName is null (issue #22)', async () => {
     process.env.EXPO_TOKEN = 'test-token';
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ data: { meActor: { accounts: [{ id: 'acc-1', name: 'myorg' }] } } })
-      );
+
+    const responses = [
+      jsonResponse({
+        data: {
+          meActor: { accounts: [{ id: 'acc-1', name: 'myorg', displayName: null }] },
+        },
+      }),
+      jsonResponse({
+        data: {
+          account: {
+            byId: {
+              id: 'acc-1',
+              appsPaginated: {
+                edges: [{ node: { id: 'app-1', name: 'Storefront', slug: 'storefront' } }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }),
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-20T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
+      }),
+    ];
+
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
     vi.stubGlobal('fetch', fetchImpl);
 
-    await expect(run(['--account', 'nope'])).rejects.toThrow(/No account matching "nope"/);
+    await run([]);
+
+    const tableOutput = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(tableOutput).toContain('myorg');
+  });
+
+  it('keeps the account slug — not the display name — in --json/--csv output (issue #22)', async () => {
+    process.env.EXPO_TOKEN = 'test-token';
+
+    const responses = [
+      jsonResponse({
+        data: {
+          meActor: {
+            accounts: [{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }],
+          },
+        },
+      }),
+      jsonResponse({
+        data: {
+          account: {
+            byId: {
+              id: 'acc-1',
+              appsPaginated: {
+                edges: [{ node: { id: 'app-1', name: 'Storefront', slug: 'storefront' } }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }),
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-20T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
+      }),
+    ];
+
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--json']);
+
+    const parsed = JSON.parse(logSpy.mock.calls.at(-1)[0]);
+    expect(parsed[0].account).toBe('myorg');
   });
 
   it('--platform filters output to matching builds only', async () => {
@@ -532,6 +642,46 @@ describe('run --usage', () => {
     expect(output).toContain('BUILDS');
     expect(output).toContain('2026-07-01 → 2026-07-31');
     expect(output).not.toContain('SLUG');
+  });
+
+  it('shows the account display name in the --usage table when set (issue #22)', async () => {
+    const displayNameAccountsResponse = jsonResponse({
+      data: {
+        meActor: {
+          accounts: [{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }],
+        },
+      },
+    });
+    const responses = [displayNameAccountsResponse, planResponse];
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--usage']);
+
+    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(output).toContain('My Organization');
+  });
+
+  it('keeps the account slug — not the display name — in --usage --json output (issue #22)', async () => {
+    const displayNameAccountsResponse = jsonResponse({
+      data: {
+        meActor: {
+          accounts: [{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }],
+        },
+      },
+    });
+    const responses = [displayNameAccountsResponse, planResponse];
+    let call = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
+
+    await run(['--usage', '--json']);
+
+    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
+    expect(parsed[0].account).toBe('myorg');
   });
 
   it('emits the usage fields for --json', async () => {
