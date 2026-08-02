@@ -35,6 +35,14 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+      # Q_BUILDS gained a $limit variable for --history (issue #17); a
+      # separate step so a break in that variable/shape is distinguishable
+      # from a break in the plain (limit: 1) query above.
+      - name: Run --history against the live EAS API
+        run: node bin/cli.mjs --history 5
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: File an issue on failure
         if: failure()
         uses: actions/github-script@v9
