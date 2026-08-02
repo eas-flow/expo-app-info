@@ -41,6 +41,20 @@ describe('toDisplayRows', () => {
       ['myorg', 'Prototype', 'prototype', '-', '-', '-', '-'],
     ]);
   });
+
+  it('shows the account slug when no accountDisplayNames map is given', () => {
+    expect(toDisplayRows([withBuild])[0][0]).toBe('myorg');
+  });
+
+  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+    const accountDisplayNames = new Map([['myorg', 'My Organization']]);
+    expect(toDisplayRows([withBuild], { accountDisplayNames })[0][0]).toBe('My Organization');
+  });
+
+  it('falls back to the slug when the map has no entry for this account', () => {
+    const accountDisplayNames = new Map([['other', 'Other Org']]);
+    expect(toDisplayRows([withBuild], { accountDisplayNames })[0][0]).toBe('myorg');
+  });
 });
 
 describe('formatJSON', () => {
@@ -159,6 +173,17 @@ describe('toUsageDisplayRows', () => {
   it('shows "-" when only one end of the billing period is known', () => {
     const row = toUsageDisplayRows([{ ...usageEntry, periodEnd: null }])[0];
     expect(row[5]).toBe('-');
+  });
+
+  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+    const accountDisplayNames = new Map([['myorg', 'My Organization']]);
+    const row = toUsageDisplayRows([usageEntry], { accountDisplayNames })[0];
+    expect(row[0]).toBe('My Organization');
+  });
+
+  it('falls back to the slug when no accountDisplayNames map is given', () => {
+    const row = toUsageDisplayRows([usageEntry])[0];
+    expect(row[0]).toBe('myorg');
   });
 });
 
