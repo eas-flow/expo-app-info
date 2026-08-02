@@ -666,7 +666,10 @@ describe('run --usage', () => {
   it('emits 3 rows (one per account per month, newest first) with client-side successful-build counts', async () => {
     const responses = [accountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage', '--json']);
 
@@ -699,7 +702,10 @@ describe('run --usage', () => {
   it('emits the 5-field usage header for --csv', async () => {
     const responses = [accountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage', '--csv']);
 
@@ -711,7 +717,10 @@ describe('run --usage', () => {
   it('shows "(today)" for the current month and the inclusive last day for finished months', async () => {
     const responses = [accountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage']);
 
@@ -724,7 +733,10 @@ describe('run --usage', () => {
   it('--month widens the window (e.g. --month 1 shows only the current month)', async () => {
     const responses = [accountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage', '--month', '1', '--json']);
 
@@ -740,7 +752,10 @@ describe('run --usage', () => {
   it('shows only the requested platform column with --platform', async () => {
     const responses = [accountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage', '--platform', 'ios']);
 
@@ -752,7 +767,10 @@ describe('run --usage', () => {
   it('degrades a whole account to null build counts (not a failed run) when its apps/builds fetch fails', async () => {
     const responses = [accountsResponse, jsonResponse({ errors: [{ message: 'boom' }] })];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage', '--json']);
 
@@ -777,7 +795,10 @@ describe('run --usage', () => {
     });
     const responses = [displayNameAccountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage', '--csv']);
 
@@ -796,7 +817,10 @@ describe('run --usage', () => {
     });
     const responses = [displayNameAccountsResponse, singleAppResponse, buildsPageResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--usage']);
 
@@ -941,7 +965,10 @@ describe('run --plan', () => {
     });
     const responses = [displayNameAccountsResponse, subscriptionResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan']);
 
@@ -959,7 +986,10 @@ describe('run --plan', () => {
     });
     const responses = [displayNameAccountsResponse, subscriptionResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan', '--json']);
 
@@ -970,7 +1000,10 @@ describe('run --plan', () => {
   it('emits the plan fields for --json', async () => {
     const responses = [accountsResponse, subscriptionResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan', '--json']);
 
@@ -992,7 +1025,10 @@ describe('run --plan', () => {
   it('emits the plan header for --csv', async () => {
     const responses = [accountsResponse, subscriptionResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan', '--csv']);
 
@@ -1009,7 +1045,10 @@ describe('run --plan', () => {
       jsonResponse({ errors: [{ message: 'Entity not authorized: Account[acc-1]' }] }),
     ];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan', '--json']);
 
@@ -1031,7 +1070,10 @@ describe('run --plan', () => {
   it("reports only that platform's concurrency when combined with --platform", async () => {
     const responses = [accountsResponse, subscriptionResponse];
     let call = 0;
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan', '--platform', 'ios']);
 
@@ -1078,7 +1120,10 @@ describe('run --plan', () => {
 
     let call = 0;
     const responses = [twoAccountsResponse, subResponseFor('acc-1'), subResponseFor('acc-2')];
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => responses[call++]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => responses[call++])
+    );
 
     await run(['--plan', '--json']);
 
