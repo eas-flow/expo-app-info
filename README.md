@@ -21,22 +21,20 @@ $ npx expo-app-info
 └─────────┘────────────┘───────────┘──────────┘─────────┘───────┘───────────────────────────┘
 ```
 
-## Why
+## Features
 
-If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"*
+If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-app-info` walks your whole account via the EAS GraphQL API and prints one table.
 
-- `eas build:list` only works **inside** a project directory, and shows one project at a time.
-- There is no `eas project:list` command.
-- The Expo dashboard requires clicking into every project one by one.
+- Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
+- `--json` / `--csv` output for CI and spreadsheets
+- `--platform` filter to narrow to `ios` or `android`
+- `--history <N>` — show the `N` most recent builds per platform, not just the latest
+- `--usage` — successful build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
+- `--plan` — current account subscription: plan, plan ID, status, concurrency, trial end
+- `ACCOUNT` shows the EAS "Display name" when set, falling back to the unique slug
+- Zero runtime dependencies
 
-`expo-app-info` walks your whole account via the EAS GraphQL API and prints one table.
-
-## Requirements
-
-Node.js **20 or later** (the CLI uses the global `fetch`). Node 22 LTS or newer
-is recommended — Node 20 reached end of life in April 2026.
-
-## Usage
+## Install
 
 ```bash
 npx expo-app-info
@@ -48,6 +46,24 @@ No install required. If you prefer:
 npm install -g expo-app-info
 expo-app-info
 ```
+
+Requires Node.js **20 or later** (the CLI uses the global `fetch`). Node 22 LTS or newer
+is recommended — Node 20 reached end of life in April 2026.
+
+## Authentication
+
+A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
+
+```bash
+export EXPO_TOKEN=xxxxxxxx
+npx expo-app-info
+```
+
+Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
+
+This is deliberately the only option. The token is never read from `argv` and never written to disk, so it cannot leak through your shell history, the process list, or a forgotten config file. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+
+## Usage
 
 Filter by platform, or switch the output format for scripts:
 
@@ -129,26 +145,7 @@ Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to
 just that platform's number. Cannot be combined with `--usage` or
 `--history`, since all three are separate display modes.
 
-## Authentication
-
-A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
-
-```bash
-export EXPO_TOKEN=xxxxxxxx
-npx expo-app-info
-```
-
-Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
-
-This is deliberately the only option. The token is never read from `argv` and never written to disk, so it cannot leak through your shell history, the process list, or a forgotten config file. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
-
-> **On robot tokens:** a robot token can only see the account that issued it. Use a personal access token to list every account you belong to.
-
-> **On `--usage`:** it no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` (or `null` in `--json`/`--csv`) and the reason goes to stderr — the run does not fail.
-
-> **On `--plan`:** plan data is billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan columns and the reason goes to stderr, rather than failing the run.
-
-## What the numbers mean
+### What the numbers mean
 
 | Column         | Source                                                     |
 | -------------- | ---------------------------------------------------------- |
@@ -189,7 +186,7 @@ token.
 
 **`ACCOUNT` is cosmetic — table only.** It shows the account's EAS "Display name" when the account has one set, falling back to the unique slug otherwise, since the display name is friendlier to read and is not guaranteed to be unique. `--json`/`--csv` always emit the slug in the `account` field regardless, since scripts may rely on it as a unique key.
 
-## Filtering
+### Filtering
 
 - `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's `SUCCESSFUL BUILDS` column; with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
 - `--month <n>` — only with `--usage`: widen the window to the last `n` calendar months (1–12, default 3).
@@ -199,7 +196,7 @@ token.
 
 There is no `--account` filter at the moment — it was removed (see [#22](https://github.com/eas-flow/expo-app-info/issues/22)) rather than kept alongside the new `ACCOUNT` display-name behavior. Filtering by account may return once the shape it should take (slug, display name, or both) is settled.
 
-## Machine-readable output (`--json` / `--csv`)
+### Machine-readable output (`--json` / `--csv`)
 
 Both emit one entry per row shown in the table, with raw values instead of display strings — `null` (JSON) / an empty cell (CSV) where the table shows `-`, and a full ISO 8601 timestamp (`lastBuildAt`) instead of a relative date:
 
@@ -230,13 +227,15 @@ With `--usage` they emit one entry per account per month instead: `account`, `bu
 
 With `--plan` they emit: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `trialEnd`. All three concurrency fields are always present regardless of `--platform` — that flag only changes which number the human table shows in `CONCURRENCY`.
 
-## Output stability
+### Output stability
 
 The default table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release.
 
 `--json` and `--csv` are for scripts and follow semver: existing fields are never renamed or removed, and their meaning never changes, without a major version bump. New fields may be added in a minor release; scripts should ignore fields they don't recognize.
 
-## How it works
+## Documentation
+
+### How it works
 
 Three GraphQL queries against `https://api.expo.dev/graphql`:
 
@@ -249,6 +248,13 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 `--usage` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { status: FINISHED })` for each app and buckets every build by platform + UTC calendar month on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Both accounts and, within each account, apps are fetched with a concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
 
 `--plan` skips 2 and 3 entirely, and runs a smaller query per account: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
+
+### Further reading
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, test/lint commands, project layout, and the release process
+- [SECURITY.md](./SECURITY.md) — vulnerability reporting policy and how to report an issue privately
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — the Contributor Covenant this project follows
+- [Roadmap](#roadmap) below — shipped and planned features
 
 ## Roadmap
 
@@ -264,20 +270,32 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
 Issues and PRs welcome.
 
-## Caveats
+## FAQ
 
-The EAS GraphQL API is **not officially documented or versioned**. Field names were derived from Expo's own open-source clients ([`eas-cli`](https://github.com/expo/eas-cli), [`orbit`](https://github.com/expo/orbit)) and may change without notice. This project is not affiliated with Expo.
+**Is this an official Expo tool?**
 
-## Security
+No. The EAS GraphQL API is **not officially documented or versioned**. Field names were derived from Expo's own open-source clients ([`eas-cli`](https://github.com/expo/eas-cli), [`orbit`](https://github.com/expo/orbit)) and may change without notice. This project is not affiliated with or endorsed by Expo.
 
-The `EXPO_TOKEN` is never read from `argv`, never written to disk, and never
-printed. See [SECURITY.md](./SECURITY.md) for the full policy and for how to
-report a vulnerability privately.
+**Can I use a robot token instead of a personal access token?**
 
-## Contributing
+A robot token can only see the account that issued it. Use a personal access token to list every account you belong to.
 
-Bug reports and PRs are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup, test/lint commands, and release process. This project follows the [Contributor Covenant](./CODE_OF_CONDUCT.md).
+**What happens if a token can't read an account's apps or builds?**
+
+`--usage` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` (or `null` in `--json`/`--csv`) and the reason goes to stderr — the run does not fail.
+
+**Why do some accounts show `-` in the `--plan` columns?**
+
+Plan data is billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan columns and the reason goes to stderr, rather than failing the run.
+
+**Does `VERSION` come from my local `app.json`?**
+
+No. EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
+
+**Is the `EXPO_TOKEN` ever written to disk or logged?**
+
+No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](./SECURITY.md) for the full policy and how to report a vulnerability privately.
 
 ## License
 
-MIT
+[MIT](./LICENSE)

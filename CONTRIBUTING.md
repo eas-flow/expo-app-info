@@ -37,12 +37,14 @@ for the checklist.
 ## Project layout
 
 ```
-bin/cli.mjs   Thin executable entry point (shebang + calls src/cli.mjs#run)
-src/cli.mjs   Argument parsing, help text, the run() flow
-src/api.mjs   EAS GraphQL client (throws, never exits/prints)
+bin/cli.mjs     Thin executable entry point (shebang + calls src/cli.mjs#run)
+src/cli.mjs     Argument parsing, help text, the run() flow
+src/api.mjs     EAS GraphQL client (throws, never exits/prints)
+src/format.mjs  entries → JSON/CSV/display-row conversion (FIELDS/USAGE_FIELDS
+                are the machine-readable output contract)
 src/render.mjs  Table rendering, column width, relative-date formatting
-test/         Vitest tests, one file per src module (plus an integration
-              test for run() with a mocked fetch)
+test/           Vitest tests, one file per src module (plus an integration
+                test for run() with a mocked fetch)
 ```
 
 `src/*` files never call `process.exit` or read directly from `process.argv`
