@@ -800,10 +800,11 @@ describe('run --usage', () => {
       vi.fn().mockImplementation(async () => responses[call++])
     );
 
-    await run(['--usage']);
+    await run(['--usage', '--csv']);
 
-    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
-    expect(output).toContain('My Organization');
+    const csv = logSpy.mock.calls[0][0];
+    expect(csv.split('\n')[0]).toBe('account,buildsIos,buildsAndroid,periodStart,periodEnd');
+    expect(csv.split('\n')[1]).toBe('myorg,2,1,2026-07-01T00:00:00.000Z,2026-08-01T00:00:00.000Z');
   });
 
   it('keeps the account slug — not the display name — in --usage --json output (issue #22)', async () => {
@@ -821,10 +822,12 @@ describe('run --usage', () => {
       vi.fn().mockImplementation(async () => responses[call++])
     );
 
-    await run(['--usage', '--json']);
+    await run(['--usage']);
 
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed[0].account).toBe('myorg');
+    const output = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(output).toContain('2026-07-01 → (today)');
+    expect(output).toContain('2026-06-01 → 2026-06-30');
+    expect(output).toContain('2026-05-01 → 2026-05-31');
   });
 
   it('fetches accounts (and their apps/builds) in parallel rather than a strictly sequential loop', async () => {
