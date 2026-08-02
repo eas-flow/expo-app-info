@@ -31,38 +31,15 @@ export const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
   } }
 }`;
 
-// Billing-scoped fields. A token without billing permission on the account
-// gets a GraphQL error here rather than data, so the CLI queries this
-// separately and degrades to "-" instead of failing the whole run.
-//
-// `billingPeriod` takes a required `date` and returns whichever billing
-// period contains it — passing "now" gets the current one. The same date is
-// reused for `byBillingPeriod` so both fields describe the same window.
-//
-// Per-platform build counts live under
-// `usageMetrics.byBillingPeriod(...).planMetrics[].platformBreakdown`, found
-// by walking `EstimatedUsage` in the schema — NOT via `filterParams` on
-// `metricsForServiceMetric`, which accepts (and silently ignores) any key.
-// See scripts/probe-usage.mjs and issue #15 for how this was confirmed.
-export const Q_ACCOUNT_PLAN = `query AccountPlan($accountId: String!, $now: DateTime!) {
-  account { byId(accountId: $accountId) { id
-    subscription {
-      id planId name status trialEnd
-      concurrencies { total ios android }
-    }
-    billingPeriod(date: $now) { start end }
-    usageMetrics {
-      byBillingPeriod(date: $now, service: BUILDS) {
-        planMetrics {
-          serviceMetric
-          metricType
-          value
-          platformBreakdown { ios { value } android { value } }
-        }
-      }
-    }
-  } }
-}`;
+// NOTE: the previous `Q_ACCOUNT_PLAN` query (billingPeriod + usageMetrics +
+// subscription, keyed to EAS's own billing cycle) lived here and backed
+// `--usage`. Issue #18 replaced `--usage` with client-side, UTC
+// calendar-month "successful build" counting (see Q_BUILDS_PAGE /
+// countBuildsByMonth below) — arbitrary calendar ranges can't be sliced out
+// of `usageMetrics.byBillingPeriod`, which is tied to the billing cycle, and
+// `metricsForServiceMetric`'s `filterParams` was found not to filter by
+// platform at all (issue #15). The subscription-only part of that query
+// lives on as Q_SUBSCRIPTION below, for `--plan` (issue #19).
 
 // `--plan` (issue #19). Deliberately a separate, minimal query from
 // Q_ACCOUNT_PLAN above rather than a shared one: it has no `billingPeriod`
@@ -85,6 +62,46 @@ export const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
     }
   } }
 }`;
+
+// `--usage` (issue #18). Same shape as Q_BUILDS above but paginated with
+// `offset`/`limit` instead of a fixed small `limit`, so callers can walk
+// arbitrarily far back into an app's build history. Only `createdAt` is
+// needed here — counting/bucketing by calendar month happens client-side in
+// countBuildsByMonth, not appVersion/appBuildVersion display.
+export const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
+  app { byId(appId: $appId) { id
+    ios: builds(offset: $offset, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
+      createdAt
+    }
+    android: builds(offset: $offset, limit: $limit, filter: { platform: ANDROID, status: FINISHED }) {
+      createdAt
+    }
+  } }
+}`;
+
+// Page size for Q_BUILDS_PAGE. `builds(offset: 0, limit: 100)` is confirmed
+// accepted by the API (issue #17's scripts/probe-history.mjs); a non-zero
+// offset with this field hasn't been separately probed, but it's the same
+// standard offset/limit shape, not a new field, so this is treated as safe
+// pending scripts/probe-usage.mjs's extended check (issue #18's "事前検証").
+const BUILD_PAGE_SIZE = 50;
+
+/**
+ * Which month bucket (index into `months`) a build's `createdAt` falls into,
+ * or -1 if it is outside every requested month (older than the oldest one).
+ * `months` is a list of `{ start, end }` UTC calendar-month boundaries
+ * (ISO 8601, `end` exclusive — the instant the next month starts), ordered
+ * newest first, as produced by src/cli.mjs#calendarMonths().
+ */
+function monthIndexForBuild(createdAt, months) {
+  const t = new Date(createdAt).getTime();
+  for (let i = 0; i < months.length; i++) {
+    if (t >= new Date(months[i].start).getTime() && t < new Date(months[i].end).getTime()) {
+      return i;
+    }
+  }
+  return -1;
+}
 
 /**
  * Creates a client bound to one API URL / auth header set. Keeping this a
@@ -157,45 +174,78 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
   }
 
   /**
-   * Subscription, current billing period, and this-period build counts per
-   * platform, for one account. Throws like every other method here; the
-   * caller decides whether a missing plan is fatal (it isn't — see
-   * src/cli.mjs, which renders "-" and keeps going).
+   * Successful (FINISHED) build counts for one app, bucketed by platform and
+   * UTC calendar month, for `--usage` (issue #18). `months` is a list of
+   * `{ start, end }` boundaries ordered newest first (src/cli.mjs's
+   * calendarMonths()); the return value is a parallel array of
+   * `{ ios, android }` counts, one entry per month in `months`.
    *
-   * `now` is a parameter (default `new Date()`) so callers can pin the
-   * billing-period lookup to a fixed instant in tests.
+   * Pages through Q_BUILDS_PAGE newest-first, a fixed BUILD_PAGE_SIZE at a
+   * time, for both platforms in the same request. Each platform stops
+   * independently once either a page comes back short
+   * (fewer than BUILD_PAGE_SIZE — no more builds exist) or every build in a
+   * page is older than the oldest requested month's start (further pages
+   * would only be older still, assuming the API's undocumented order holds
+   * newest-first, as observed for tested accounts in
+   * scripts/probe-history.mjs). Throws ApiError like every other method
+   * here; the caller (src/cli.mjs#runUsage) decides a failure degrades that
+   * whole account's rows rather than failing the run.
    */
-  async function fetchAccountPlan(accountId, { now = new Date() } = {}) {
-    const account = (await gql(Q_ACCOUNT_PLAN, { accountId, now: now.toISOString() })).account.byId;
+  async function countBuildsByMonth(appId, months) {
+    const counts = months.map(() => ({ ios: 0, android: 0 }));
+    const oldestStartMs = new Date(months[months.length - 1].start).getTime();
 
-    const buildMetric = account?.usageMetrics?.byBillingPeriod?.planMetrics?.find(
-      (m) => m.serviceMetric === 'BUILDS'
-    );
+    let offset = 0;
+    let iosDone = false;
+    let androidDone = false;
 
-    return {
-      subscription: account?.subscription ?? null,
-      billingPeriod: account?.billingPeriod ?? null,
-      buildsByPlatform: buildMetric?.platformBreakdown
-        ? {
-            ios: buildMetric.platformBreakdown.ios?.value ?? null,
-            android: buildMetric.platformBreakdown.android?.value ?? null,
-          }
-        : null,
-    };
+    while (!iosDone || !androidDone) {
+      const page = (await gql(Q_BUILDS_PAGE, { appId, offset, limit: BUILD_PAGE_SIZE })).app.byId;
+      const iosPage = iosDone ? [] : page.ios;
+      const androidPage = androidDone ? [] : page.android;
+
+      for (const b of iosPage) {
+        const i = monthIndexForBuild(b.createdAt, months);
+        if (i !== -1) counts[i].ios++;
+      }
+      for (const b of androidPage) {
+        const i = monthIndexForBuild(b.createdAt, months);
+        if (i !== -1) counts[i].android++;
+      }
+
+      if (!iosDone) {
+        const exhausted = iosPage.length < BUILD_PAGE_SIZE;
+        const pastOldest =
+          iosPage.length > 0 &&
+          iosPage.every((b) => new Date(b.createdAt).getTime() < oldestStartMs);
+        if (exhausted || pastOldest) iosDone = true;
+      }
+      if (!androidDone) {
+        const exhausted = androidPage.length < BUILD_PAGE_SIZE;
+        const pastOldest =
+          androidPage.length > 0 &&
+          androidPage.every((b) => new Date(b.createdAt).getTime() < oldestStartMs);
+        if (exhausted || pastOldest) androidDone = true;
+      }
+
+      offset += BUILD_PAGE_SIZE;
+    }
+
+    return counts;
   }
 
   /**
    * Current subscription (plan, status, trial end, concurrency) for one
-   * account — no billing period / usage metrics, unlike fetchAccountPlan.
-   * Used by `--plan` (issue #19). Throws like every other method here; the
-   * caller (src/cli.mjs#runPlan) decides a missing plan isn't fatal.
+   * account — no billing period or build counts. Used by `--plan`
+   * (issue #19). Throws like every other method here; the caller
+   * (src/cli.mjs#runPlan) decides a missing plan isn't fatal.
    */
   async function fetchSubscription(accountId) {
     const account = (await gql(Q_SUBSCRIPTION, { accountId })).account.byId;
     return account?.subscription ?? null;
   }
 
-  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchAccountPlan, fetchSubscription };
+  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
 }
 
 /** Run `task` over `items` with a bounded number of in-flight requests. */
