@@ -4,7 +4,12 @@
 
 export class ApiError extends Error {}
 
-export const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name } } }`;
+// `displayName` is fetched alongside the unique `name` slug so the CLI can
+// show a friendlier name in the human table (issue #22) while keeping `name`
+// as the value --json/--csv emit and that used to back --account filtering
+// (removed in the same change — see issue #22). It is nullable — not every
+// account has one set.
+export const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
 
 export const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   account { byId(accountId: $accountId) { id

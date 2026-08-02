@@ -37,7 +37,6 @@ export const HELP = `
     -v, --version           Show version
     --json                  Output as JSON instead of a table
     --csv                   Output as CSV instead of a table
-    --account <name>        Only show this account (exact match, case-insensitive)
     --platform <platform>   Only show "ios" or "android" builds
     --usage                 Show account plan/usage instead of the app list
     --history <N>           Show the N most recent builds per platform instead of just
@@ -51,6 +50,11 @@ export const HELP = `
     your shell history or the process list.
 
   Notes
+    ACCOUNT shows the account's EAS "Display name" when one is set, falling
+    back to its unique slug otherwise. This is cosmetic (table only) —
+    --json/--csv always emit the slug in the \`account\` field, since scripts
+    may rely on it as a unique identifier.
+
     VERSION / BUILD come from the latest *successful* EAS build, not from your
     local app.json. Apps that have never been built show "-" in the table (and
     null in --json/--csv).
@@ -74,7 +78,6 @@ export function parseArgs(argv) {
     version: false,
     json: false,
     csv: false,
-    account: null,
     platform: null,
     usage: false,
     history: null,
@@ -93,10 +96,6 @@ export function parseArgs(argv) {
       opts.csv = true;
     } else if (arg === '--usage') {
       opts.usage = true;
-    } else if (arg === '--account') {
-      opts.account = requireValue(argv, ++i, '--account');
-    } else if (arg.startsWith('--account=')) {
-      opts.account = arg.slice('--account='.length);
     } else if (arg === '--platform') {
       opts.platform = requireValue(argv, ++i, '--platform');
     } else if (arg.startsWith('--platform=')) {
@@ -189,19 +188,17 @@ export async function run(argv = process.argv.slice(2)) {
   const client = createApiClient({ apiUrl, authHeaders });
 
   progress('Fetching accounts…');
-  let accounts = await client.fetchAccounts();
+  const accounts = await client.fetchAccounts();
   if (accounts.length === 0) throw new CliError('No accounts found for this token.');
 
-  if (opts.account !== null) {
-    const wanted = opts.account.toLowerCase();
-    accounts = accounts.filter((a) => a.name.toLowerCase() === wanted);
-    if (accounts.length === 0) {
-      throw new CliError(`No account matching "${opts.account}" found.`);
-    }
-  }
+  // Table-only, cosmetic mapping of account slug -> EAS "Display name"
+  // (issue #22). --json/--csv keep emitting the slug (`account.name`)
+  // unconditionally — see toDisplayRows/toUsageDisplayRows in format.mjs.
+  // Falls back to the slug itself when displayName is null/unset.
+  const accountDisplayNames = new Map(accounts.map((a) => [a.name, a.displayName || a.name]));
 
   if (opts.usage) {
-    await runUsage(client, accounts, opts);
+    await runUsage(client, accounts, opts, accountDisplayNames);
     return;
   }
 
@@ -267,7 +264,7 @@ export async function run(argv = process.argv.slice(2)) {
   console.log(
     renderTable(
       ['ACCOUNT', 'APP', 'SLUG', 'PLATFORM', 'VERSION', 'BUILD', 'BUILD DATE'],
-      toDisplayRows(filtered)
+      toDisplayRows(filtered, { accountDisplayNames })
     )
   );
   // The effective count is what matters here, not whether --history was
@@ -290,7 +287,7 @@ export async function run(argv = process.argv.slice(2)) {
  * row is still printed with "-" in the plan columns, and the reason is
  * reported on stderr so it stays out of --json/--csv output.
  */
-async function runUsage(client, accounts, opts) {
+async function runUsage(client, accounts, opts, accountDisplayNames) {
   const entries = [];
   const warnings = [];
 
@@ -349,7 +346,7 @@ async function runUsage(client, accounts, opts) {
         usageBuildsHeader(opts.platform),
         'PERIOD',
       ],
-      toUsageDisplayRows(entries, { platform: opts.platform })
+      toUsageDisplayRows(entries, { platform: opts.platform, accountDisplayNames })
     )
   );
   console.log(
