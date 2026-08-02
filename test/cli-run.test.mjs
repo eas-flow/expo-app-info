@@ -70,7 +70,7 @@ describe('run', () => {
           },
         },
       }),
-      // fetchLatestBuilds
+      // fetchBuilds
       jsonResponse({
         data: {
           app: {
@@ -98,9 +98,184 @@ describe('run', () => {
     await run([]);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
+
     const tableOutput = logSpy.mock.calls.map((args) => args[0]).join('\n');
     expect(tableOutput).toContain('storefront');
     expect(tableOutput).toContain('3.2.1');
+    expect(tableOutput).toContain('BUILD DATE');
+    expect(tableOutput).toContain('VERSION/BUILD = latest successful EAS build.');
+  });
+
+  it('--history N fetches up to N builds per platform, newest first, and lists them as separate rows', async () => {
+    process.env.EXPO_TOKEN = 'test-token';
+
+    const responses = [
+      jsonResponse({ data: { meActor: { accounts: [{ id: 'acc-1', name: 'myorg' }] } } }),
+      jsonResponse({
+        data: {
+          account: {
+            byId: {
+              id: 'acc-1',
+              appsPaginated: {
+                edges: [{ node: { id: 'app-1', name: 'Storefront', slug: 'storefront' } }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }),
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              // Out of order on purpose — the CLI must not depend on the
+              // API returning builds newest-first.
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.0',
+                  appBuildVersion: '40',
+                  createdAt: '2026-06-20T00:00:00.000Z',
+                },
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-20T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
+      }),
+    ];
+
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--history', '2', '--json']);
+
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 2 });
+
+    const parsed = JSON.parse(logSpy.mock.calls.at(-1)[0]);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].build).toBe('41');
+    expect(parsed[1].build).toBe('40');
+  });
+
+  it('--history 1 produces identical output to leaving --history off', async () => {
+    process.env.EXPO_TOKEN = 'test-token';
+
+    const responses = [
+      jsonResponse({ data: { meActor: { accounts: [{ id: 'acc-1', name: 'myorg' }] } } }),
+      jsonResponse({
+        data: {
+          account: {
+            byId: {
+              id: 'acc-1',
+              appsPaginated: {
+                edges: [{ node: { id: 'app-1', name: 'Storefront', slug: 'storefront' } }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }),
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-20T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
+      }),
+    ];
+
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--history', '1']);
+
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
+
+    const tableOutput = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(tableOutput).toContain('VERSION/BUILD = latest successful EAS build.');
+    expect(tableOutput).not.toContain('newest first');
+  });
+
+  it('shows the history footer note when --history > 1', async () => {
+    process.env.EXPO_TOKEN = 'test-token';
+
+    const responses = [
+      jsonResponse({ data: { meActor: { accounts: [{ id: 'acc-1', name: 'myorg' }] } } }),
+      jsonResponse({
+        data: {
+          account: {
+            byId: {
+              id: 'acc-1',
+              appsPaginated: {
+                edges: [{ node: { id: 'app-1', name: 'Storefront', slug: 'storefront' } }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          },
+        },
+      }),
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-20T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
+      }),
+    ];
+
+    let call = 0;
+    const fetchImpl = vi.fn().mockImplementation(async () => responses[call++]);
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--history', '3']);
+
+    const tableOutput = logSpy.mock.calls.map((args) => args[0]).join('\n');
+    expect(tableOutput).toContain(
+      'VERSION/BUILD = latest 3 successful EAS builds per platform, newest first.'
+    );
+  });
+
+  it('rejects with CliError when --history is combined with --usage', async () => {
+    process.env.EXPO_TOKEN = 'test-token';
+    await expect(run(['--usage', '--history', '5'])).rejects.toThrow(
+      /--history cannot be combined with --usage/
+    );
   });
 
   it('--account filters accounts before fetching apps for the others', async () => {
