@@ -43,6 +43,14 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+      # --plan (issue #19) queries `subscription` on its own, without
+      # `billingPeriod`/`usageMetrics` — a separate step so a break here is
+      # distinguishable from a break in --usage's larger query above.
+      - name: Run --plan against the live EAS API
+        run: node bin/cli.mjs --plan
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: File an issue on failure
         if: failure()
         uses: actions/github-script@v9

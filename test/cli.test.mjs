@@ -8,6 +8,7 @@ const DEFAULTS = {
   csv: false,
   platform: null,
   usage: false,
+  plan: false,
   history: null,
 };
 
@@ -134,5 +135,49 @@ describe('parseArgs', () => {
 
   it('throws CliError on --account, which was removed (issue #22 — Account.displayName in the table replaced the need for filtering by slug for now)', () => {
     expect(() => parseArgs(['--account', 'myorg'])).toThrow(/Unknown option: --account/);
+  });
+
+  it('parses --plan', () => {
+    expect(parseArgs(['--plan'])).toEqual({ ...DEFAULTS, plan: true });
+  });
+
+  it('parses --plan combined with --json', () => {
+    expect(parseArgs(['--plan', '--json'])).toEqual({ ...DEFAULTS, plan: true, json: true });
+  });
+
+  it('parses --plan combined with --csv', () => {
+    expect(parseArgs(['--plan', '--csv'])).toEqual({ ...DEFAULTS, plan: true, csv: true });
+  });
+
+  it('combines --plan with --platform', () => {
+    expect(parseArgs(['--plan', '--platform', 'ios'])).toEqual({
+      ...DEFAULTS,
+      plan: true,
+      platform: 'ios',
+    });
+  });
+
+  it('throws when --plan is combined with --usage', () => {
+    expect(() => parseArgs(['--plan', '--usage'])).toThrow(
+      /--plan cannot be combined with --usage/
+    );
+  });
+
+  it('throws when --usage is combined with --plan (order does not matter)', () => {
+    expect(() => parseArgs(['--usage', '--plan'])).toThrow(
+      /--plan cannot be combined with --usage/
+    );
+  });
+
+  it('throws when --plan is combined with --history', () => {
+    expect(() => parseArgs(['--plan', '--history', '3'])).toThrow(
+      /--plan cannot be combined with --history/
+    );
+  });
+
+  it('throws when --history is combined with --plan (order does not matter)', () => {
+    expect(() => parseArgs(['--history', '3', '--plan'])).toThrow(
+      /--plan cannot be combined with --history/
+    );
   });
 });

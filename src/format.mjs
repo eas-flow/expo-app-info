@@ -22,6 +22,23 @@ export const USAGE_FIELDS = [
 ];
 
 /**
+ * `--plan`: one entry per account, current subscription only (no billing
+ * period / build counts — that's `--usage`). No price field: not confirmed
+ * to exist in the schema yet (issue #19's pre-verification note); add one
+ * later only once that's checked against a real token.
+ */
+export const PLAN_FIELDS = [
+  'account',
+  'plan',
+  'planId',
+  'status',
+  'concurrencyTotal',
+  'concurrencyIos',
+  'concurrencyAndroid',
+  'trialEnd',
+];
+
+/**
  * Table rows: display strings, "-" for null/missing, absolute build dates.
  *
  * `accountDisplayNames` (account slug -> EAS "Display name") is an optional
@@ -96,6 +113,50 @@ export function usageBuildsHeader(platform = null) {
   if (platform === 'ios') return 'BUILDS (IOS)';
   if (platform === 'android') return 'BUILDS (ANDROID)';
   return 'BUILDS';
+}
+
+/**
+ * `--plan` table rows: display strings, "-" for null/missing. Unlike
+ * `--usage`, PLAN ID is shown as its own column (there's no billing period
+ * or build count column to compete for space with), and CONCURRENCY reports
+ * all three numbers (total/ios/android) at once unless `--platform` narrows
+ * it to one, mirroring the `--usage` convention in `usageConcurrencyHeader`.
+ * `accountDisplayNames` is the same cosmetic, table-only slug -> Display
+ * name lookup described on `toDisplayRows` (issue #22).
+ */
+export function toPlanDisplayRows(
+  entries,
+  { platform = null, accountDisplayNames = new Map() } = {}
+) {
+  return entries.map((e) => [
+    accountDisplayNames.get(e.account) ?? e.account,
+    e.plan ?? '-',
+    e.planId ?? '-',
+    e.status ?? '-',
+    planConcurrencyCell(e, platform),
+    e.trialEnd ? isoDate(e.trialEnd) : '-',
+  ]);
+}
+
+function planConcurrencyCell(entry, platform) {
+  const { concurrencyTotal, concurrencyIos, concurrencyAndroid } = entry;
+  if (platform === 'ios') {
+    return concurrencyIos === null || concurrencyIos === undefined ? '-' : String(concurrencyIos);
+  }
+  if (platform === 'android') {
+    return concurrencyAndroid === null || concurrencyAndroid === undefined
+      ? '-'
+      : String(concurrencyAndroid);
+  }
+  if (concurrencyTotal === null || concurrencyTotal === undefined) return '-';
+  return `${concurrencyTotal} / ${concurrencyIos} / ${concurrencyAndroid}`;
+}
+
+/** Header for the `--plan` concurrency column, which depends on the --platform filter. */
+export function planConcurrencyHeader(platform = null) {
+  if (platform === 'ios') return 'CONCURRENCY (IOS)';
+  if (platform === 'android') return 'CONCURRENCY (ANDROID)';
+  return 'CONCURRENCY (TOTAL/IOS/AND)';
 }
 
 /** ISO 8601 timestamp → YYYY-MM-DD, for the human table only. */

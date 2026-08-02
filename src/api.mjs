@@ -64,6 +64,28 @@ export const Q_ACCOUNT_PLAN = `query AccountPlan($accountId: String!, $now: Date
   } }
 }`;
 
+// `--plan` (issue #19). Deliberately a separate, minimal query from
+// Q_ACCOUNT_PLAN above rather than a shared one: it has no `billingPeriod`
+// or `usageMetrics`, so it works standalone once issue #18 removes those
+// fields (and this query) from the `--usage` path. Same billing-scoped
+// caveat applies — a token without billing permission on the account gets a
+// GraphQL error here, and the CLI degrades that to "-" per account rather
+// than failing the whole run.
+//
+// No monthly price field here: the schema wasn't probed for one (see
+// issue #19's "事前検証" note) and the fields already confirmed via #15 —
+// `planId`, `name`, `status`, `trialEnd`, `concurrencies` — are the ones
+// queried below. Add a price field later only once it's confirmed to exist
+// against a real token.
+export const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
+  account { byId(accountId: $accountId) { id
+    subscription {
+      id planId name status trialEnd
+      concurrencies { total ios android }
+    }
+  } }
+}`;
+
 /**
  * Creates a client bound to one API URL / auth header set. Keeping this a
  * factory (rather than module-scoped state) means tests can spin up an
@@ -162,7 +184,18 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     };
   }
 
-  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchAccountPlan };
+  /**
+   * Current subscription (plan, status, trial end, concurrency) for one
+   * account — no billing period / usage metrics, unlike fetchAccountPlan.
+   * Used by `--plan` (issue #19). Throws like every other method here; the
+   * caller (src/cli.mjs#runPlan) decides a missing plan isn't fatal.
+   */
+  async function fetchSubscription(accountId) {
+    const account = (await gql(Q_SUBSCRIPTION, { accountId })).account.byId;
+    return account?.subscription ?? null;
+  }
+
+  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchAccountPlan, fetchSubscription };
 }
 
 /** Run `task` over `items` with a bounded number of in-flight requests. */

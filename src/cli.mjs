@@ -7,7 +7,10 @@ import { ApiError, createApiClient, mapWithConcurrency } from './api.mjs';
 import {
   formatCSV,
   formatJSON,
+  PLAN_FIELDS,
+  planConcurrencyHeader,
   toDisplayRows,
+  toPlanDisplayRows,
   toUsageDisplayRows,
   USAGE_FIELDS,
   usageBuildsHeader,
@@ -42,8 +45,10 @@ export const HELP = `
     --csv                   Output as CSV instead of a table
     --platform <platform>   Only show "ios" or "android" builds
     --usage                 Show account plan/usage instead of the app list
+    --plan                  Show current account subscription (plan/concurrency) instead
+                             of the app list. Cannot be combined with --usage or --history.
     --history <N>           Show the N most recent builds per platform instead of just
-                             the latest (1-100). Cannot be combined with --usage.
+                             the latest (1-100). Cannot be combined with --usage or --plan.
 
   Authentication
     EXPO_TOKEN environment variable only. Create a personal access token at
@@ -73,6 +78,13 @@ export const HELP = `
     counts per platform for the current billing period) instead of one row
     per app. Plan data is billing-scoped: a token without billing permission
     on an account shows "-" there rather than failing the run.
+
+    --plan prints one row per account with its current subscription only —
+    plan name, plan ID, status, concurrency (total/ios/android), and trial
+    end — no build counts or billing period. Same billing-scope caveat as
+    --usage: a token without billing permission on an account shows "-"
+    there rather than failing the run. Cannot be combined with --usage or
+    --history, since each is its own display mode.
 `;
 
 export function parseArgs(argv) {
@@ -83,6 +95,7 @@ export function parseArgs(argv) {
     csv: false,
     platform: null,
     usage: false,
+    plan: false,
     history: null,
   };
 
@@ -99,6 +112,8 @@ export function parseArgs(argv) {
       opts.csv = true;
     } else if (arg === '--usage') {
       opts.usage = true;
+    } else if (arg === '--plan') {
+      opts.plan = true;
     } else if (arg === '--platform') {
       opts.platform = requireValue(argv, ++i, '--platform');
     } else if (arg.startsWith('--platform=')) {
@@ -137,6 +152,15 @@ export function parseArgs(argv) {
 
     if (opts.usage) {
       throw new CliError('--history cannot be combined with --usage.');
+    }
+  }
+
+  if (opts.plan) {
+    if (opts.usage) {
+      throw new CliError('--plan cannot be combined with --usage.');
+    }
+    if (opts.history !== null) {
+      throw new CliError('--plan cannot be combined with --history.');
     }
   }
 
@@ -202,6 +226,11 @@ export async function run(argv = process.argv.slice(2)) {
 
   if (opts.usage) {
     await runUsage(client, accounts, opts, accountDisplayNames);
+    return;
+  }
+
+  if (opts.plan) {
+    await runPlan(client, accounts, opts, accountDisplayNames);
     return;
   }
 
@@ -355,6 +384,79 @@ async function runUsage(client, accounts, opts, accountDisplayNames) {
   console.log(
     dim(
       `\n  ${entries.length} account(s). BUILDS/PERIOD = this account's current EAS billing period.`
+    )
+  );
+}
+
+/**
+ * `--plan`: one row per account with its current subscription only (plan,
+ * plan ID, status, concurrency, trial end) — no build counts or billing
+ * period, that's `--usage` (issue #19).
+ *
+ * Unlike `runUsage`, accounts are fetched with `mapWithConcurrency` rather
+ * than a sequential loop: each account's subscription lookup is independent
+ * of every other account's, so there is nothing to serialize on here.
+ *
+ * Plan fields are billing-scoped, so a token without billing permission on
+ * an account gets a GraphQL error for that account only. That is not fatal:
+ * the row is still printed with "-" in the plan columns, and the reason is
+ * reported on stderr so it stays out of --json/--csv output.
+ */
+async function runPlan(client, accounts, opts, accountDisplayNames) {
+  const warnings = [];
+  let done = 0;
+
+  const subscriptions = await mapWithConcurrency(accounts, CONCURRENCY, async (account) => {
+    try {
+      const subscription = await client.fetchSubscription(account.id);
+      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
+      return subscription;
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+      warnings.push(`${account.name}: ${err.message}`);
+      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
+      return null;
+    }
+  });
+
+  clearProgress();
+
+  for (const warning of warnings) {
+    console.error(dim(`  ! plan unavailable — ${warning}`));
+  }
+
+  const entries = accounts.map((account, i) => {
+    const subscription = subscriptions[i];
+    return {
+      account: account.name,
+      plan: subscription?.name ?? null,
+      planId: subscription?.planId ?? null,
+      status: subscription?.status ?? null,
+      concurrencyTotal: subscription?.concurrencies?.total ?? null,
+      concurrencyIos: subscription?.concurrencies?.ios ?? null,
+      concurrencyAndroid: subscription?.concurrencies?.android ?? null,
+      trialEnd: subscription?.trialEnd ?? null,
+    };
+  });
+
+  if (opts.json) {
+    console.log(formatJSON(entries));
+    return;
+  }
+  if (opts.csv) {
+    console.log(formatCSV(entries, PLAN_FIELDS));
+    return;
+  }
+
+  console.log(
+    renderTable(
+      ['ACCOUNT', 'PLAN', 'PLAN ID', 'STATUS', planConcurrencyHeader(opts.platform), 'TRIAL END'],
+      toPlanDisplayRows(entries, { platform: opts.platform, accountDisplayNames })
+    )
+  );
+  console.log(
+    dim(
+      `\n  ${entries.length} account(s). PLAN/STATUS/CONCURRENCY = current subscription (as of now).`
     )
   );
 }
