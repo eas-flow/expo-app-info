@@ -8,8 +8,7 @@ import {
   toPlanDisplayRows,
   toUsageDisplayRows,
   USAGE_FIELDS,
-  usageBuildsHeader,
-  usageConcurrencyHeader,
+  usageBuildsHeaders,
 } from '../src/format.mjs';
 
 const withBuild = {
@@ -95,130 +94,131 @@ describe('formatCSV', () => {
   });
 });
 
-const usageEntry = {
+const NOW = new Date('2026-07-15T00:00:00.000Z');
+
+// Current (still in progress) month: 2026-07-01 -> 2026-08-01 (exclusive).
+const currentMonthEntry = {
   account: 'myorg',
-  plan: 'Production',
-  planId: 'production',
-  status: 'active',
-  concurrencyTotal: 3,
-  concurrencyIos: 2,
-  concurrencyAndroid: 1,
-  buildsIos: 23,
-  buildsAndroid: 11,
+  buildsIos: 18,
+  buildsAndroid: 16,
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',
 };
 
-const usageEntryNoPlan = {
+// A finished past month: 2026-06-01 -> 2026-07-01 (exclusive).
+const pastMonthEntry = {
+  account: 'myorg',
+  buildsIos: 14,
+  buildsAndroid: 15,
+  periodStart: '2026-06-01T00:00:00.000Z',
+  periodEnd: '2026-07-01T00:00:00.000Z',
+};
+
+// A degraded account (app/build fetch failed) — periodStart/periodEnd are
+// still known upfront (calendar months don't depend on the account), only
+// the build counts are null.
+const degradedMonthEntry = {
   account: 'other',
-  plan: null,
-  planId: null,
-  status: null,
-  concurrencyTotal: null,
-  concurrencyIos: null,
-  concurrencyAndroid: null,
   buildsIos: null,
   buildsAndroid: null,
-  periodStart: null,
-  periodEnd: null,
+  periodStart: '2026-06-01T00:00:00.000Z',
+  periodEnd: '2026-07-01T00:00:00.000Z',
 };
 
 describe('toUsageDisplayRows', () => {
-  it('maps an account with a plan to display strings, summing builds across platforms', () => {
-    expect(toUsageDisplayRows([usageEntry])).toEqual([
-      ['myorg', 'Production', 'active', '3', '34', '2026-07-01 → 2026-07-31'],
+  it('maps an account-month to [account, period, ios builds, android builds]', () => {
+    expect(toUsageDisplayRows([pastMonthEntry], { now: NOW })).toEqual([
+      ['myorg', '2026-06-01 → 2026-06-30', '14', '15'],
     ]);
   });
 
-  it("shows the last inclusive day of the period, not the API's exclusive end", () => {
-    // billingPeriod.end from the API is the instant the *next* period
-    // starts (2026-08-01T00:00:00Z for a July period) — the table should
-    // read "→ 2026-07-31", not "→ 2026-08-01".
-    const row = toUsageDisplayRows([usageEntry])[0];
-    expect(row[5]).toBe('2026-07-01 → 2026-07-31');
+  it('shows "(today)" as the period end for the still-in-progress current month', () => {
+    const row = toUsageDisplayRows([currentMonthEntry], { now: NOW })[0];
+    expect(row[1]).toBe('2026-07-01 → (today)');
   });
 
-  it('handles a period end that is not exactly midnight', () => {
-    const row = toUsageDisplayRows([
-      {
-        ...usageEntry,
-        periodStart: '2026-07-15T09:00:00.000Z',
-        periodEnd: '2026-08-15T09:00:00.000Z',
-      },
-    ])[0];
-    expect(row[5]).toBe('2026-07-15 → 2026-08-14');
+  it("shows the last inclusive day of a finished month, not the API's exclusive end", () => {
+    const row = toUsageDisplayRows([pastMonthEntry], { now: NOW })[0];
+    expect(row[1]).toBe('2026-06-01 → 2026-06-30');
   });
 
-  it('shows "-" for every unavailable plan field', () => {
-    expect(toUsageDisplayRows([usageEntryNoPlan])).toEqual([['other', '-', '-', '-', '-', '-']]);
-  });
-
-  it('reports the platform concurrency and build count when --platform is set', () => {
-    const iosRow = toUsageDisplayRows([usageEntry], { platform: 'ios' })[0];
-    expect(iosRow[3]).toBe('2');
-    expect(iosRow[4]).toBe('23');
-
-    const androidRow = toUsageDisplayRows([usageEntry], { platform: 'android' })[0];
-    expect(androidRow[3]).toBe('1');
-    expect(androidRow[4]).toBe('11');
-  });
-
-  it('renders a zero concurrency as "0", not "-"', () => {
-    const row = toUsageDisplayRows([{ ...usageEntry, concurrencyTotal: 0 }])[0];
-    expect(row[3]).toBe('0');
+  it('shows "-" for both build counts when the account is degraded (fetch failure)', () => {
+    expect(toUsageDisplayRows([degradedMonthEntry], { now: NOW })).toEqual([
+      ['other', '2026-06-01 → 2026-06-30', '-', '-'],
+    ]);
   });
 
   it('renders a zero build count as "0", not "-"', () => {
-    const row = toUsageDisplayRows([{ ...usageEntry, buildsIos: 0, buildsAndroid: 0 }])[0];
-    expect(row[4]).toBe('0');
+    const row = toUsageDisplayRows([{ ...pastMonthEntry, buildsIos: 0, buildsAndroid: 0 }], {
+      now: NOW,
+    })[0];
+    expect(row[2]).toBe('0');
+    expect(row[3]).toBe('0');
   });
 
-  it('shows "-" when only one end of the billing period is known', () => {
-    const row = toUsageDisplayRows([{ ...usageEntry, periodEnd: null }])[0];
-    expect(row[5]).toBe('-');
+  it('shows only the ios column when --platform ios is set', () => {
+    const row = toUsageDisplayRows([pastMonthEntry], { platform: 'ios', now: NOW })[0];
+    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', '14']);
+  });
+
+  it('shows only the android column when --platform android is set', () => {
+    const row = toUsageDisplayRows([pastMonthEntry], { platform: 'android', now: NOW })[0];
+    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', '15']);
+  });
+
+  it('shows "-" for the period when periodStart/periodEnd are both missing', () => {
+    const row = toUsageDisplayRows([{ ...pastMonthEntry, periodStart: null, periodEnd: null }], {
+      now: NOW,
+    })[0];
+    expect(row[1]).toBe('-');
   });
 
   it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
-    const row = toUsageDisplayRows([usageEntry], { accountDisplayNames })[0];
+    const row = toUsageDisplayRows([pastMonthEntry], { accountDisplayNames, now: NOW })[0];
     expect(row[0]).toBe('My Organization');
   });
 
   it('falls back to the slug when no accountDisplayNames map is given', () => {
-    const row = toUsageDisplayRows([usageEntry])[0];
+    const row = toUsageDisplayRows([pastMonthEntry], { now: NOW })[0];
     expect(row[0]).toBe('myorg');
   });
-});
 
-describe('usageConcurrencyHeader', () => {
-  it('labels the column per platform filter', () => {
-    expect(usageConcurrencyHeader(null)).toBe('CONCURRENCY');
-    expect(usageConcurrencyHeader('ios')).toBe('CONCURRENCY (IOS)');
-    expect(usageConcurrencyHeader('android')).toBe('CONCURRENCY (ANDROID)');
+  it('defaults `now` to the current time when not given', () => {
+    expect(() => toUsageDisplayRows([pastMonthEntry])).not.toThrow();
   });
 });
 
-describe('usageBuildsHeader', () => {
-  it('labels the column per platform filter', () => {
-    expect(usageBuildsHeader(null)).toBe('BUILDS');
-    expect(usageBuildsHeader('ios')).toBe('BUILDS (IOS)');
-    expect(usageBuildsHeader('android')).toBe('BUILDS (ANDROID)');
+describe('usageBuildsHeaders', () => {
+  it('returns both platform headers by default', () => {
+    expect(usageBuildsHeaders(null)).toEqual([
+      'SUCCESSFUL BUILDS (IOS)',
+      'SUCCESSFUL BUILDS (AND)',
+    ]);
+  });
+
+  it('returns only the ios header when platform is ios', () => {
+    expect(usageBuildsHeaders('ios')).toEqual(['SUCCESSFUL BUILDS (IOS)']);
+  });
+
+  it('returns only the android header when platform is android', () => {
+    expect(usageBuildsHeaders('android')).toEqual(['SUCCESSFUL BUILDS (AND)']);
   });
 });
 
 describe('formatCSV with USAGE_FIELDS', () => {
   it('emits the usage header and raw values', () => {
-    const csv = formatCSV([usageEntry], USAGE_FIELDS);
-    expect(csv.split('\n')[0]).toBe(
-      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,buildsIos,buildsAndroid,periodStart,periodEnd'
-    );
+    const csv = formatCSV([pastMonthEntry], USAGE_FIELDS);
+    expect(csv.split('\n')[0]).toBe('account,buildsIos,buildsAndroid,periodStart,periodEnd');
     expect(csv.split('\n')[1]).toBe(
-      'myorg,Production,production,active,3,2,1,23,11,2026-07-01T00:00:00.000Z,2026-08-01T00:00:00.000Z'
+      'myorg,14,15,2026-06-01T00:00:00.000Z,2026-07-01T00:00:00.000Z'
     );
   });
 
-  it('emits empty cells for a row with no plan data', () => {
-    expect(formatCSV([usageEntryNoPlan], USAGE_FIELDS).split('\n')[1]).toBe('other,,,,,,,,,,');
+  it('emits empty cells for a row with no build data', () => {
+    expect(formatCSV([degradedMonthEntry], USAGE_FIELDS).split('\n')[1]).toBe(
+      'other,,,2026-06-01T00:00:00.000Z,2026-07-01T00:00:00.000Z'
+    );
   });
 });
 
