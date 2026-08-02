@@ -81,26 +81,31 @@ order isn't documented anywhere. It works with `--platform`, `--json`, and
 `--csv`, but cannot be combined with `--usage`. `--history 1` prints exactly
 the same output as leaving the flag off entirely.
 
-Or ask about the account itself rather than its apps:
+Or ask about successful build counts per calendar month instead of app versions:
 
 ```bash
 npx expo-app-info --usage
 ```
 
 ```
-┌─────────┐───────────┐────────┐───────────┐────────┐────────────────────┐
-│ ACCOUNT │ PLAN       │ STATUS │ CONCURRENCY │ BUILDS │ PERIOD                  │
-├─────────┼───────────┼────────┼────────────┼────────┼────────────────────┤
-│ myorg   │ Production │ active │ 3           │ 34     │ 2026-07-01 → 2026-07-31 │
-└─────────┘───────────┘────────┘────────────┘────────┘────────────────────┘
+┌─────────┬─────────────────────────┬──────────────────────────┬──────────────────────────┐
+│ ACCOUNT │ PERIOD                  │ SUCCESSFUL BUILDS (IOS)   │ SUCCESSFUL BUILDS (AND)  │
+├─────────┼─────────────────────────┼──────────────────────────┼──────────────────────────┤
+│ myorg   │ 2026-07-01 → (today)    │ 18                        │ 16                       │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ 14                        │ 15                       │
+│ myorg   │ 2026-05-01 → 2026-05-31 │ 21                        │ 20                       │
+└─────────┴─────────────────────────┴──────────────────────────┴──────────────────────────┘
 ```
 
-`BUILDS` is the sum of both platforms for the current billing period; pass
-`--platform ios` or `--platform android` to see just that platform's count
-(and its own concurrency) instead. `PERIOD` shows the last calendar day the
-period actually covers — the API's own `billingPeriod.end` is exclusive (the
-instant the *next* period starts), which would otherwise print as
-"2026-07-01 → 2026-08-01" for a period that is entirely July.
+One row per account **per UTC calendar month** — the last 3 months by
+default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage
+--month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed
+client-side from finished builds via the API — not read from EAS's own
+billing/usage metric, which is tied to the billing cycle and can't be sliced
+into arbitrary calendar ranges — so they may not exactly match what the EAS
+dashboard reports. Pass `--platform ios` or `--platform android` to narrow
+to just that platform's column. The still-in-progress current month's row
+shows `(today)` as its end, since it isn't a finished count yet.
 
 Or just the account's current subscription, with no build counts or billing
 period at all:
@@ -139,9 +144,9 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 > **On robot tokens:** a robot token can only see the account that issued it. Use a personal access token to list every account you belong to.
 
-> **On `--usage`:** plan and usage data are billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan/build columns and the reason goes to stderr — the run does not fail.
+> **On `--usage`:** it no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` (or `null` in `--json`/`--csv`) and the reason goes to stderr — the run does not fail.
 
-> **On `--plan`:** same billing-scope caveat as `--usage` — a token without billing permission on an account shows `-` in that row's plan columns and reports the reason on stderr, rather than failing the run.
+> **On `--plan`:** plan data is billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan columns and the reason goes to stderr, rather than failing the run.
 
 ## What the numbers mean
 
@@ -154,16 +159,16 @@ This is deliberately the only option. The token is never read from `argv` and ne
 | `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode) |
 | `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)      |
 
-With `--usage`, one row per account instead:
+With `--usage`, one row per account **per UTC calendar month** instead (last 3 months by default, or `--month <n>` for 1–12):
 
-| Column        | Source                                                                                                                                                               |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`     | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                       |
-| `PLAN`        | `subscription.name` (e.g. Free / Production / Enterprise)                                                                                                            |
-| `STATUS`      | Subscription status as Expo reports it (`active`, `trialing`, …)                                                                                                     |
-| `CONCURRENCY` | Build concurrency included in the plan; per platform with `--platform`                                                                                               |
-| `BUILDS`      | Builds run this billing period, from EAS's own usage metrics (not counted locally); summed across platforms, or per platform with `--platform`                       |
-| `PERIOD`      | Current EAS **billing** period — not the calendar month. The table shows the last inclusive day; `--json`/`--csv` `periodEnd` keeps the API's raw (exclusive) value. |
+| Column                     | Source                                                                                                                                              |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`                  | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                       |
+| `PERIOD`                   | A UTC calendar month. The table shows `(today)` as the end for the still-in-progress current month, else the last inclusive day; `--json`/`--csv` `periodStart`/`periodEnd` are always the raw UTC calendar-month boundaries (`periodEnd` exclusive). |
+| `SUCCESSFUL BUILDS (IOS)`  | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                     |
+| `SUCCESSFUL BUILDS (AND)`  | Same, for Android                                                                                                                                    |
+
+Pass `--platform ios` or `--platform android` to show only that platform's column.
 
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
@@ -186,7 +191,8 @@ token.
 
 ## Filtering
 
-- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage` or `--plan`, it switches `CONCURRENCY` (and `BUILDS` for `--usage`) to that platform's own numbers instead of the account total / cross-platform sum.
+- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's `SUCCESSFUL BUILDS` column; with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
+- `--month <n>` — only with `--usage`: widen the window to the last `n` calendar months (1–12, default 3).
 - `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage` or `--plan`.
 
 `--usage`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
@@ -220,7 +226,7 @@ myorg,Storefront,storefront,ios,3.2.1,41,2026-07-26T09:12:00.000Z
 
 `--json` and `--csv` are mutually exclusive, and both can be combined with `--platform`.
 
-With `--usage` they emit the account fields instead: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `buildsIos`, `buildsAndroid`, `periodStart`, `periodEnd`. `buildsIos`/`buildsAndroid` are always both present regardless of `--platform` — that flag only changes which numbers the human table combines into `BUILDS`.
+With `--usage` they emit one entry per account per month instead: `account`, `buildsIos`, `buildsAndroid`, `periodStart`, `periodEnd`. `buildsIos`/`buildsAndroid` are always both present regardless of `--platform` — that flag only changes which column(s) the human table shows. `periodStart`/`periodEnd` are the raw UTC calendar-month boundaries (`periodEnd` exclusive) even for the current, still-in-progress month — the `(today)` marker is table-only.
 
 With `--plan` they emit: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `trialEnd`. All three concurrency fields are always present regardless of `--platform` — that flag only changes which number the human table shows in `CONCURRENCY`.
 
@@ -240,9 +246,9 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
-`--usage` skips 2 and 3 and instead runs one query per account: `account.byId(...) { subscription, billingPeriod, usageMetrics.byBillingPeriod(...) }`. The per-platform build split comes from `usageMetrics.byBillingPeriod(...).planMetrics[].platformBreakdown` — not from `filterParams` on the other aggregate endpoint (`metricsForServiceMetric`), which accepts any key without actually filtering by platform.
+`--usage` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { status: FINISHED })` for each app and buckets every build by platform + UTC calendar month on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Both accounts and, within each account, apps are fetched with a concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
 
-`--plan` also skips 2 and 3, and runs a smaller query per account than `--usage`'s: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
+`--plan` skips 2 and 3 entirely, and runs a smaller query per account: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
 
 ## Roadmap
 
@@ -252,6 +258,7 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 - [x] `--history <N>`: show the N most recent builds per platform, not just the latest ([#17](https://github.com/eas-flow/expo-app-info/issues/17))
 - [x] `ACCOUNT` shows the EAS "Display name" (falls back to the slug); `--account` removed ([#22](https://github.com/eas-flow/expo-app-info/issues/22))
 - [x] `--plan`: current account subscription (plan, plan ID, status, concurrency, trial end) on its own, separate from `--usage`'s build counts ([#19](https://github.com/eas-flow/expo-app-info/issues/19))
+- [x] `--usage`: one row per account per UTC calendar month (last 3 by default, `--month <n>` up to 12), client-side "successful build" counts instead of EAS's billing-period metric ([#18](https://github.com/eas-flow/expo-app-info/issues/18))
 - [ ] Diff against local `app.json` to surface version drift between source and shipped builds
 - [ ] Show the latest submitted store version alongside the build version
 
