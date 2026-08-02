@@ -76,6 +76,30 @@ describe('gql (via createApiClient)', () => {
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
     await expect(client.fetchAccounts()).resolves.toEqual([{ id: '1', name: 'acme' }]);
   });
+
+  it('forwards displayName when the API returns one (issue #22)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { meActor: { accounts: [{ id: '1', name: 'acme', displayName: 'Acme Corp' }] } },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).resolves.toEqual([
+      { id: '1', name: 'acme', displayName: 'Acme Corp' },
+    ]);
+  });
+
+  it('forwards a null displayName as-is when the account has none set', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { meActor: { accounts: [{ id: '1', name: 'acme', displayName: null }] } },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).resolves.toEqual([
+      { id: '1', name: 'acme', displayName: null },
+    ]);
+  });
 });
 
 describe('fetchApps', () => {

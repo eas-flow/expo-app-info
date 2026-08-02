@@ -6,7 +6,6 @@ const DEFAULTS = {
   version: false,
   json: false,
   csv: false,
-  account: null,
   platform: null,
   usage: false,
   history: null,
@@ -17,12 +16,11 @@ describe('parseArgs', () => {
     expect(parseArgs(['--usage'])).toEqual({ ...DEFAULTS, usage: true });
   });
 
-  it('parses --usage combined with --json and --account', () => {
-    expect(parseArgs(['--usage', '--json', '--account', 'myorg'])).toEqual({
+  it('parses --usage combined with --json', () => {
+    expect(parseArgs(['--usage', '--json'])).toEqual({
       ...DEFAULTS,
       usage: true,
       json: true,
-      account: 'myorg',
     });
   });
 
@@ -65,18 +63,6 @@ describe('parseArgs', () => {
 
   it('throws when --json and --csv are combined', () => {
     expect(() => parseArgs(['--json', '--csv'])).toThrow(/cannot be used together/);
-  });
-
-  it('parses --account with a space-separated value', () => {
-    expect(parseArgs(['--account', 'myorg'])).toEqual({ ...DEFAULTS, account: 'myorg' });
-  });
-
-  it('parses --account=value', () => {
-    expect(parseArgs(['--account=myorg'])).toEqual({ ...DEFAULTS, account: 'myorg' });
-  });
-
-  it('throws when --account has no value', () => {
-    expect(() => parseArgs(['--account'])).toThrow(/--account requires a value/);
   });
 
   it('parses --platform and lowercases it', () => {
@@ -138,12 +124,15 @@ describe('parseArgs', () => {
     );
   });
 
-  it('combines --history with --account and --platform', () => {
-    expect(parseArgs(['--history', '3', '--account', 'myorg', '--platform', 'ios'])).toEqual({
+  it('combines --history with --platform', () => {
+    expect(parseArgs(['--history', '3', '--platform', 'ios'])).toEqual({
       ...DEFAULTS,
       history: 3,
-      account: 'myorg',
       platform: 'ios',
     });
+  });
+
+  it('throws CliError on --account, which was removed (issue #22 — Account.displayName in the table replaced the need for filtering by slug for now)', () => {
+    expect(() => parseArgs(['--account', 'myorg'])).toThrow(/Unknown option: --account/);
   });
 });
