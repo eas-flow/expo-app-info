@@ -310,111 +310,103 @@ describe('mapWithConcurrency', () => {
   });
 });
 
-describe('fetchAccountPlan', () => {
-  const NOW = new Date('2026-07-15T00:00:00.000Z');
+describe('countBuildsByMonth', () => {
+  // Two calendar months, newest first — mirrors src/cli.mjs#calendarMonths()'s
+  // shape and ordering (index 0 = current month).
+  const MONTHS = [
+    { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },
+    { start: '2026-06-01T00:00:00.000Z', end: '2026-07-01T00:00:00.000Z' },
+  ];
 
-  const planResponse = {
-    data: {
-      account: {
-        byId: {
-          id: 'acc-1',
-          subscription: {
-            id: 'sub-1',
-            planId: 'production',
-            name: 'Production',
-            status: 'active',
-            trialEnd: null,
-            concurrencies: { total: 2, ios: 1, android: 1 },
-          },
-          billingPeriod: { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },
-          usageMetrics: {
-            byBillingPeriod: {
-              planMetrics: [
-                {
-                  serviceMetric: 'BUILDS',
-                  metricType: 'BUILD',
-                  value: 34,
-                  platformBreakdown: { ios: { value: 23 }, android: { value: 11 } },
-                },
-                {
-                  serviceMetric: 'LOCAL_BUILDS',
-                  metricType: 'BUILD',
-                  value: 2,
-                  platformBreakdown: { ios: { value: 1 }, android: { value: 1 } },
-                },
-              ],
-            },
+  function buildsPage(iosCreatedAts, androidCreatedAts) {
+    return jsonResponse({
+      data: {
+        app: {
+          byId: {
+            id: 'app-1',
+            ios: iosCreatedAts.map((createdAt) => ({ createdAt })),
+            android: androidCreatedAts.map((createdAt) => ({ createdAt })),
           },
         },
       },
-    },
-  };
-
-  it('returns the subscription, billing period, and per-platform build counts', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    await expect(client.fetchAccountPlan('acc-1', { now: NOW })).resolves.toEqual({
-      subscription: planResponse.data.account.byId.subscription,
-      billingPeriod: planResponse.data.account.byId.billingPeriod,
-      buildsByPlatform: { ios: 23, android: 11 },
     });
+  }
 
-    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(body.variables).toEqual({ accountId: 'acc-1', now: NOW.toISOString() });
-  });
-
-  it('defaults `now` to the current time when not given', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    await client.fetchAccountPlan('acc-1');
-
-    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(() => new Date(body.variables.now).toISOString()).not.toThrow();
-  });
-
-  it('only reads the BUILDS metric, ignoring LOCAL_BUILDS and other services', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(planResponse));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    const result = await client.fetchAccountPlan('acc-1', { now: NOW });
-    expect(result.buildsByPlatform).toEqual({ ios: 23, android: 11 });
-  });
-
-  it('returns nulls when the account exposes no subscription or usage metrics', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          account: {
-            byId: {
-              id: 'acc-1',
-              subscription: null,
-              billingPeriod: null,
-              usageMetrics: { byBillingPeriod: { planMetrics: [] } },
-            },
-          },
-        },
-      })
-    );
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    await expect(client.fetchAccountPlan('acc-1', { now: NOW })).resolves.toEqual({
-      subscription: null,
-      billingPeriod: null,
-      buildsByPlatform: null,
-    });
-  });
-
-  it('throws ApiError when the account lacks billing permission', async () => {
+  it('buckets builds into the right platform/month, in a single page', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(
-        jsonResponse({ errors: [{ message: 'Entity not authorized: Account[acc-1]' }] })
+      .mockResolvedValueOnce(
+        buildsPage(
+          ['2026-07-20T00:00:00.000Z', '2026-06-15T00:00:00.000Z', '2026-06-10T00:00:00.000Z'],
+          ['2026-07-05T00:00:00.000Z']
+        )
+      );
+    // Both platforms are short of BUILD_PAGE_SIZE on the first page, so
+    // pagination stops there; no second page should even be requested.
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
+      { ios: 1, android: 1 },
+      { ios: 2, android: 0 },
+    ]);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ appId: 'app-1', offset: 0, limit: 50 });
+  });
+
+  it('ignores builds older than the oldest requested month', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildsPage(['2026-07-01T00:00:00.000Z', '2026-05-15T00:00:00.000Z'], [])
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchAccountPlan('acc-1', { now: NOW })).rejects.toThrow(ApiError);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
+      { ios: 1, android: 0 },
+      { ios: 0, android: 0 },
+    ]);
+  });
+
+  it('pages again when a platform returns a full page, stopping once a short page arrives', async () => {
+    // 50 distinct minutes on the same day (not 50 distinct days — July only
+    // has 31) so every build stays inside the current month bucket.
+    const fullIosPage = Array.from({ length: 50 }, (_, i) =>
+      new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString()
+    );
+
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage(fullIosPage, []))
+      .mockResolvedValueOnce(buildsPage(['2026-06-01T00:00:00.000Z'], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const counts = await client.countBuildsByMonth('app-1', MONTHS);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    expect(secondBody.variables).toEqual({ appId: 'app-1', offset: 50, limit: 50 });
+
+    expect(counts[0].ios).toBe(50);
+    expect(counts[1].ios).toBe(1);
+  });
+
+  it('returns all-zero counts when the app has no builds at all', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
+      { ios: 0, android: 0 },
+      { ios: 0, android: 0 },
+    ]);
+  });
+
+  it('throws ApiError when the build query fails', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ errors: [{ message: 'boom' }] }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(ApiError);
   });
 });
 
@@ -449,7 +441,7 @@ describe('fetchSubscription', () => {
     expect(body.variables).toEqual({ accountId: 'acc-1' });
   });
 
-  it('does not query billingPeriod or usageMetrics (issue #19 — separate from fetchAccountPlan)', async () => {
+  it('does not query billingPeriod or usageMetrics (issue #19 — a minimal, standalone query)', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
