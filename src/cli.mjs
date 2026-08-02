@@ -21,8 +21,11 @@ const CONCURRENCY = 8;
 const PLATFORMS = ['ios', 'android'];
 // Sanity cap on --history; the EAS API has no documented max, this just
 // keeps a typo like --history 99999 from hammering the API for one app.
-// TODO(issue #17): confirm against the live API via scripts/probe-history.mjs
-// that `builds(limit: 100)` is actually accepted before shipping this cap.
+// Confirmed against the live API via scripts/probe-history.mjs (issue #17):
+// `builds(limit: 100)` is accepted with no GraphQL error, and the API's own
+// order was already newest-first for the account tested (the client-side
+// sort in fetchBuilds still runs regardless, since that order isn't
+// documented as guaranteed).
 const MAX_HISTORY = 100;
 
 export const HELP = `
