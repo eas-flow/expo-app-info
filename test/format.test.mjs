@@ -30,10 +30,9 @@ const noBuild = {
 };
 
 describe('toDisplayRows', () => {
-  it('maps a built entry to display strings with a relative date', () => {
-    const now = new Date('2026-07-29T00:00:00.000Z').getTime();
-    expect(toDisplayRows([withBuild], { now })).toEqual([
-      ['myorg', 'Storefront', 'storefront', 'ios', '3.2.1', '41', '3d ago'],
+  it('maps a built entry to display strings with an absolute UTC build date', () => {
+    expect(toDisplayRows([withBuild])).toEqual([
+      ['myorg', 'Storefront', 'storefront', 'ios', '3.2.1', '41', '2026/07/26-00:00:00'],
     ]);
   });
 
