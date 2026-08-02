@@ -102,6 +102,28 @@ period actually covers — the API's own `billingPeriod.end` is exclusive (the
 instant the *next* period starts), which would otherwise print as
 "2026-07-01 → 2026-08-01" for a period that is entirely July.
 
+Or just the account's current subscription, with no build counts or billing
+period at all:
+
+```bash
+npx expo-app-info --plan
+```
+
+```
+┌─────────┬────────────┬────────────┬────────┬─────────────────────────────┬───────────┐
+│ ACCOUNT │ PLAN       │ PLAN ID    │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
+├─────────┼────────────┼────────────┼────────┼─────────────────────────────┼───────────┤
+│ myorg   │ Production │ production │ active │ 2 / 1 / 1                   │ -         │
+└─────────┴────────────┴────────────┴────────┴─────────────────────────────┴───────────┘
+```
+
+`--plan` shows only the account's *current* subscription — no build counts,
+no billing period — since those are "as of now" facts that would otherwise
+be repeated identically on every row if shown alongside historical data.
+Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to
+just that platform's number. Cannot be combined with `--usage` or
+`--history`, since all three are separate display modes.
+
 ## Authentication
 
 A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
@@ -118,6 +140,8 @@ This is deliberately the only option. The token is never read from `argv` and ne
 > **On robot tokens:** a robot token can only see the account that issued it. Use a personal access token to list every account you belong to.
 
 > **On `--usage`:** plan and usage data are billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan/build columns and the reason goes to stderr — the run does not fail.
+
+> **On `--plan`:** same billing-scope caveat as `--usage` — a token without billing permission on an account shows `-` in that row's plan columns and reports the reason on stderr, rather than failing the run.
 
 ## What the numbers mean
 
@@ -141,14 +165,31 @@ With `--usage`, one row per account instead:
 | `BUILDS`      | Builds run this billing period, from EAS's own usage metrics (not counted locally); summed across platforms, or per platform with `--platform`                       |
 | `PERIOD`      | Current EAS **billing** period — not the calendar month. The table shows the last inclusive day; `--json`/`--csv` `periodEnd` keeps the API's raw (exclusive) value. |
 
+With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
+
+| Column                        | Source                                                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------------------- |
+| `ACCOUNT`                     | Same as above                                                                                 |
+| `PLAN`                        | `subscription.name`                                                                           |
+| `PLAN ID`                     | `subscription.planId`                                                                         |
+| `STATUS`                      | Subscription status as Expo reports it (`active`, `trialing`, …)                             |
+| `CONCURRENCY (TOTAL/IOS/AND)` | All three concurrency numbers at once; narrows to one with `--platform`                      |
+| `TRIAL END`                   | `subscription.trialEnd` (`YYYY-MM-DD`), or `-` if the account isn't (or never was) trialing   |
+
+There is no monthly price column yet — it hasn't been confirmed to exist in
+the EAS schema. It may be added later once that's checked against a real
+token.
+
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
 **`ACCOUNT` is cosmetic — table only.** It shows the account's EAS "Display name" when the account has one set, falling back to the unique slug otherwise, since the display name is friendlier to read and is not guaranteed to be unique. `--json`/`--csv` always emit the slug in the `account` field regardless, since scripts may rely on it as a unique key.
 
 ## Filtering
 
-- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it switches `CONCURRENCY` and `BUILDS` to that platform's own numbers instead of the account total / cross-platform sum.
-- `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage`.
+- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage` or `--plan`, it switches `CONCURRENCY` (and `BUILDS` for `--usage`) to that platform's own numbers instead of the account total / cross-platform sum.
+- `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage` or `--plan`.
+
+`--usage`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
 
 There is no `--account` filter at the moment — it was removed (see [#22](https://github.com/eas-flow/expo-app-info/issues/22)) rather than kept alongside the new `ACCOUNT` display-name behavior. Filtering by account may return once the shape it should take (slug, display name, or both) is settled.
 
@@ -181,6 +222,8 @@ myorg,Storefront,storefront,ios,3.2.1,41,2026-07-26T09:12:00.000Z
 
 With `--usage` they emit the account fields instead: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `buildsIos`, `buildsAndroid`, `periodStart`, `periodEnd`. `buildsIos`/`buildsAndroid` are always both present regardless of `--platform` — that flag only changes which numbers the human table combines into `BUILDS`.
 
+With `--plan` they emit: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `trialEnd`. All three concurrency fields are always present regardless of `--platform` — that flag only changes which number the human table shows in `CONCURRENCY`.
+
 ## Output stability
 
 The default table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release.
@@ -199,6 +242,8 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
 `--usage` skips 2 and 3 and instead runs one query per account: `account.byId(...) { subscription, billingPeriod, usageMetrics.byBillingPeriod(...) }`. The per-platform build split comes from `usageMetrics.byBillingPeriod(...).planMetrics[].platformBreakdown` — not from `filterParams` on the other aggregate endpoint (`metricsForServiceMetric`), which accepts any key without actually filtering by platform.
 
+`--plan` also skips 2 and 3, and runs a smaller query per account than `--usage`'s: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
+
 ## Roadmap
 
 - [x] `--json` / `--csv` output for CI and spreadsheets
@@ -206,6 +251,7 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 - [x] `--usage`: subscription plan, build concurrency, and monthly build counts per platform ([#15](https://github.com/eas-flow/expo-app-info/issues/15))
 - [x] `--history <N>`: show the N most recent builds per platform, not just the latest ([#17](https://github.com/eas-flow/expo-app-info/issues/17))
 - [x] `ACCOUNT` shows the EAS "Display name" (falls back to the slug); `--account` removed ([#22](https://github.com/eas-flow/expo-app-info/issues/22))
+- [x] `--plan`: current account subscription (plan, plan ID, status, concurrency, trial end) on its own, separate from `--usage`'s build counts ([#19](https://github.com/eas-flow/expo-app-info/issues/19))
 - [ ] Diff against local `app.json` to surface version drift between source and shipped builds
 - [ ] Show the latest submitted store version alongside the build version
 

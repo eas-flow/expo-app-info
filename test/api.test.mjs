@@ -417,3 +417,68 @@ describe('fetchAccountPlan', () => {
     await expect(client.fetchAccountPlan('acc-1', { now: NOW })).rejects.toThrow(ApiError);
   });
 });
+
+describe('fetchSubscription', () => {
+  const subscriptionResponse = {
+    data: {
+      account: {
+        byId: {
+          id: 'acc-1',
+          subscription: {
+            id: 'sub-1',
+            planId: 'production',
+            name: 'Production',
+            status: 'active',
+            trialEnd: null,
+            concurrencies: { total: 2, ios: 1, android: 1 },
+          },
+        },
+      },
+    },
+  };
+
+  it('returns the subscription for an account', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchSubscription('acc-1')).resolves.toEqual(
+      subscriptionResponse.data.account.byId.subscription
+    );
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ accountId: 'acc-1' });
+  });
+
+  it('does not query billingPeriod or usageMetrics (issue #19 — separate from fetchAccountPlan)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchSubscription('acc-1');
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.query).not.toContain('billingPeriod');
+    expect(body.query).not.toContain('usageMetrics');
+  });
+
+  it('returns null when the account has no subscription', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: { account: { byId: { id: 'acc-1', subscription: null } } },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
+  });
+
+  it('throws ApiError when the account lacks billing permission', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ errors: [{ message: 'Entity not authorized: Account[acc-1]' }] })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchSubscription('acc-1')).rejects.toThrow(ApiError);
+  });
+});
