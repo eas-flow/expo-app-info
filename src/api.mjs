@@ -9,9 +9,9 @@ export class ApiError extends Error {}
 // as the value --json/--csv emit and that used to back --account filtering
 // (removed in the same change — see issue #22). It is nullable — not every
 // account has one set.
-export const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
+const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
 
-export const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
+const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   account { byId(accountId: $accountId) { id
     appsPaginated(first: 100, after: $after) {
       edges { node { id name slug } }
@@ -20,7 +20,7 @@ export const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
-export const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
+const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
     ios: builds(offset: 0, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
       platform appVersion appBuildVersion createdAt
@@ -54,7 +54,7 @@ export const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
 // `planId`, `name`, `status`, `trialEnd`, `concurrencies` — are the ones
 // queried below. Add a price field later only once it's confirmed to exist
 // against a real token.
-export const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
+const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   account { byId(accountId: $accountId) { id
     subscription {
       id planId name status trialEnd
@@ -68,7 +68,7 @@ export const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
 // arbitrarily far back into an app's build history. Only `createdAt` is
 // needed here — counting/bucketing by calendar month happens client-side in
 // countBuildsByMonth, not appVersion/appBuildVersion display.
-export const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
+const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
     ios: builds(offset: $offset, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
       createdAt

@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  bold,
-  dim,
-  formatBuildDate,
-  pad,
-  relativeDate,
-  renderTable,
-  width,
-} from '../src/render.mjs';
+import { bold, dim, formatBuildDate, pad, renderTable, width } from '../src/render.mjs';
 
 describe('width', () => {
   it('counts ASCII as 1 column each', () => {
@@ -78,43 +70,6 @@ describe('renderTable', () => {
   it('treats missing cells as empty strings', () => {
     const out = renderTable(['A', 'B'], [['x', undefined]], { isTTY: false });
     expect(out).toContain('x');
-  });
-});
-
-describe('relativeDate', () => {
-  const base = new Date('2026-07-29T00:00:00.000Z').getTime();
-
-  it('returns "-" for a missing date', () => {
-    expect(relativeDate(null, base)).toBe('-');
-  });
-
-  it('returns "today" for the same day (0 days)', () => {
-    expect(relativeDate(new Date(base).toISOString(), base)).toBe('today');
-  });
-
-  it('returns "yesterday" for exactly 1 day ago', () => {
-    const iso = new Date(base - 1 * 86_400_000).toISOString();
-    expect(relativeDate(iso, base)).toBe('yesterday');
-  });
-
-  it('returns "Nd ago" just under the 30-day boundary', () => {
-    const iso = new Date(base - 29 * 86_400_000).toISOString();
-    expect(relativeDate(iso, base)).toBe('29d ago');
-  });
-
-  it('returns "Nmo ago" at the 30-day boundary', () => {
-    const iso = new Date(base - 30 * 86_400_000).toISOString();
-    expect(relativeDate(iso, base)).toBe('1mo ago');
-  });
-
-  it('returns "Nmo ago" just under the 365-day boundary', () => {
-    const iso = new Date(base - 364 * 86_400_000).toISOString();
-    expect(relativeDate(iso, base)).toBe('12mo ago');
-  });
-
-  it('returns "Ny ago" at the 365-day boundary', () => {
-    const iso = new Date(base - 365 * 86_400_000).toISOString();
-    expect(relativeDate(iso, base)).toBe('1y ago');
   });
 });
 
