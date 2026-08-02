@@ -10,6 +10,7 @@ const DEFAULTS = {
   usage: false,
   plan: false,
   history: null,
+  month: null,
 };
 
 describe('parseArgs', () => {
@@ -178,6 +179,67 @@ describe('parseArgs', () => {
   it('throws when --history is combined with --plan (order does not matter)', () => {
     expect(() => parseArgs(['--history', '3', '--plan'])).toThrow(
       /--plan cannot be combined with --history/
+    );
+  });
+
+  it('parses --usage combined with --month as a number', () => {
+    expect(parseArgs(['--usage', '--month', '6'])).toEqual({
+      ...DEFAULTS,
+      usage: true,
+      month: 6,
+    });
+  });
+
+  it('parses --usage --month=value', () => {
+    expect(parseArgs(['--usage', '--month=12'])).toEqual({
+      ...DEFAULTS,
+      usage: true,
+      month: 12,
+    });
+  });
+
+  it('throws when --month has no value', () => {
+    expect(() => parseArgs(['--usage', '--month'])).toThrow(/--month requires a value/);
+  });
+
+  it('throws on a non-numeric --month value', () => {
+    expect(() => parseArgs(['--usage', '--month', 'abc'])).toThrow(/Invalid --month value/);
+  });
+
+  it('throws on a zero or negative --month value', () => {
+    expect(() => parseArgs(['--usage', '--month', '0'])).toThrow(/Invalid --month value/);
+    expect(() => parseArgs(['--usage', '--month', '-1'])).toThrow(/Invalid --month value/);
+  });
+
+  it('throws on a non-integer --month value', () => {
+    expect(() => parseArgs(['--usage', '--month', '2.5'])).toThrow(/Invalid --month value/);
+  });
+
+  it('throws when --month exceeds the max of 12', () => {
+    expect(() => parseArgs(['--usage', '--month', '13'])).toThrow(/Invalid --month value/);
+  });
+
+  it('accepts --month at the max of 12', () => {
+    expect(parseArgs(['--usage', '--month', '12'])).toEqual({
+      ...DEFAULTS,
+      usage: true,
+      month: 12,
+    });
+  });
+
+  it('throws when --month is used without --usage', () => {
+    expect(() => parseArgs(['--month', '6'])).toThrow(/--month can only be used with --usage/);
+  });
+
+  it('throws when --month is combined with --plan (not --usage)', () => {
+    expect(() => parseArgs(['--plan', '--month', '6'])).toThrow(
+      /--month can only be used with --usage/
+    );
+  });
+
+  it('throws when --month is combined with --history (not --usage)', () => {
+    expect(() => parseArgs(['--history', '3', '--month', '6'])).toThrow(
+      /--month can only be used with --usage/
     );
   });
 });
