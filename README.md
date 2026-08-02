@@ -11,14 +11,14 @@
 ```
 $ npx expo-app-info
 
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬───────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼───────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
 │ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:05:02 │
 │ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ 2026/05/28-18:40:11 │
 │ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -                   │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴───────────────────────┘
 ```
 
 ## Why
@@ -49,10 +49,10 @@ npm install -g expo-app-info
 expo-app-info
 ```
 
-Filter to one account or platform, or switch the output format for scripts:
+Filter by platform, or switch the output format for scripts:
 
 ```bash
-npx expo-app-info --account myorg --platform ios
+npx expo-app-info --platform ios
 npx expo-app-info --json  > apps.json
 npx expo-app-info --csv   > apps.csv
 ```
@@ -64,22 +64,22 @@ npx expo-app-info --history 5
 ```
 
 ```
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬───────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼───────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.0   │ 40    │ 2026/06/30-14:05:02 │
 │ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:03:47 │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴───────────────────────┘
 ```
 
 `--history <N>` (1–100, default: 1) prints the `N` most recent **successful**
 builds per platform as separate rows instead of collapsing each app/platform
 down to a single row. Rows are always newest-first by build date — sorted on
 the client, not just trusted from the API's response order, since that
-order isn't documented anywhere. It works with `--account`, `--platform`,
-`--json`, and `--csv`, but cannot be combined with `--usage`. `--history 1`
-prints exactly the same output as leaving the flag off entirely.
+order isn't documented anywhere. It works with `--platform`, `--json`, and
+`--csv`, but cannot be combined with `--usage`. `--history 1` prints exactly
+the same output as leaving the flag off entirely.
 
 Or ask about the account itself rather than its apps:
 
@@ -88,11 +88,11 @@ npx expo-app-info --usage
 ```
 
 ```
-┌─────────┬────────────┬────────┬─────────────┬────────┬─────────────────────────┐
+┌─────────┬────────────┬────────┬─────────────┬────────┬───────────────────┐
 │ ACCOUNT │ PLAN       │ STATUS │ CONCURRENCY │ BUILDS │ PERIOD                  │
-├─────────┼────────────┼────────┼─────────────┼────────┼─────────────────────────┤
+├─────────┼────────────┼────────┼─────────────┼────────┼───────────────────┤
 │ myorg   │ Production │ active │ 3           │ 34     │ 2026-07-01 → 2026-07-31 │
-└─────────┴────────────┴────────┴─────────────┴────────┴─────────────────────────┘
+└─────────┴────────────┴────────┴─────────────┴────────┴───────────────────┘
 ```
 
 `BUILDS` is the sum of both platforms for the current billing period; pass
@@ -123,7 +123,7 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 | Column         | Source                                                     |
 | -------------- | ---------------------------------------------------------- |
-| `ACCOUNT`      | Accounts the authenticated actor belongs to                |
+| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug (table only — see below) |
 | `APP` / `SLUG` | EAS project name and slug                                  |
 | `PLATFORM`     | `ios` / `android`                                          |
 | `VERSION`      | `appVersion` of the latest **successful** build            |
@@ -134,7 +134,7 @@ With `--usage`, one row per account instead:
 
 | Column        | Source                                                                                                                                                               |
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`     | Accounts the authenticated actor belongs to                                                                                                                          |
+| `ACCOUNT`     | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                       |
 | `PLAN`        | `subscription.name` (e.g. Free / Production / Enterprise)                                                                                                            |
 | `STATUS`      | Subscription status as Expo reports it (`active`, `trialing`, …)                                                                                                     |
 | `CONCURRENCY` | Build concurrency included in the plan; per platform with `--platform`                                                                                               |
@@ -143,11 +143,14 @@ With `--usage`, one row per account instead:
 
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
+**`ACCOUNT` is cosmetic — table only.** It shows the account's EAS "Display name" when the account has one set, falling back to the unique slug otherwise, since the display name is friendlier to read and is not guaranteed to be unique. `--json`/`--csv` always emit the slug in the `account` field regardless, since scripts may rely on it as a unique key.
+
 ## Filtering
 
-- `--account <name>` — only this account (exact match, case-insensitive against the `ACCOUNT` column). Apps in other accounts are never fetched.
 - `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it switches `CONCURRENCY` and `BUILDS` to that platform's own numbers instead of the account total / cross-platform sum.
 - `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage`.
+
+There is no `--account` filter at the moment — it was removed (see [#22](https://github.com/eas-flow/expo-app-info/issues/22)) rather than kept alongside the new `ACCOUNT` display-name behavior. Filtering by account may return once the shape it should take (slug, display name, or both) is settled.
 
 ## Machine-readable output (`--json` / `--csv`)
 
@@ -174,7 +177,7 @@ account,app,slug,platform,version,build,lastBuildAt
 myorg,Storefront,storefront,ios,3.2.1,41,2026-07-26T09:12:00.000Z
 ```
 
-`--json` and `--csv` are mutually exclusive, and both can be combined with `--account` / `--platform`.
+`--json` and `--csv` are mutually exclusive, and both can be combined with `--platform`.
 
 With `--usage` they emit the account fields instead: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `buildsIos`, `buildsAndroid`, `periodStart`, `periodEnd`. `buildsIos`/`buildsAndroid` are always both present regardless of `--platform` — that flag only changes which numbers the human table combines into `BUILDS`.
 
@@ -188,7 +191,7 @@ The default table (columns, wording, colors, spacing) is for humans and is **not
 
 Three GraphQL queries against `https://api.expo.dev/graphql`:
 
-1. `meActor { accounts }` — every account the token can see
+1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
 3. `app.byId(...).builds(limit, filter: { platform, status: FINISHED })` — the `N` most recent builds per platform (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
 
@@ -199,9 +202,10 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 ## Roadmap
 
 - [x] `--json` / `--csv` output for CI and spreadsheets
-- [x] `--account` / `--platform` filters
+- [x] `--platform` filter
 - [x] `--usage`: subscription plan, build concurrency, and monthly build counts per platform ([#15](https://github.com/eas-flow/expo-app-info/issues/15))
 - [x] `--history <N>`: show the N most recent builds per platform, not just the latest ([#17](https://github.com/eas-flow/expo-app-info/issues/17))
+- [x] `ACCOUNT` shows the EAS "Display name" (falls back to the slug); `--account` removed ([#22](https://github.com/eas-flow/expo-app-info/issues/22))
 - [ ] Diff against local `app.json` to surface version drift between source and shipped builds
 - [ ] Show the latest submitted store version alongside the build version
 
