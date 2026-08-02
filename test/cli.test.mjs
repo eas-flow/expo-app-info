@@ -9,6 +9,7 @@ const DEFAULTS = {
   account: null,
   platform: null,
   usage: false,
+  history: null,
 };
 
 describe('parseArgs', () => {
@@ -92,5 +93,57 @@ describe('parseArgs', () => {
 
   it('throws when --platform has no value', () => {
     expect(() => parseArgs(['--platform'])).toThrow(/--platform requires a value/);
+  });
+
+  it('parses --history with a space-separated value as a number', () => {
+    expect(parseArgs(['--history', '5'])).toEqual({ ...DEFAULTS, history: 5 });
+  });
+
+  it('parses --history=value', () => {
+    expect(parseArgs(['--history=10'])).toEqual({ ...DEFAULTS, history: 10 });
+  });
+
+  it('parses --history 1 (the same as the default behavior, but explicit)', () => {
+    expect(parseArgs(['--history', '1'])).toEqual({ ...DEFAULTS, history: 1 });
+  });
+
+  it('throws when --history has no value', () => {
+    expect(() => parseArgs(['--history'])).toThrow(/--history requires a value/);
+  });
+
+  it('throws on a non-numeric --history value', () => {
+    expect(() => parseArgs(['--history', 'abc'])).toThrow(/Invalid --history value/);
+  });
+
+  it('throws on a zero or negative --history value', () => {
+    expect(() => parseArgs(['--history', '0'])).toThrow(/Invalid --history value/);
+    expect(() => parseArgs(['--history', '-1'])).toThrow(/Invalid --history value/);
+  });
+
+  it('throws on a non-integer --history value', () => {
+    expect(() => parseArgs(['--history', '2.5'])).toThrow(/Invalid --history value/);
+  });
+
+  it('throws when --history exceeds the max of 100', () => {
+    expect(() => parseArgs(['--history', '101'])).toThrow(/Invalid --history value/);
+  });
+
+  it('accepts --history at the max of 100', () => {
+    expect(parseArgs(['--history', '100'])).toEqual({ ...DEFAULTS, history: 100 });
+  });
+
+  it('throws when --history is combined with --usage', () => {
+    expect(() => parseArgs(['--usage', '--history', '5'])).toThrow(
+      /--history cannot be combined with --usage/
+    );
+  });
+
+  it('combines --history with --account and --platform', () => {
+    expect(parseArgs(['--history', '3', '--account', 'myorg', '--platform', 'ios'])).toEqual({
+      ...DEFAULTS,
+      history: 3,
+      account: 'myorg',
+      platform: 'ios',
+    });
   });
 });
