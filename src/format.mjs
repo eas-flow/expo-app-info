@@ -1,4 +1,5 @@
-// Converts the raw "entries" produced by src/cli.mjs#run() into each of the
+// Converts the raw "entries" produced by the display-mode flows in
+// src/commands/ into each of the
 // supported output formats. Kept separate from src/render.mjs, which only
 // knows about the human-oriented table.
 

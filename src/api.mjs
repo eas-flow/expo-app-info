@@ -188,7 +188,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * would only be older still, assuming the API's undocumented order holds
    * newest-first, as observed for tested accounts in
    * scripts/probe-history.mjs). Throws ApiError like every other method
-   * here; the caller (src/cli.mjs#runUsage) decides a failure degrades that
+   * here; the caller (src/commands/usage.mjs#runUsage) decides a failure degrades that
    * whole account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months) {
@@ -238,7 +238,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * Current subscription (plan, status, trial end, concurrency) for one
    * account — no billing period or build counts. Used by `--plan`
    * (issue #19). Throws like every other method here; the caller
-   * (src/cli.mjs#runPlan) decides a missing plan isn't fatal.
+   * (src/commands/plan.mjs#runPlan) decides a missing plan isn't fatal.
    */
   async function fetchSubscription(accountId) {
     const account = (await gql(Q_SUBSCRIPTION, { accountId })).account.byId;
@@ -247,6 +247,13 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
 
   return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
 }
+
+/**
+ * Shared in-flight request cap for every parallelized fetch in this CLI
+ * (see mapWithConcurrency below) — the guardrail that keeps request count
+ * growth from turning into request *rate* growth.
+ */
+export const CONCURRENCY = 8;
 
 /** Run `task` over `items` with a bounded number of in-flight requests. */
 export async function mapWithConcurrency(items, limit, task) {
