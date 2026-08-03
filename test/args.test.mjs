@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CliError, parseArgs } from '../src/cli.mjs';
+import { parseArgs } from '../src/args.mjs';
+import { CliError } from '../src/cli.mjs';
 
 const DEFAULTS = {
   help: false,

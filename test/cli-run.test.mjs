@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CliError, HELP, run } from '../src/cli.mjs';
+import { HELP } from '../src/args.mjs';
+import { CliError, run } from '../src/cli.mjs';
 
 function jsonResponse(body, { status = 200, ok = true } = {}) {
   return { status, ok, json: async () => body };
