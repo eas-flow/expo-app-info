@@ -1,23 +1,9 @@
 #!/usr/bin/env node
-// Verification script for issue #17 — NOT part of the published package
-// (`package.json#files` only ships bin/ and src/).
-//
-// `--history <N>` raises `builds(offset: 0, limit: N, ...)` from the
-// hardcoded `limit: 1` the CLI has always used. Two things are unverified
-// against the real API before shipping that:
-//
-//   1. Does `builds(limit: 100)` (the cap `--history` validates against)
-//      actually get accepted, or does the API reject/clamp it below that?
-//      If it clamps or errors, MAX_HISTORY in src/cli.mjs needs to come down
-//      to match.
-//   2. What order does `builds(offset, limit)` actually return in? The CLI
-//      does not trust this (it sorts by `createdAt` descending itself in
-//      `fetchBuilds`), but knowing the real order helps sanity-check that
-//      the sort is doing something, not silently no-op-ing.
-//
-// This calls the real `fetchBuilds()` the CLI ships, against the first app
-// found in each account (or the app given via --app), so a good run here is
-// a good run in production.
+// Dev-only verification script for issue #17 (not shipped — see package.json#files).
+// Checks two things against the real API for `--history <N>`: whether
+// `builds(limit: 100)` (the --history validation cap) is accepted or clamped, and
+// what order `builds(offset, limit)` actually returns in (fetchBuilds always
+// re-sorts client-side regardless — this just confirms that sort isn't a no-op).
 //
 //   export EXPO_TOKEN=xxxxx
 //   node scripts/probe-history.mjs                    # first app in every account
@@ -25,9 +11,8 @@
 //   node scripts/probe-history.mjs --account myorg --app storefront
 //   node scripts/probe-history.mjs --limit 100         # override the tested limit (default 100)
 //
-// The token is read from the environment only and is never printed. The
-// output does contain account/app names and build metadata — read it before
-// pasting it anywhere public.
+// Reads the token from the environment only (never printed). Output contains real
+// account/app/build data — review before sharing.
 
 import { createApiClient } from '../src/api.mjs';
 
@@ -78,14 +63,12 @@ for (const account of accounts) {
     continue;
   }
 
-  // One app is enough to answer both questions; skip the rest to keep this
-  // script cheap to run against real accounts.
+  // One app per account is enough; keeps this cheap to run for real.
   const app = apps[0];
   console.log(`  Using app: ${app.name} (${app.slug})`);
 
   try {
-    // Call the raw query directly (not fetchBuilds) so we can see the
-    // API's own order BEFORE the client-side sort is applied.
+    // Raw query (not fetchBuilds) to see the API's own order before the client-side sort.
     const raw = await client.gql(
       `query ProbeBuilds($appId: String!, $limit: Int!) {
         app { byId(appId: $appId) { id

@@ -1,26 +1,18 @@
 #!/usr/bin/env node
-// Verification script for issue #18 — NOT part of the published package
-// (`package.json#files` only ships bin/ and src/).
-//
-// Issue #18 replaced --usage's old billing-period query (Q_ACCOUNT_PLAN,
-// subscription + billingPeriod + usageMetrics.byBillingPeriod) with
-// client-side "successful build" counting: page through each app's
-// `builds(offset, limit, filter: { status: FINISHED })` and bucket by
-// platform + UTC calendar month (src/api.mjs#countBuildsByMonth).
-//
-// That client-side count is NOT guaranteed to match EAS's own billing/usage
-// definition (retry handling, etc. may differ) — this script exists so that
-// can be checked against a real account's EAS dashboard numbers before
-// shipping, and re-checked if the counting logic ever changes.
+// Dev-only verification script for issue #18 (not shipped — see package.json#files).
+// --usage counts "successful builds" client-side (paging builds(...FINISHED) and
+// bucketing by platform + UTC calendar month, src/api.mjs#countBuildsByMonth) rather
+// than using EAS's billing/usage metrics. This isn't guaranteed to match EAS's own
+// numbers (e.g. retry handling may differ) — run this against a real account and
+// compare with the EAS dashboard before shipping or changing the counting logic.
 //
 //   export EXPO_TOKEN=xxxxx
 //   node scripts/probe-usage.mjs                    # every account, last 3 months
 //   node scripts/probe-usage.mjs --account myorg
 //   node scripts/probe-usage.mjs --month 6          # widen the window (same cap as --usage: 12)
 //
-// The token is read from the environment only and is never printed. The
-// output does contain account/app names and build counts — read it before
-// pasting it anywhere public.
+// Reads the token from the environment only (never printed). Output contains real
+// account/app/build data — review before sharing.
 
 import { createApiClient } from '../src/api.mjs';
 import { calendarMonths } from '../src/dates.mjs';
@@ -55,8 +47,7 @@ if (accounts.length === 0) {
   process.exit(1);
 }
 
-// UTC calendar-month boundaries, current month first — same helper --usage
-// itself calls, so this script observes exactly what the CLI will compute.
+// Same calendar-month helper --usage calls, so this mirrors what the CLI computes.
 const months = calendarMonths(monthCount);
 
 console.log(`API: ${API_URL}`);

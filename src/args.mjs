@@ -6,20 +6,13 @@
 import { CliError } from './cli.mjs';
 
 const PLATFORMS = ['ios', 'android'];
-// Sanity cap on --history; the EAS API has no documented max, this just
-// keeps a typo like --history 99999 from hammering the API for one app.
-// Confirmed against the live API via scripts/probe-history.mjs (issue #17):
-// `builds(limit: 100)` is accepted with no GraphQL error, and the API's own
-// order was already newest-first for the account tested (the client-side
-// sort in fetchBuilds still runs regardless, since that order isn't
-// documented as guaranteed).
+// Sanity cap on --history (no documented API max) — keeps a typo like
+// --history 99999 from hammering the API. Confirmed accepted at 100 via
+// scripts/probe-history.mjs (issue #17).
 const MAX_HISTORY = 100;
 
-// --usage defaults to the last 3 UTC calendar months (current + 2 prior).
-// --month widens that window; capped at 12 (a year) rather than 24 because
-// countBuildsByMonth pages further back into each app's build history the
-// wider the window gets, directly increasing request count/latency — 12
-// covers the stated 6-month/1-year need. One-line change to raise later.
+// --usage defaults to the last 3 UTC calendar months; --month widens it, capped
+// at 12 since a wider window means more paging per app (request count/latency).
 export const DEFAULT_USAGE_MONTHS = 3;
 const MAX_MONTH = 12;
 
