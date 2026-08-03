@@ -15,232 +15,63 @@ const DEFAULTS = {
 };
 
 describe('parseArgs', () => {
-  it('parses --usage', () => {
-    expect(parseArgs(['--usage'])).toEqual({ ...DEFAULTS, usage: true });
+  // Table-driven happy path: argv → expected overrides on DEFAULTS.
+  it.each([
+    [[], {}],
+    [['-h'], { help: true }],
+    [['--help'], { help: true }],
+    [['-v'], { version: true }],
+    [['--version'], { version: true }],
+    [['--help', '--version'], { help: true, version: true }],
+    [['--json'], { json: true }],
+    [['--csv'], { csv: true }],
+    [['--usage'], { usage: true }],
+    [['--usage', '--json'], { usage: true, json: true }],
+    [['--platform', 'IOS'], { platform: 'ios' }], // lowercased
+    [['--platform=android'], { platform: 'android' }],
+    [['--history', '5'], { history: 5 }],
+    [['--history=10'], { history: 10 }],
+    [['--history', '1'], { history: 1 }], // explicit default
+    [['--history', '100'], { history: 100 }], // at MAX_HISTORY
+    [['--history', '3', '--platform', 'ios'], { history: 3, platform: 'ios' }],
+    [['--plan'], { plan: true }],
+    [['--plan', '--json'], { plan: true, json: true }],
+    [['--plan', '--csv'], { plan: true, csv: true }],
+    [['--plan', '--platform', 'ios'], { plan: true, platform: 'ios' }],
+    [['--usage', '--month', '6'], { usage: true, month: 6 }],
+    [['--usage', '--month=12'], { usage: true, month: 12 }], // at MAX_MONTH
+  ])('parses %j', (argv, expected) => {
+    expect(parseArgs(argv)).toEqual({ ...DEFAULTS, ...expected });
   });
 
-  it('parses --usage combined with --json', () => {
-    expect(parseArgs(['--usage', '--json'])).toEqual({
-      ...DEFAULTS,
-      usage: true,
-      json: true,
-    });
-  });
-
-  it('parses -h', () => {
-    expect(parseArgs(['-h'])).toEqual({ ...DEFAULTS, help: true });
-  });
-
-  it('parses --help', () => {
-    expect(parseArgs(['--help'])).toEqual({ ...DEFAULTS, help: true });
-  });
-
-  it('parses -v', () => {
-    expect(parseArgs(['-v'])).toEqual({ ...DEFAULTS, version: true });
-  });
-
-  it('parses --version', () => {
-    expect(parseArgs(['--version'])).toEqual({ ...DEFAULTS, version: true });
-  });
-
-  it('returns all defaults when no args are given', () => {
-    expect(parseArgs([])).toEqual(DEFAULTS);
-  });
-
-  it('handles a combination of flags (last one wins is not relevant, both get set)', () => {
-    expect(parseArgs(['--help', '--version'])).toEqual({ ...DEFAULTS, help: true, version: true });
-  });
-
-  it('throws CliError on an unknown option', () => {
-    expect(() => parseArgs(['--bogus'])).toThrow(CliError);
-    expect(() => parseArgs(['--bogus'])).toThrow(/Unknown option: --bogus/);
-  });
-
-  it('parses --json', () => {
-    expect(parseArgs(['--json'])).toEqual({ ...DEFAULTS, json: true });
-  });
-
-  it('parses --csv', () => {
-    expect(parseArgs(['--csv'])).toEqual({ ...DEFAULTS, csv: true });
-  });
-
-  it('throws when --json and --csv are combined', () => {
-    expect(() => parseArgs(['--json', '--csv'])).toThrow(/cannot be used together/);
-  });
-
-  it('parses --platform and lowercases it', () => {
-    expect(parseArgs(['--platform', 'IOS'])).toEqual({ ...DEFAULTS, platform: 'ios' });
-  });
-
-  it('parses --platform=value', () => {
-    expect(parseArgs(['--platform=android'])).toEqual({ ...DEFAULTS, platform: 'android' });
-  });
-
-  it('throws on an invalid --platform value', () => {
-    expect(() => parseArgs(['--platform', 'windows'])).toThrow(/Invalid --platform value/);
-  });
-
-  it('throws when --platform has no value', () => {
-    expect(() => parseArgs(['--platform'])).toThrow(/--platform requires a value/);
-  });
-
-  it('parses --history with a space-separated value as a number', () => {
-    expect(parseArgs(['--history', '5'])).toEqual({ ...DEFAULTS, history: 5 });
-  });
-
-  it('parses --history=value', () => {
-    expect(parseArgs(['--history=10'])).toEqual({ ...DEFAULTS, history: 10 });
-  });
-
-  it('parses --history 1 (the same as the default behavior, but explicit)', () => {
-    expect(parseArgs(['--history', '1'])).toEqual({ ...DEFAULTS, history: 1 });
-  });
-
-  it('throws when --history has no value', () => {
-    expect(() => parseArgs(['--history'])).toThrow(/--history requires a value/);
-  });
-
-  it('throws on a non-numeric --history value', () => {
-    expect(() => parseArgs(['--history', 'abc'])).toThrow(/Invalid --history value/);
-  });
-
-  it('throws on a zero or negative --history value', () => {
-    expect(() => parseArgs(['--history', '0'])).toThrow(/Invalid --history value/);
-    expect(() => parseArgs(['--history', '-1'])).toThrow(/Invalid --history value/);
-  });
-
-  it('throws on a non-integer --history value', () => {
-    expect(() => parseArgs(['--history', '2.5'])).toThrow(/Invalid --history value/);
-  });
-
-  it('throws when --history exceeds the max of 100', () => {
-    expect(() => parseArgs(['--history', '101'])).toThrow(/Invalid --history value/);
-  });
-
-  it('accepts --history at the max of 100', () => {
-    expect(parseArgs(['--history', '100'])).toEqual({ ...DEFAULTS, history: 100 });
-  });
-
-  it('throws when --history is combined with --usage', () => {
-    expect(() => parseArgs(['--usage', '--history', '5'])).toThrow(
-      /--history cannot be combined with --usage/
-    );
-  });
-
-  it('combines --history with --platform', () => {
-    expect(parseArgs(['--history', '3', '--platform', 'ios'])).toEqual({
-      ...DEFAULTS,
-      history: 3,
-      platform: 'ios',
-    });
-  });
-
-  it('throws CliError on --account, which was removed (issue #22 — Account.displayName in the table replaced the need for filtering by slug for now)', () => {
-    expect(() => parseArgs(['--account', 'myorg'])).toThrow(/Unknown option: --account/);
-  });
-
-  it('parses --plan', () => {
-    expect(parseArgs(['--plan'])).toEqual({ ...DEFAULTS, plan: true });
-  });
-
-  it('parses --plan combined with --json', () => {
-    expect(parseArgs(['--plan', '--json'])).toEqual({ ...DEFAULTS, plan: true, json: true });
-  });
-
-  it('parses --plan combined with --csv', () => {
-    expect(parseArgs(['--plan', '--csv'])).toEqual({ ...DEFAULTS, plan: true, csv: true });
-  });
-
-  it('combines --plan with --platform', () => {
-    expect(parseArgs(['--plan', '--platform', 'ios'])).toEqual({
-      ...DEFAULTS,
-      plan: true,
-      platform: 'ios',
-    });
-  });
-
-  it('throws when --plan is combined with --usage', () => {
-    expect(() => parseArgs(['--plan', '--usage'])).toThrow(
-      /--plan cannot be combined with --usage/
-    );
-  });
-
-  it('throws when --usage is combined with --plan (order does not matter)', () => {
-    expect(() => parseArgs(['--usage', '--plan'])).toThrow(
-      /--plan cannot be combined with --usage/
-    );
-  });
-
-  it('throws when --plan is combined with --history', () => {
-    expect(() => parseArgs(['--plan', '--history', '3'])).toThrow(
-      /--plan cannot be combined with --history/
-    );
-  });
-
-  it('throws when --history is combined with --plan (order does not matter)', () => {
-    expect(() => parseArgs(['--history', '3', '--plan'])).toThrow(
-      /--plan cannot be combined with --history/
-    );
-  });
-
-  it('parses --usage combined with --month as a number', () => {
-    expect(parseArgs(['--usage', '--month', '6'])).toEqual({
-      ...DEFAULTS,
-      usage: true,
-      month: 6,
-    });
-  });
-
-  it('parses --usage --month=value', () => {
-    expect(parseArgs(['--usage', '--month=12'])).toEqual({
-      ...DEFAULTS,
-      usage: true,
-      month: 12,
-    });
-  });
-
-  it('throws when --month has no value', () => {
-    expect(() => parseArgs(['--usage', '--month'])).toThrow(/--month requires a value/);
-  });
-
-  it('throws on a non-numeric --month value', () => {
-    expect(() => parseArgs(['--usage', '--month', 'abc'])).toThrow(/Invalid --month value/);
-  });
-
-  it('throws on a zero or negative --month value', () => {
-    expect(() => parseArgs(['--usage', '--month', '0'])).toThrow(/Invalid --month value/);
-    expect(() => parseArgs(['--usage', '--month', '-1'])).toThrow(/Invalid --month value/);
-  });
-
-  it('throws on a non-integer --month value', () => {
-    expect(() => parseArgs(['--usage', '--month', '2.5'])).toThrow(/Invalid --month value/);
-  });
-
-  it('throws when --month exceeds the max of 12', () => {
-    expect(() => parseArgs(['--usage', '--month', '13'])).toThrow(/Invalid --month value/);
-  });
-
-  it('accepts --month at the max of 12', () => {
-    expect(parseArgs(['--usage', '--month', '12'])).toEqual({
-      ...DEFAULTS,
-      usage: true,
-      month: 12,
-    });
-  });
-
-  it('throws when --month is used without --usage', () => {
-    expect(() => parseArgs(['--month', '6'])).toThrow(/--month can only be used with --usage/);
-  });
-
-  it('throws when --month is combined with --plan (not --usage)', () => {
-    expect(() => parseArgs(['--plan', '--month', '6'])).toThrow(
-      /--month can only be used with --usage/
-    );
-  });
-
-  it('throws when --month is combined with --history (not --usage)', () => {
-    expect(() => parseArgs(['--history', '3', '--month', '6'])).toThrow(
-      /--month can only be used with --usage/
-    );
+  // Table-driven errors: argv → thrown message. Exclusive-pair checks run
+  // after the parse loop (src/args.mjs), so argv order does not matter and
+  // one direction per pair is enough. Numeric validation shares one code
+  // path per flag; boundary representatives: below-min, above-max,
+  // non-numeric, non-integer, missing value.
+  it.each([
+    [['--bogus'], /Unknown option: --bogus/],
+    // --account was removed in issue #22 (displayName replaced slug filtering)
+    [['--account', 'myorg'], /Unknown option: --account/],
+    [['--json', '--csv'], /cannot be used together/],
+    [['--platform', 'windows'], /Invalid --platform value/],
+    [['--platform'], /--platform requires a value/],
+    [['--history'], /--history requires a value/],
+    [['--history', 'abc'], /Invalid --history value/],
+    [['--history', '0'], /Invalid --history value/],
+    [['--history', '2.5'], /Invalid --history value/],
+    [['--history', '101'], /Invalid --history value/],
+    [['--usage', '--history', '5'], /--history cannot be combined with --usage/],
+    [['--plan', '--usage'], /--plan cannot be combined with --usage/],
+    [['--plan', '--history', '3'], /--plan cannot be combined with --history/],
+    [['--usage', '--month'], /--month requires a value/],
+    [['--usage', '--month', 'abc'], /Invalid --month value/],
+    [['--usage', '--month', '0'], /Invalid --month value/],
+    [['--usage', '--month', '2.5'], /Invalid --month value/],
+    [['--usage', '--month', '13'], /Invalid --month value/],
+    [['--month', '6'], /--month can only be used with --usage/],
+  ])('throws on %j', (argv, message) => {
+    expect(() => parseArgs(argv)).toThrow(CliError);
+    expect(() => parseArgs(argv)).toThrow(message);
   });
 });

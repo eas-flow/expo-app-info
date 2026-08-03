@@ -1,14 +1,10 @@
-// EAS GraphQL client. No process.exit / console here — every failure throws
-// an ApiError so the CLI layer (src/cli.mjs) is the single place that turns
-// errors into exit codes and printed messages.
+// EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
+// src/cli.mjs is the only place that turns errors into exit codes and messages.
 
 export class ApiError extends Error {}
 
-// `displayName` is fetched alongside the unique `name` slug so the CLI can
-// show a friendlier name in the human table (issue #22) while keeping `name`
-// as the value --json/--csv emit and that used to back --account filtering
-// (removed in the same change — see issue #22). It is nullable — not every
-// account has one set.
+// `displayName` (nullable) backs the human table's friendlier ACCOUNT name;
+// --json/--csv always emit the unique `name` slug instead (issue #22).
 const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
 
 const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
@@ -31,29 +27,14 @@ const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
   } }
 }`;
 
-// NOTE: the previous `Q_ACCOUNT_PLAN` query (billingPeriod + usageMetrics +
-// subscription, keyed to EAS's own billing cycle) lived here and backed
-// `--usage`. Issue #18 replaced `--usage` with client-side, UTC
-// calendar-month "successful build" counting (see Q_BUILDS_PAGE /
-// countBuildsByMonth below) — arbitrary calendar ranges can't be sliced out
-// of `usageMetrics.byBillingPeriod`, which is tied to the billing cycle, and
-// `metricsForServiceMetric`'s `filterParams` was found not to filter by
-// platform at all (issue #15). The subscription-only part of that query
-// lives on as Q_SUBSCRIPTION below, for `--plan` (issue #19).
-
-// `--plan` (issue #19). Deliberately a separate, minimal query from
-// Q_ACCOUNT_PLAN above rather than a shared one: it has no `billingPeriod`
-// or `usageMetrics`, so it works standalone once issue #18 removes those
-// fields (and this query) from the `--usage` path. Same billing-scoped
-// caveat applies — a token without billing permission on the account gets a
-// GraphQL error here, and the CLI degrades that to "-" per account rather
-// than failing the whole run.
+// `--usage` moved off this billing-scoped shape to client-side UTC calendar-month
+// counting below (Q_BUILDS_PAGE/countBuildsByMonth) — see
+// .claude/rules/eas-api-knowledge.md for why (issue #15, #18). Only the
+// subscription fields survive here, for `--plan` (issue #19).
 //
-// No monthly price field here: the schema wasn't probed for one (see
-// issue #19's "事前検証" note) and the fields already confirmed via #15 —
-// `planId`, `name`, `status`, `trialEnd`, `concurrencies` — are the ones
-// queried below. Add a price field later only once it's confirmed to exist
-// against a real token.
+// Billing-scoped: a token without billing permission errors per account; the
+// CLI degrades that to "-" rather than failing the run. No price field —
+// not yet confirmed to exist against a real token.
 const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   account { byId(accountId: $accountId) { id
     subscription {
@@ -79,11 +60,9 @@ const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: 
   } }
 }`;
 
-// Page size for Q_BUILDS_PAGE. `builds(offset: 0, limit: 100)` is confirmed
-// accepted by the API (issue #17's scripts/probe-history.mjs); a non-zero
-// offset with this field hasn't been separately probed, but it's the same
-// standard offset/limit shape, not a new field, so this is treated as safe
-// pending scripts/probe-usage.mjs's extended check (issue #18's "事前検証").
+// Page size for Q_BUILDS_PAGE; `limit: 100` confirmed accepted by the API
+// (scripts/probe-history.mjs, issue #17). Non-zero offset not separately
+// probed, but same offset/limit shape.
 const BUILD_PAGE_SIZE = 50;
 
 /**
@@ -120,11 +99,8 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
       throw new ApiError('Authentication failed (401/403). The token or session may have expired.');
     }
 
-    // This API (like many GraphQL servers) returns a non-2xx status — 400 in
-    // particular — for query validation errors, not only for transport
-    // failures. Read the body before giving up on a non-2xx response so
-    // `errors[].message` (the actually useful part) isn't discarded in favor
-    // of a bare status code.
+    // Validation errors come back as HTTP 400 with a normal GraphQL error body —
+    // read it before giving up, so `errors[].message` isn't lost to a bare status code.
     let json;
     try {
       json = await res.json();
