@@ -4,6 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 import { ApiError, createApiClient, mapWithConcurrency } from './api.mjs';
+import { calendarMonths } from './dates.mjs';
 import {
   formatCSV,
   formatJSON,
@@ -15,6 +16,7 @@ import {
   USAGE_FIELDS,
   usageBuildsHeaders,
 } from './format.mjs';
+import { clearProgress, progress } from './progress.mjs';
 import { dim, renderTable } from './render.mjs';
 
 export class CliError extends Error {}
@@ -223,15 +225,6 @@ function resolveAuthHeaders(env = process.env) {
   return { authorization: `Bearer ${token}` };
 }
 
-function progress(msg) {
-  if (!process.stderr.isTTY) return;
-  process.stderr.write(`\r\x1b[2K${dim(msg)}`);
-}
-
-function clearProgress() {
-  if (process.stderr.isTTY) process.stderr.write('\r\x1b[2K');
-}
-
 export async function run(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
 
@@ -343,33 +336,6 @@ export async function run(argv = process.argv.slice(2)) {
       ? `VERSION/BUILD = latest ${effectiveHistory} successful EAS builds per platform, newest first.`
       : 'VERSION/BUILD = latest successful EAS build.';
   console.log(dim(`\n  ${filtered.length} row(s). ${footerNote}`));
-}
-
-/**
- * UTC calendar-month boundaries for `--usage` (issue #18), `count` months
- * ending with the month containing `now`, ordered newest first (index 0 is
- * the current, still-in-progress month). Each entry is `{ start, end }`
- * ISO 8601, with `end` exclusive (the instant the next month starts) —
- * matching the convention the old billingPeriod.end used, so the rest of the
- * codebase (inclusiveEnd/isoDate in format.mjs) can treat both the same way.
- *
- * Calendar boundaries (unlike the old billing-period chaining, which needed
- * the previous period's `start` before it could compute the next one) can
- * all be computed upfront from `now` alone — `Date.UTC` normalizes
- * out-of-range months (e.g. month `-1` becomes December of the prior year),
- * so no manual year/month-rollover arithmetic is needed here.
- */
-export function calendarMonths(count, now = new Date()) {
-  const year = now.getUTCFullYear();
-  const month = now.getUTCMonth();
-
-  return Array.from({ length: count }, (_, i) => {
-    const targetMonth = month - i;
-    return {
-      start: new Date(Date.UTC(year, targetMonth, 1)).toISOString(),
-      end: new Date(Date.UTC(year, targetMonth + 1, 1)).toISOString(),
-    };
-  });
 }
 
 /**
