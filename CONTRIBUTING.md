@@ -1,5 +1,7 @@
 # Contributing
 
+English | [日本語](./CONTRIBUTING.ja.md)
+
 Thanks for considering a contribution to `expo-app-info`. This is a small,
 dependency-free CLI, so the bar for changes is: does it earn its place?
 

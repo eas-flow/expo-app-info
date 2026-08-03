@@ -1,5 +1,7 @@
 # expo-app-info
 
+English | [日本語](./README.ja.md)
+
 [![npm version](https://img.shields.io/npm/v/expo-app-info.svg)](https://www.npmjs.com/package/expo-app-info)
 [![license](https://img.shields.io/npm/l/expo-app-info.svg)](./LICENSE)
 [![node](https://img.shields.io/node/v/expo-app-info.svg)](https://nodejs.org)
@@ -144,7 +146,7 @@ With `--usage`, one row per account **per UTC calendar month** instead (last 3 m
 | `ACCOUNT`                 | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                                                                                                         |
 | `PERIOD`                  | A UTC calendar month. The table shows `(today)` as the end for the still-in-progress current month, else the last inclusive day; `--json`/`--csv` `periodStart`/`periodEnd` are always the raw UTC calendar-month boundaries (`periodEnd` exclusive). |
 | `SUCCESSFUL BUILDS (IOS)` | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                                                                                                        |
-| `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                                                                                                     |
+| `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                                                                                                    |
 
 Pass `--platform ios` or `--platform android` to show only that platform's column.
 
