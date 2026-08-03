@@ -37,13 +37,31 @@ for the checklist.
 ## Project layout
 
 ```
-bin/cli.mjs   Thin executable entry point (shebang + calls src/cli.mjs#run)
-src/cli.mjs   Argument parsing, help text, the run() flow
-src/api.mjs   EAS GraphQL client (throws, never exits/prints)
-src/render.mjs  Table rendering, column width, relative-date formatting
-test/         Vitest tests, one file per src module (plus an integration
-              test for run() with a mocked fetch)
+bin/cli.mjs           Thin executable entry point (shebang + calls src/cli.mjs#run)
+src/cli.mjs           The top-level run() flow: resolve auth, fetch accounts,
+                      dispatch to a display mode in src/commands/
+src/args.mjs          Argument parsing, validation limits, help text
+src/commands/
+  list.mjs            Default app list (and --history)
+  usage.mjs           --usage (successful builds per UTC calendar month)
+  plan.mjs            --plan (current subscription per account)
+src/api.mjs           EAS GraphQL client (throws, never exits/prints) +
+                      mapWithConcurrency/CONCURRENCY
+src/format.mjs        entries → JSON/CSV/display-row conversion (FIELDS/
+                      USAGE_FIELDS/PLAN_FIELDS are the machine-readable
+                      output contract)
+src/render.mjs        Table rendering and column widths
+src/dates.mjs         UTC date helpers (calendar-month boundaries, display
+                      formatting) — every date this CLI shows is UTC
+src/progress.mjs      TTY-only progress reporting on stderr
+test/                 Vitest tests, one file per src module (run-*.test.mjs
+                      are the per-display-mode integration tests for run()
+                      with a mocked fetch; shared bits live in helpers.mjs)
 ```
+
+Imports flow one way — `bin → cli → args / commands/* → api / format /
+render / dates / progress`, with `format` also using `dates`/`render` — and
+never in reverse (e.g. `api.mjs` must not import from `commands/`).
 
 `src/*` files never call `process.exit` or read directly from `process.argv`
 so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.

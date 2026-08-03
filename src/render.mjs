@@ -1,4 +1,4 @@
-// Table rendering, column width, and relative-date helpers.
+// Table rendering and column-width helpers.
 // Kept dependency-free and pure so they are easy to unit test.
 
 /** Display width, counting East Asian wide characters as 2 columns. */
@@ -52,15 +52,4 @@ export function renderTable(headers, rows, { isTTY = process.stdout.isTTY } = {}
   }
   out.push(line('└', '┴', '┘'));
   return out.join('\n');
-}
-
-/** `now` is a parameter (default `Date.now()`) so boundary days can be tested deterministically. */
-export function relativeDate(iso, now = Date.now()) {
-  if (!iso) return '-';
-  const days = Math.floor((now - new Date(iso).getTime()) / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 30) return `${days}d ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
 }
