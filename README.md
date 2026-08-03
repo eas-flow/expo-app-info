@@ -198,7 +198,7 @@ There is no `--account` filter at the moment — it was removed (see [#22](https
 
 ### Machine-readable output (`--json` / `--csv`)
 
-Both emit one entry per row shown in the table, with raw values instead of display strings — `null` (JSON) / an empty cell (CSV) where the table shows `-`, and a full ISO 8601 timestamp (`lastBuildAt`) instead of a relative date:
+Both emit one entry per row shown in the table, with raw values instead of display strings — `null` (JSON) / an empty cell (CSV) where the table shows `-`, and a full ISO 8601 timestamp (`lastBuildAt`) instead of the table's formatted build date:
 
 ```bash
 $ npx expo-app-info --json

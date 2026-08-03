@@ -1,4 +1,4 @@
-// Table rendering, column width, and build-date formatting helpers.
+// Table rendering and column-width helpers.
 // Kept dependency-free and pure so they are easy to unit test.
 
 /** Display width, counting East Asian wide characters as 2 columns. */
@@ -52,25 +52,4 @@ export function renderTable(headers, rows, { isTTY = process.stdout.isTTY } = {}
   }
   out.push(line('└', '┴', '┘'));
   return out.join('\n');
-}
-
-const pad2 = (n) => String(n).padStart(2, '0');
-
-/**
- * ISO 8601 timestamp -> "YYYY/MM/DD-HH:mm:ss", for the human table's BUILD
- * DATE column (issue #17 follow-up: an absolute timestamp was requested over
- * the relative "3d ago" style so the exact build time is visible without
- * doing the math). Always UTC, matching every other date shown by this CLI
- * (`isoDate` in format.mjs, `inclusiveEnd`) so output does not depend on the
- * machine's local timezone. `--json`/`--csv` are unaffected — they keep the
- * raw ISO 8601 `lastBuildAt` value.
- */
-export function formatBuildDate(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '-';
-  return (
-    `${d.getUTCFullYear()}/${pad2(d.getUTCMonth() + 1)}/${pad2(d.getUTCDate())}-` +
-    `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`
-  );
 }

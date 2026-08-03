@@ -23,7 +23,7 @@
 // pasting it anywhere public.
 
 import { createApiClient } from '../src/api.mjs';
-import { calendarMonths } from '../src/cli.mjs';
+import { calendarMonths } from '../src/dates.mjs';
 
 const API_URL = process.env.EXPO_API_URL ?? 'https://api.expo.dev/graphql';
 

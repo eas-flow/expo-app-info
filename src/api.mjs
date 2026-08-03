@@ -91,7 +91,7 @@ const BUILD_PAGE_SIZE = 50;
  * or -1 if it is outside every requested month (older than the oldest one).
  * `months` is a list of `{ start, end }` UTC calendar-month boundaries
  * (ISO 8601, `end` exclusive — the instant the next month starts), ordered
- * newest first, as produced by src/cli.mjs#calendarMonths().
+ * newest first, as produced by src/dates.mjs#calendarMonths().
  */
 function monthIndexForBuild(createdAt, months) {
   const t = new Date(createdAt).getTime();
@@ -176,7 +176,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
   /**
    * Successful (FINISHED) build counts for one app, bucketed by platform and
    * UTC calendar month, for `--usage` (issue #18). `months` is a list of
-   * `{ start, end }` boundaries ordered newest first (src/cli.mjs's
+   * `{ start, end }` boundaries ordered newest first (src/dates.mjs's
    * calendarMonths()); the return value is a parallel array of
    * `{ ios, android }` counts, one entry per month in `months`.
    *
@@ -188,7 +188,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * would only be older still, assuming the API's undocumented order holds
    * newest-first, as observed for tested accounts in
    * scripts/probe-history.mjs). Throws ApiError like every other method
-   * here; the caller (src/cli.mjs#runUsage) decides a failure degrades that
+   * here; the caller (src/commands/usage.mjs#runUsage) decides a failure degrades that
    * whole account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months) {
@@ -238,7 +238,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * Current subscription (plan, status, trial end, concurrency) for one
    * account — no billing period or build counts. Used by `--plan`
    * (issue #19). Throws like every other method here; the caller
-   * (src/cli.mjs#runPlan) decides a missing plan isn't fatal.
+   * (src/commands/plan.mjs#runPlan) decides a missing plan isn't fatal.
    */
   async function fetchSubscription(accountId) {
     const account = (await gql(Q_SUBSCRIPTION, { accountId })).account.byId;
@@ -247,6 +247,13 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
 
   return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
 }
+
+/**
+ * Shared in-flight request cap for every parallelized fetch in this CLI
+ * (see mapWithConcurrency below) — the guardrail that keeps request count
+ * growth from turning into request *rate* growth.
+ */
+export const CONCURRENCY = 8;
 
 /** Run `task` over `items` with a bounded number of in-flight requests. */
 export async function mapWithConcurrency(items, limit, task) {

@@ -1,8 +1,9 @@
-// Converts the raw "entries" produced by src/cli.mjs#run() into each of the
+// Converts the raw "entries" produced by the display-mode flows in
+// src/commands/ into each of the
 // supported output formats. Kept separate from src/render.mjs, which only
 // knows about the human-oriented table.
 
-import { formatBuildDate } from './render.mjs';
+import { formatBuildDate, inclusiveEnd, isoDate } from './dates.mjs';
 
 const FIELDS = ['account', 'app', 'slug', 'platform', 'version', 'build', 'lastBuildAt'];
 
@@ -153,27 +154,6 @@ export function planConcurrencyHeader(platform = null) {
   if (platform === 'ios') return 'CONCURRENCY (IOS)';
   if (platform === 'android') return 'CONCURRENCY (ANDROID)';
   return 'CONCURRENCY (TOTAL/IOS/AND)';
-}
-
-/** ISO 8601 timestamp → YYYY-MM-DD, for the human table only. */
-function isoDate(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '-' : d.toISOString().slice(0, 10);
-}
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * EAS's `billingPeriod.end` is an *exclusive* boundary — the instant the
- * next period starts (e.g. a July period ends at 2026-08-01T00:00:00Z), not
- * the last moment of the period. Displayed as-is that reads like "runs into
- * August" for a period that is entirely July, so the human table shows the
- * last day the period actually covers instead: `end` minus one day. Only
- * cosmetic — `--json`/`--csv` still emit the raw, unmodified `periodEnd`.
- */
-function inclusiveEnd(iso) {
-  return new Date(new Date(iso).getTime() - ONE_DAY_MS).toISOString();
 }
 
 /** `--json`: an array of entries, raw values (null, ISO 8601 dates). */
