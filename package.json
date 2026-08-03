@@ -1,6 +1,6 @@
 {
   "name": "expo-app-info",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
   "keywords": [
     "expo",
