@@ -17,6 +17,10 @@ release with no bug fixes just omits 🐛 Bug Fixes).
 
 - <!-- Performance-related changes -->
 
+## 🚨 Breaking Changes
+
+- <!-- breaking changes -->
+
 ## Notes
 
 <!-- Optional: breaking changes, upgrade steps, known issues. Omit if none -->

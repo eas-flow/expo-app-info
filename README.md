@@ -21,7 +21,7 @@ $ npx expo-app-info
 └─────────┘────────────┘───────────┘──────────┘─────────┘───────┘───────────────────────────┘
 ```
 
-## Features
+## 🚀 Features
 
 If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-app-info` walks your whole account via the EAS GraphQL API and prints one table.
 
@@ -34,7 +34,7 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 - `ACCOUNT` shows the EAS "Display name" when set, falling back to the unique slug
 - Zero runtime dependencies
 
-## Install
+## 📦 Install
 
 ```bash
 npx expo-app-info
@@ -50,7 +50,7 @@ expo-app-info
 Requires Node.js **20 or later** (the CLI uses the global `fetch`). Node 22 LTS or newer
 is recommended — Node 20 reached end of life in April 2026.
 
-## Authentication
+## 🔑 Authentication
 
 A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
 
@@ -63,7 +63,7 @@ Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access
 
 This is deliberately the only option. The token is never read from `argv` and never written to disk, so it cannot leak through your shell history, the process list, or a forgotten config file. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
 
-## Usage
+## 🛠️ Usage
 
 Filter by platform, or switch the output format for scripts:
 
@@ -147,36 +147,36 @@ just that platform's number. Cannot be combined with `--usage` or
 
 ### What the numbers mean
 
-| Column         | Source                                                     |
-| -------------- | ---------------------------------------------------------- |
+| Column         | Source                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------- |
 | `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug (table only — see below) |
-| `APP` / `SLUG` | EAS project name and slug                                  |
-| `PLATFORM`     | `ios` / `android`                                          |
-| `VERSION`      | `appVersion` of the latest **successful** build            |
-| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode) |
-| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)      |
+| `APP` / `SLUG` | EAS project name and slug                                                              |
+| `PLATFORM`     | `ios` / `android`                                                                      |
+| `VERSION`      | `appVersion` of the latest **successful** build                                        |
+| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)                             |
+| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)                                  |
 
 With `--usage`, one row per account **per UTC calendar month** instead (last 3 months by default, or `--month <n>` for 1–12):
 
-| Column                     | Source                                                                                                                                              |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`                  | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                       |
-| `PERIOD`                   | A UTC calendar month. The table shows `(today)` as the end for the still-in-progress current month, else the last inclusive day; `--json`/`--csv` `periodStart`/`periodEnd` are always the raw UTC calendar-month boundaries (`periodEnd` exclusive). |
-| `SUCCESSFUL BUILDS (IOS)`  | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                     |
-| `SUCCESSFUL BUILDS (AND)`  | Same, for Android                                                                                                                                    |
+| Column                    | Source                                                                                                                                                                                                                                                |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`                 | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                                                                                                         |
+| `PERIOD`                  | A UTC calendar month. The table shows `(today)` as the end for the still-in-progress current month, else the last inclusive day; `--json`/`--csv` `periodStart`/`periodEnd` are always the raw UTC calendar-month boundaries (`periodEnd` exclusive). |
+| `SUCCESSFUL BUILDS (IOS)` | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                                                                                                        |
+| `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                                                                                                     |
 
 Pass `--platform ios` or `--platform android` to show only that platform's column.
 
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
-| Column                        | Source                                                                                       |
-| ------------------------------ | --------------------------------------------------------------------------------------------- |
-| `ACCOUNT`                     | Same as above                                                                                 |
-| `PLAN`                        | `subscription.name`                                                                           |
-| `PLAN ID`                     | `subscription.planId`                                                                         |
-| `STATUS`                      | Subscription status as Expo reports it (`active`, `trialing`, …)                             |
-| `CONCURRENCY (TOTAL/IOS/AND)` | All three concurrency numbers at once; narrows to one with `--platform`                      |
-| `TRIAL END`                   | `subscription.trialEnd` (`YYYY-MM-DD`), or `-` if the account isn't (or never was) trialing   |
+| Column                        | Source                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `ACCOUNT`                     | Same as above                                                                               |
+| `PLAN`                        | `subscription.name`                                                                         |
+| `PLAN ID`                     | `subscription.planId`                                                                       |
+| `STATUS`                      | Subscription status as Expo reports it (`active`, `trialing`, …)                            |
+| `CONCURRENCY (TOTAL/IOS/AND)` | All three concurrency numbers at once; narrows to one with `--platform`                     |
+| `TRIAL END`                   | `subscription.trialEnd` (`YYYY-MM-DD`), or `-` if the account isn't (or never was) trialing |
 
 There is no monthly price column yet — it hasn't been confirmed to exist in
 the EAS schema. It may be added later once that's checked against a real
@@ -233,7 +233,7 @@ The default table (columns, wording, colors, spacing) is for humans and is **not
 
 `--json` and `--csv` are for scripts and follow semver: existing fields are never renamed or removed, and their meaning never changes, without a major version bump. New fields may be added in a minor release; scripts should ignore fields they don't recognize.
 
-## Documentation
+## 📚 Documentation
 
 ### How it works
 
@@ -256,7 +256,7 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — the Contributor Covenant this project follows
 - [Roadmap](#roadmap) below — shipped and planned features
 
-## Roadmap
+## 🗺️ Roadmap
 
 - [x] `--json` / `--csv` output for CI and spreadsheets
 - [x] `--platform` filter
@@ -270,7 +270,7 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
 Issues and PRs welcome.
 
-## FAQ
+## ❓ FAQ
 
 **Is this an official Expo tool?**
 
@@ -296,6 +296,6 @@ No. EAS does not store a version on the project itself, so the number shown is t
 
 No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](./SECURITY.md) for the full policy and how to report a vulnerability privately.
 
-## License
+## 📄 License
 
 [MIT](./LICENSE)
