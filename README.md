@@ -89,13 +89,7 @@ npx expo-app-info --history 5
 └─────────┘────────────┘────────────┘──────────┘─────────┘───────┘─────────────────────┘
 ```
 
-`--history <N>` (1–100, default: 1) prints the `N` most recent **successful**
-builds per platform as separate rows instead of collapsing each app/platform
-down to a single row. Rows are always newest-first by build date — sorted on
-the client, not just trusted from the API's response order, since that
-order isn't documented anywhere. It works with `--platform`, `--json`, and
-`--csv`, but cannot be combined with `--usage`. `--history 1` prints exactly
-the same output as leaving the flag off entirely.
+`--history <N>` (1–100, default: 1) prints the `N` most recent **successful** builds per platform as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, `--json`, and `--csv`, but cannot be combined with `--usage`. `--history 1` prints exactly the same output as leaving the flag off entirely.
 
 Or ask about successful build counts per calendar month instead of app versions:
 
@@ -113,15 +107,7 @@ npx expo-app-info --usage
 └─────────┴─────────────────────────┴──────────────────────────┴──────────────────────────┘
 ```
 
-One row per account **per UTC calendar month** — the last 3 months by
-default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage
---month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed
-client-side from finished builds via the API — not read from EAS's own
-billing/usage metric, which is tied to the billing cycle and can't be sliced
-into arbitrary calendar ranges — so they may not exactly match what the EAS
-dashboard reports. Pass `--platform ios` or `--platform android` to narrow
-to just that platform's column. The still-in-progress current month's row
-shows `(today)` as its end, since it isn't a finished count yet.
+One row per account **per UTC calendar month** — the last 3 months by default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed client-side from finished builds via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. Pass `--platform ios` or `--platform android` to narrow to just that platform's column. The still-in-progress current month's row shows `(today)` as its end, since it isn't a finished count yet.
 
 Or just the account's current subscription, with no build counts or billing
 period at all:
@@ -138,12 +124,7 @@ npx expo-app-info --plan
 └─────────┘────────────┘────────────┘────────┘─────────────────────────────┘───────────┘
 ```
 
-`--plan` shows only the account's *current* subscription — no build counts,
-no billing period — since those are "as of now" facts that would otherwise
-be repeated identically on every row if shown alongside historical data.
-Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to
-just that platform's number. Cannot be combined with `--usage` or
-`--history`, since all three are separate display modes.
+`--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--usage` or `--history`, since all three are separate display modes.
 
 ### What the numbers mean
 
@@ -178,9 +159,7 @@ With `--plan`, one row per account instead, with only the current subscription (
 | `CONCURRENCY (TOTAL/IOS/AND)` | All three concurrency numbers at once; narrows to one with `--platform`                     |
 | `TRIAL END`                   | `subscription.trialEnd` (`YYYY-MM-DD`), or `-` if the account isn't (or never was) trialing |
 
-There is no monthly price column yet — it hasn't been confirmed to exist in
-the EAS schema. It may be added later once that's checked against a real
-token.
+There is no monthly price column yet — it hasn't been confirmed to exist in the EAS schema. It may be added later once that's checked against a real token.
 
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
