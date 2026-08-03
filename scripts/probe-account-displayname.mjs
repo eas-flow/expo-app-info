@@ -1,31 +1,14 @@
 #!/usr/bin/env node
-// Verification script for issue #22 — NOT part of the published package
-// (`package.json#files` only ships bin/ and src/).
-//
-// `Account.displayName` is present in EAS's GraphQL schema (confirmed via
-// eas-cli's generated TypeScript types) but eas-cli itself never queries it,
-// so nothing confirms what it actually contains in practice. Before relying
-// on it for the table's ACCOUNT column (falling back to the unique `name`
-// slug when absent), this checks against the real API:
-//
-//   1. Does `displayName` come back non-null for real accounts, or is it
-//      always null in practice (in which case the fallback to `name` would
-//      fire 100% of the time and the feature would be a no-op)?
-//   2. When non-null, does it ever differ from `name`? If it's always equal
-//      to `name`, the distinct column source barely matters.
-//   3. Sanity check: is `displayName` ever an empty string rather than null?
-//      The current fallback (`displayName || name`) treats both the same,
-//      but it's worth confirming which one the API actually sends.
-//
-// This calls the real `fetchAccounts()` the CLI ships, so a good run here is
-// a good run in production.
+// Dev-only verification script for issue #22 (not shipped — see package.json#files).
+// Checks whether `Account.displayName` is populated/non-null in practice and how it
+// compares to the unique `name` slug, to validate the ACCOUNT column fallback
+// (`displayName || name`) in src/format.mjs against real API data.
 //
 //   export EXPO_TOKEN=xxxxx
 //   node scripts/probe-account-displayname.mjs
 //
-// The token is read from the environment only and is never printed. The
-// output does contain account names/display names — read it before pasting
-// it anywhere public.
+// Reads the token from the environment only (never printed). Output contains real
+// account names — review before sharing.
 
 import { createApiClient } from '../src/api.mjs';
 
