@@ -1,7 +1,7 @@
 // Converts the raw "entries" produced by the display-mode flows in
 // src/commands/ into human-oriented table rows. There is no machine-readable
-// output mode (--json/--csv was removed in issue #43); the table below is
-// the only supported output and carries no compatibility guarantee.
+// output mode; the table below is the only supported output and carries no
+// compatibility guarantee.
 
 import { formatBuildDate, inclusiveEnd, isoDate } from './dates.mjs';
 

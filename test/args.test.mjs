@@ -46,7 +46,7 @@ describe('parseArgs', () => {
     [['--bogus'], /Unknown option: --bogus/],
     // --account was removed in issue #22 (displayName replaced slug filtering)
     [['--account', 'myorg'], /Unknown option: --account/],
-    // --json/--csv were removed in issue #43
+    // --json/--csv were removed
     [['--json'], /Unknown option: --json/],
     [['--csv'], /Unknown option: --csv/],
     [['--platform', 'windows'], /Invalid --platform value/],

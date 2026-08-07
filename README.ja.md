@@ -172,7 +172,7 @@ npx expo-app-info --plan
 
 ### 出力の安定性
 
-テーブル（列・文言・色・間隔）は人間向けであり、互換性の保証は**一切ありません** — どのリリースでも変更される可能性があります。機械可読な出力モードはありません: `--json`/`--csv` はテーブルが唯一の利用者だったため、契約を凍結するのではなく [v1.0.0](https://github.com/eas-flow/expo-app-info/issues/43) で削除しました。要望があれば将来のマイナーリリースで復活する可能性があります — 必要であれば [Issue を作成](https://github.com/eas-flow/expo-app-info/issues)してください。
+テーブル（列・文言・色・間隔）は人間向けであり、互換性の保証は**一切ありません** — どのリリースでも変更される可能性があります。機械可読な出力モードはありません: `--json`/`--csv` はテーブルが唯一の利用者だったため、契約を凍結するのではなく v1.0.0 で削除しました。要望があれば将来のマイナーリリースで復活する可能性があります — 必要であれば [Issue を作成](https://github.com/eas-flow/expo-app-info/issues)してください。
 
 ## 📚 ドキュメント
 
@@ -195,7 +195,6 @@ npx expo-app-info --plan
 - [CONTRIBUTING.md](./CONTRIBUTING.md)（[日本語版](./CONTRIBUTING.ja.md)） — 開発環境のセットアップ、テスト/lint コマンド、プロジェクト構成、リリースプロセス
 - [SECURITY.md](./SECURITY.md)（[日本語版](./SECURITY.ja.md)） — 脆弱性報告のポリシーと、非公開で問題を報告する方法
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)（[日本語版](./CODE_OF_CONDUCT.ja.md)） — このプロジェクトが従う Contributor Covenant
-- 下記のロードマップ — 実装済み・予定の機能
 
 ## ❓ FAQ
 

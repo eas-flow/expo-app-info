@@ -173,7 +173,7 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 ### Output stability
 
-The table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release. There is no machine-readable output mode: `--json`/`--csv` were removed in [v1.0.0](https://github.com/eas-flow/expo-app-info/issues/43) since the table was their only consumer, so the contract was retired rather than frozen. It may return in a future minor release if there's demand — [open an issue](https://github.com/eas-flow/expo-app-info/issues) if you need it.
+The table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release. There is no machine-readable output mode: `--json`/`--csv` were removed in v1.0.0 since the table was their only consumer, so the contract was retired rather than frozen. It may return in a future minor release if there's demand — [open an issue](https://github.com/eas-flow/expo-app-info/issues) if you need it.
 
 ## 📚 Documentation
 
@@ -196,7 +196,6 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, test/lint commands, project layout, and the release process
 - [SECURITY.md](./SECURITY.md) — vulnerability reporting policy and how to report an issue privately
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — the Contributor Covenant this project follows
-- [Roadmap](#roadmap) below — shipped and planned features
 
 ## ❓ FAQ
 
