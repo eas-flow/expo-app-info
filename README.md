@@ -49,8 +49,7 @@ npm install -g expo-app-info
 expo-app-info
 ```
 
-Requires Node.js **20 or later** (the CLI uses the global `fetch`). Node 22 LTS or newer
-is recommended — Node 20 reached end of life in April 2026.
+Requires Node.js **22 or later** (the CLI uses the global `fetch`).
 
 ## 🔑 Authentication
 
