@@ -126,23 +126,23 @@ npx expo-app-info --plan
 
 ### What the numbers mean
 
-| Column         | Source                                                                                 |
-| -------------- | -------------------------------------------------------------------------------------- |
-| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug                          |
-| `APP` / `SLUG` | EAS project name and slug                                                              |
-| `PLATFORM`     | `ios` / `android`                                                                      |
-| `VERSION`      | `appVersion` of the latest **successful** build                                        |
-| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)                             |
-| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)                                  |
+| Column         | Source                                                        |
+| -------------- | ------------------------------------------------------------- |
+| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug |
+| `APP` / `SLUG` | EAS project name and slug                                     |
+| `PLATFORM`     | `ios` / `android`                                             |
+| `VERSION`      | `appVersion` of the latest **successful** build               |
+| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)    |
+| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)         |
 
 With `--usage`, one row per account **per UTC calendar month** instead (last 3 months by default, or `--month <n>` for 1–12):
 
-| Column                    | Source                                                                                                                                                                                                                                                |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`                 | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                                                                                                         |
+| Column                    | Source                                                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`                 | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
 | `PERIOD`                  | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
-| `SUCCESSFUL BUILDS (IOS)` | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                                                                                                        |
-| `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                                                                                                    |
+| `SUCCESSFUL BUILDS (IOS)` | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                              |
+| `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                           |
 
 Pass `--platform ios` or `--platform android` to show only that platform's column.
 
@@ -171,8 +171,6 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 `--usage`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
 
-There is no `--account` filter at the moment — it was removed (see [#22](https://github.com/eas-flow/expo-app-info/issues/22)) rather than kept alongside the new `ACCOUNT` display-name behavior. Filtering by account may return once the shape it should take (slug, display name, or both) is settled.
-
 ### Output stability
 
 The table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release. There is no machine-readable output mode: `--json`/`--csv` were removed in [v1.0.0](https://github.com/eas-flow/expo-app-info/issues/43) since the table was their only consumer, so the contract was retired rather than frozen. It may return in a future minor release if there's demand — [open an issue](https://github.com/eas-flow/expo-app-info/issues) if you need it.
@@ -199,20 +197,6 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 - [SECURITY.md](./SECURITY.md) — vulnerability reporting policy and how to report an issue privately
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) — the Contributor Covenant this project follows
 - [Roadmap](#roadmap) below — shipped and planned features
-
-## 🗺️ Roadmap
-
-- [x] `--platform` filter
-- [x] `--usage`: subscription plan, build concurrency, and monthly build counts per platform ([#15](https://github.com/eas-flow/expo-app-info/issues/15))
-- [x] `--history <N>`: show the N most recent builds per platform, not just the latest ([#17](https://github.com/eas-flow/expo-app-info/issues/17))
-- [x] `ACCOUNT` shows the EAS "Display name" (falls back to the slug); `--account` removed ([#22](https://github.com/eas-flow/expo-app-info/issues/22))
-- [x] `--plan`: current account subscription (plan, plan ID, status, concurrency, trial end) on its own, separate from `--usage`'s build counts ([#19](https://github.com/eas-flow/expo-app-info/issues/19))
-- [x] `--usage`: one row per account per UTC calendar month (last 3 by default, `--month <n>` up to 12), client-side "successful build" counts instead of EAS's billing-period metric ([#18](https://github.com/eas-flow/expo-app-info/issues/18))
-- [x] `--json` / `--csv` removed — table was the only consumer, so the machine-readable contract was retired rather than frozen going into v1.0.0 ([#43](https://github.com/eas-flow/expo-app-info/issues/43))
-- [ ] Diff against local `app.json` to surface version drift between source and shipped builds
-- [ ] Show the latest submitted store version alongside the build version
-
-Issues and PRs welcome.
 
 ## ❓ FAQ
 
