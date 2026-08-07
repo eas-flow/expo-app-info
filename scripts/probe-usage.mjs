@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Dev-only verification script for issue #18 (not shipped — see package.json#files).
+// Dev-only verification script (not shipped — see package.json#files).
 // --usage counts "successful builds" client-side (paging builds(...FINISHED) and
 // bucketing by platform + UTC calendar month, src/api.mjs#countBuildsByMonth) rather
 // than using EAS's billing/usage metrics. This isn't guaranteed to match EAS's own
@@ -89,4 +89,4 @@ for (const account of accounts) {
   }
 }
 
-console.log('\nDone. Paste the output above into issue #18.');
+console.log('\nDone. Paste the output above into the tracking issue for this check.');

@@ -44,7 +44,7 @@ describe('parseArgs', () => {
   // non-numeric, non-integer, missing value.
   it.each([
     [['--bogus'], /Unknown option: --bogus/],
-    // --account was removed in issue #22 (displayName replaced slug filtering)
+    // --account was removed (displayName replaced slug filtering)
     [['--account', 'myorg'], /Unknown option: --account/],
     // --json/--csv were removed
     [['--json'], /Unknown option: --json/],

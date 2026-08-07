@@ -1,6 +1,6 @@
 // Default display mode (and `--history <N>`): one row per app/platform with
-// the latest successful build(s). Moved out of src/cli.mjs (issue #30) so
-// every display mode lives in its own file under src/commands/.
+// the latest successful build(s). Moved out of src/cli.mjs so every display
+// mode lives in its own file under src/commands/.
 
 import { CONCURRENCY, mapWithConcurrency } from '../api.mjs';
 import { toDisplayRows } from '../format.mjs';

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Dev-only verification script for issue #22 (not shipped — see package.json#files).
+// Dev-only verification script (not shipped — see package.json#files).
 // Checks whether `Account.displayName` is populated/non-null in practice and how it
 // compares to the unique `name` slug, to validate the ACCOUNT column fallback
 // (`displayName || name`) in src/format.mjs against real API data.
@@ -74,4 +74,4 @@ console.log(
     : '\n[!!] No account here has a displayName distinct from its slug. That does not mean the feature is wrong (this token may just not see such an account), but it means this run cannot confirm the table shows anything different from before. Try again with an account that has a Display name set in the EAS dashboard, if one exists.'
 );
 
-console.log('\nDone. Paste the output above into issue #22.');
+console.log('\nDone. Paste the output above into the tracking issue for this check.');

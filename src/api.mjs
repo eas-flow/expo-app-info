@@ -4,7 +4,7 @@
 export class ApiError extends Error {}
 
 // `displayName` (nullable) backs the human table's friendlier ACCOUNT name;
-// `name` is always the unique slug (issue #22).
+// `name` is always the unique slug.
 const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
 
 const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
@@ -28,8 +28,9 @@ const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
 }`;
 
 // `--usage` moved off this billing-scoped shape to client-side UTC calendar-month
-// counting below (Q_BUILDS_PAGE/countBuildsByMonth) — see issue #15/#18 for why.
-// Only the subscription fields survive here, for `--plan` (issue #19).
+// counting below (Q_BUILDS_PAGE/countBuildsByMonth): billing-period metrics can't
+// be sliced into arbitrary calendar ranges. Only the subscription fields survive
+// here, for `--plan`.
 //
 // Billing-scoped: a token without billing permission errors per account; the
 // CLI degrades that to "-" rather than failing the run. No price field —
@@ -43,7 +44,7 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   } }
 }`;
 
-// `--usage` (issue #18). Same shape as Q_BUILDS above but paginated with
+// `--usage`. Same shape as Q_BUILDS above but paginated with
 // `offset`/`limit` instead of a fixed small `limit`, so callers can walk
 // arbitrarily far back into an app's build history. Only `createdAt` is
 // needed here — counting/bucketing by calendar month happens client-side in
@@ -60,8 +61,8 @@ const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: 
 }`;
 
 // Page size for Q_BUILDS_PAGE; `limit: 100` confirmed accepted by the API
-// (scripts/probe-history.mjs, issue #17). Non-zero offset not separately
-// probed, but same offset/limit shape.
+// (scripts/probe-history.mjs). Non-zero offset not separately probed, but
+// same offset/limit shape.
 const BUILD_PAGE_SIZE = 50;
 
 /**
@@ -140,7 +141,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * The API's own ordering for `builds(offset, limit)` is not documented, so
    * each platform's slice is sorted by `createdAt` descending here rather
    * than trusted as-is — with `limit: 1` a wrong order never showed up, but
-   * it would with `limit > 1` (see issue #17).
+   * it would with `limit > 1`.
    */
   async function fetchBuilds(appId, { limit = 1 } = {}) {
     const app = (await gql(Q_BUILDS, { appId, limit })).app.byId;
@@ -150,7 +151,7 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
 
   /**
    * Successful (FINISHED) build counts for one app, bucketed by platform and
-   * UTC calendar month, for `--usage` (issue #18). `months` is a list of
+   * UTC calendar month, for `--usage`. `months` is a list of
    * `{ start, end }` boundaries ordered newest first (src/dates.mjs's
    * calendarMonths()); the return value is a parallel array of
    * `{ ios, android }` counts, one entry per month in `months`.
@@ -211,8 +212,8 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
 
   /**
    * Current subscription (plan, status, trial end, concurrency) for one
-   * account — no billing period or build counts. Used by `--plan`
-   * (issue #19). Throws like every other method here; the caller
+   * account — no billing period or build counts. Used by `--plan`.
+   * Throws like every other method here; the caller
    * (src/commands/plan.mjs#runPlan) decides a missing plan isn't fatal.
    */
   async function fetchSubscription(accountId) {

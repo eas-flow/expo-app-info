@@ -8,7 +8,7 @@ import { CliError } from './cli.mjs';
 const PLATFORMS = ['ios', 'android'];
 // Sanity cap on --history (no documented API max) — keeps a typo like
 // --history 99999 from hammering the API. Confirmed accepted at 100 via
-// scripts/probe-history.mjs (issue #17).
+// scripts/probe-history.mjs.
 const MAX_HISTORY = 100;
 
 // --usage defaults to the last 3 UTC calendar months; --month widens it, capped

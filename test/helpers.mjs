@@ -1,6 +1,6 @@
 // Shared helpers for the run() integration tests (test/run-*.test.mjs).
 // Kept deliberately minimal: only what the display-mode test files
-// actually duplicate (issues #30, #37).
+// actually duplicate.
 
 /** A minimal fetch-Response stand-in for mocked GraphQL calls. */
 export function jsonResponse(body, { status = 200, ok = true } = {}) {

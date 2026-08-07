@@ -36,5 +36,5 @@ jobs:
       - run: npm pack --dry-run
 
       # No NODE_AUTH_TOKEN: publish authenticates via OIDC through the
-      # Trusted Publisher configuration on the npm package page (see issue #2).
+      # Trusted Publisher configuration on the npm package page.
       - run: npm publish --provenance --access public

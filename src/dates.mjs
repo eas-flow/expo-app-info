@@ -4,8 +4,8 @@
 // dashboard (design rule: 期間境界は UTC 固定).
 
 /**
- * UTC calendar-month boundaries for `--usage` (issue #18), `count` months
- * ending with the month containing `now`, ordered newest first (index 0 is
+ * UTC calendar-month boundaries for `--usage`, `count` months ending with
+ * the month containing `now`, ordered newest first (index 0 is
  * the current, still-in-progress month). Each entry is `{ start, end }`
  * ISO 8601, with `end` exclusive (the instant the next month starts) —
  * matching the convention the old billingPeriod.end used, so the rest of the
@@ -54,9 +54,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
 
 /**
  * ISO 8601 timestamp -> "YYYY/MM/DD-HH:mm:ss", for the human table's BUILD
- * DATE column (issue #17 follow-up: an absolute timestamp was requested over
- * the relative "3d ago" style so the exact build time is visible without
- * doing the math). Always UTC, matching every other date shown by this CLI
+ * DATE column (an absolute timestamp was requested over the relative "3d
+ * ago" style so the exact build time is visible without doing the math).
+ * Always UTC, matching every other date shown by this CLI
  * (`isoDate`, `inclusiveEnd` above) so output does not depend on the
  * machine's local timezone.
  */

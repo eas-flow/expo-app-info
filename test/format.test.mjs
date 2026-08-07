@@ -44,7 +44,7 @@ describe('toDisplayRows', () => {
     expect(toDisplayRows([withBuild])[0][0]).toBe('myorg');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
     expect(toDisplayRows([withBuild], { accountDisplayNames })[0][0]).toBe('My Organization');
   });
@@ -134,7 +134,7 @@ describe('toUsageDisplayRows', () => {
     expect(row[1]).toBe('-');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
     const row = toUsageDisplayRows([pastMonthEntry], { accountDisplayNames, now: NOW })[0];
     expect(row[0]).toBe('My Organization');
@@ -231,7 +231,7 @@ describe('toPlanDisplayRows', () => {
     expect(row[4]).toBe('0 / 0 / 0');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
     const row = toPlanDisplayRows([planEntry], { accountDisplayNames })[0];
     expect(row[0]).toBe('My Organization');

@@ -1,5 +1,5 @@
-// `--plan` display mode (issue #19). Moved out of src/cli.mjs (issue #30)
-// so every display mode lives in its own file under src/commands/.
+// `--plan` display mode. Moved out of src/cli.mjs so every display mode
+// lives in its own file under src/commands/.
 
 import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
 import { planConcurrencyHeader, toPlanDisplayRows } from '../format.mjs';
@@ -9,7 +9,7 @@ import { dim, renderTable } from '../render.mjs';
 /**
  * `--plan`: one row per account with its current subscription only (plan,
  * plan ID, status, concurrency, trial end) — no build counts or billing
- * period, that's `--usage` (issue #19).
+ * period, that's `--usage`.
  *
  * Unlike `runUsage`, accounts are fetched with `mapWithConcurrency` rather
  * than a sequential loop: each account's subscription lookup is independent

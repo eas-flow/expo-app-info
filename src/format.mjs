@@ -9,8 +9,8 @@ import { formatBuildDate, inclusiveEnd, isoDate } from './dates.mjs';
  * Table rows: display strings, "-" for null/missing, absolute build dates.
  *
  * `accountDisplayNames` (account slug -> EAS "Display name") is an optional
- * lookup (issue #22): when given and it has an entry for a row's account,
- * the table shows that instead of the slug.
+ * lookup: when given and it has an entry for a row's account, the table
+ * shows that instead of the slug.
  */
 export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {}) {
   return entries.map((e) => [
@@ -25,14 +25,14 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {})
 }
 
 /**
- * Usage table rows: one row per account per UTC calendar month (issue #18).
+ * Usage table rows: one row per account per UTC calendar month.
  * `[account, period, ...buildCells]` — `buildCells` is one or two columns
  * depending on `platform` (both iOS and Android by default, narrowed to one
  * with `--platform`), mirroring `usageBuildsHeaders` below so header/cell
  * order always line up. `accountDisplayNames` is the same cosmetic,
- * table-only slug -> Display name lookup described on `toDisplayRows`
- * (issue #22). `now` (default current time) decides which row, if any, is
- * the still-in-progress current month for the `(today)` marker below.
+ * table-only slug -> Display name lookup described on `toDisplayRows`.
+ * `now` (default current time) decides which row, if any, is the
+ * still-in-progress current month for the `(today)` marker below.
  */
 export function toUsageDisplayRows(
   entries,
@@ -85,7 +85,7 @@ export function usageBuildsHeaders(platform = null) {
  * all three numbers (total/ios/android) at once unless `--platform` narrows
  * it to one.
  * `accountDisplayNames` is the same cosmetic, table-only slug -> Display
- * name lookup described on `toDisplayRows` (issue #22).
+ * name lookup described on `toDisplayRows`.
  */
 export function toPlanDisplayRows(
   entries,

@@ -86,7 +86,7 @@ describe('run', () => {
       accountsResponse(),
       appsResponse(),
       // Out of order on purpose — the CLI must not depend on the API
-      // returning builds newest-first (issue #17).
+      // returning builds newest-first.
       buildsResponse({
         ios: [
           iosBuild({
@@ -140,7 +140,7 @@ describe('run', () => {
     );
   });
 
-  it('shows the account display name in the table when the account has one set (issue #22)', async () => {
+  it('shows the account display name in the table when the account has one set', async () => {
     stubFetch([
       accountsResponse([{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }]),
       appsResponse(),

@@ -171,10 +171,6 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 `--usage`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
 
-### Output stability
-
-The table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release. There is no machine-readable output mode: `--json`/`--csv` were removed in v1.0.0 since the table was their only consumer, so the contract was retired rather than frozen. It may return in a future minor release if there's demand — [open an issue](https://github.com/eas-flow/expo-app-info/issues) if you need it.
-
 ## 📚 Documentation
 
 ### How it works

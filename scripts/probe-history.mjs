@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Dev-only verification script for issue #17 (not shipped — see package.json#files).
+// Dev-only verification script (not shipped — see package.json#files).
 // Checks two things against the real API for `--history <N>`: whether
 // `builds(limit: 100)` (the --history validation cap) is accepted or clamped, and
 // what order `builds(offset, limit)` actually returns in (fetchBuilds always
@@ -112,4 +112,4 @@ for (const account of accounts) {
   }
 }
 
-console.log('\nDone. Paste the output above into issue #17.');
+console.log('\nDone. Paste the output above into the tracking issue for this check.');
