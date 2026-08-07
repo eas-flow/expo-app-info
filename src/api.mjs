@@ -28,9 +28,8 @@ const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
 }`;
 
 // `--usage` moved off this billing-scoped shape to client-side UTC calendar-month
-// counting below (Q_BUILDS_PAGE/countBuildsByMonth) — see
-// .claude/rules/eas-api-knowledge.md for why (issue #15, #18). Only the
-// subscription fields survive here, for `--plan` (issue #19).
+// counting below (Q_BUILDS_PAGE/countBuildsByMonth) — see issue #15/#18 for why.
+// Only the subscription fields survive here, for `--plan` (issue #19).
 //
 // Billing-scoped: a token without billing permission errors per account; the
 // CLI degrades that to "-" rather than failing the run. No price field —
