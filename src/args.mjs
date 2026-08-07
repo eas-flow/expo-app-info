@@ -8,7 +8,7 @@ import { CliError } from './cli.mjs';
 const PLATFORMS = ['ios', 'android'];
 // Sanity cap on --history (no documented API max) — keeps a typo like
 // --history 99999 from hammering the API. Confirmed accepted at 100 via
-// scripts/probe-history.mjs (issue #17).
+// scripts/probe-history.mjs.
 const MAX_HISTORY = 100;
 
 // --usage defaults to the last 3 UTC calendar months; --month widens it, capped
@@ -26,8 +26,6 @@ export const HELP = `
   Options
     -h, --help              Show this help
     -v, --version           Show version
-    --json                  Output as JSON instead of a table
-    --csv                   Output as CSV instead of a table
     --platform <platform>   Only show "ios" or "android" builds
     --usage                 Show successful build counts per UTC calendar month (last 3
                              by default) instead of the app list. Cannot be combined with
@@ -48,13 +46,10 @@ export const HELP = `
 
   Notes
     ACCOUNT shows the account's EAS "Display name" when one is set, falling
-    back to its unique slug otherwise. This is cosmetic (table only) —
-    --json/--csv always emit the slug in the \`account\` field, since scripts
-    may rely on it as a unique identifier.
+    back to its unique slug otherwise.
 
     VERSION / BUILD come from the latest *successful* EAS build, not from your
-    local app.json. Apps that have never been built show "-" in the table (and
-    null in --json/--csv).
+    local app.json. Apps that have never been built show "-" in the table.
 
     --history <N> lists the N most recent successful builds per platform as
     separate rows (newest first, sorted by build date regardless of the order
@@ -68,11 +63,9 @@ export const HELP = `
     successful build counts are counted client-side from finished builds via
     the API (not EAS's own billing usage metric, which can't be sliced by
     arbitrary calendar ranges); they may differ from what EAS's dashboard
-    reports. The current (in-progress) month's row shows "(today)" as its end
-    in the table; --json/--csv periodStart/periodEnd are always the raw UTC
-    calendar-month boundaries. A token without app/build read access on an
-    account degrades that account's rows to "-" (null in --json/--csv)
-    rather than failing the run.
+    reports. The current (in-progress) month's row shows "(today)" as its end.
+    A token without app/build read access on an account degrades that
+    account's rows to "-" rather than failing the run.
 
     --plan prints one row per account with its current subscription only —
     plan name, plan ID, status, concurrency (total/ios/android), and trial
@@ -85,8 +78,6 @@ export function parseArgs(argv) {
   const opts = {
     help: false,
     version: false,
-    json: false,
-    csv: false,
     platform: null,
     usage: false,
     plan: false,
@@ -101,10 +92,6 @@ export function parseArgs(argv) {
       opts.help = true;
     } else if (arg === '-v' || arg === '--version') {
       opts.version = true;
-    } else if (arg === '--json') {
-      opts.json = true;
-    } else if (arg === '--csv') {
-      opts.csv = true;
     } else if (arg === '--usage') {
       opts.usage = true;
     } else if (arg === '--plan') {
@@ -124,10 +111,6 @@ export function parseArgs(argv) {
     } else {
       throw new CliError(`Unknown option: ${arg}\n  Run \`expo-app-info --help\` to see usage.`);
     }
-  }
-
-  if (opts.json && opts.csv) {
-    throw new CliError('--json and --csv cannot be used together.');
   }
 
   if (opts.platform !== null) {

@@ -1,27 +1,21 @@
-// `--usage` display mode (issue #18). Moved out of src/cli.mjs (issue #30)
-// so every display mode lives in its own file under src/commands/.
+// `--usage` display mode. Moved out of src/cli.mjs so every display mode
+// lives in its own file under src/commands/.
 
 import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_USAGE_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
-import {
-  formatCSV,
-  formatJSON,
-  toUsageDisplayRows,
-  USAGE_FIELDS,
-  usageBuildsHeaders,
-} from '../format.mjs';
+import { toUsageDisplayRows, usageBuildsHeaders } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
  * `--usage`: one row per account *per UTC calendar month* (last 3 months by
- * default, or the last `opts.month` with `--month`) — see issue #18. Each
- * row's build counts are "successful build" counts counted client-side from
- * finished builds via the API (client.countBuildsByMonth), not from EAS's own
- * billing/usage metric, which is tied to the billing cycle and can't be
- * sliced into arbitrary calendar ranges (see issue #15's filterParams finding
- * and issue #18's body for the full rationale).
+ * default, or the last `opts.month` with `--month`). Each row's build counts
+ * are "successful build" counts counted client-side from finished builds via
+ * the API (client.countBuildsByMonth), not from EAS's own billing/usage
+ * metric, which is tied to the billing cycle and can't be sliced into
+ * arbitrary calendar ranges (its `filterParams` was also found not to
+ * actually filter by platform).
  *
  * Unlike the old billing-period version, months have no inter-period
  * dependency (every boundary is known upfront from `now`), so both accounts
@@ -31,8 +25,7 @@ import { dim, renderTable } from '../render.mjs';
  * The only failure mode left is app-list/build-fetch failure (subscription/
  * billing queries are no longer used by --usage at all): if either fails for
  * an account, that whole account's rows for every month degrade to "-"
- * (null in --json/--csv) rather than failing the run, and the reason is
- * reported on stderr.
+ * rather than failing the run, and the reason is reported on stderr.
  */
 export async function runUsage(client, accounts, opts, accountDisplayNames, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_USAGE_MONTHS, now);
@@ -86,15 +79,6 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       });
     });
   });
-
-  if (opts.json) {
-    console.log(formatJSON(entries));
-    return;
-  }
-  if (opts.csv) {
-    console.log(formatCSV(entries, USAGE_FIELDS));
-    return;
-  }
 
   console.log(
     renderTable(

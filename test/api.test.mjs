@@ -77,7 +77,7 @@ describe('gql (via createApiClient)', () => {
     await expect(client.fetchAccounts()).resolves.toEqual([{ id: '1', name: 'acme' }]);
   });
 
-  it('forwards displayName when the API returns one (issue #22)', async () => {
+  it('forwards displayName when the API returns one', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         data: { meActor: { accounts: [{ id: '1', name: 'acme', displayName: 'Acme Corp' }] } },
@@ -223,7 +223,7 @@ describe('fetchBuilds', () => {
     await expect(client.fetchBuilds('app-1')).resolves.toEqual([]);
   });
 
-  it('sorts each platform by createdAt descending regardless of the order the API returns them in (issue #17)', async () => {
+  it('sorts each platform by createdAt descending regardless of the order the API returns them in', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         data: {
@@ -441,7 +441,7 @@ describe('fetchSubscription', () => {
     expect(body.variables).toEqual({ accountId: 'acc-1' });
   });
 
-  it('does not query billingPeriod or usageMetrics (issue #19 — a minimal, standalone query)', async () => {
+  it('does not query billingPeriod or usageMetrics — a minimal, standalone query', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 

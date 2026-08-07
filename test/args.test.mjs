@@ -5,8 +5,6 @@ import { CliError } from '../src/cli.mjs';
 const DEFAULTS = {
   help: false,
   version: false,
-  json: false,
-  csv: false,
   platform: null,
   usage: false,
   plan: false,
@@ -23,10 +21,7 @@ describe('parseArgs', () => {
     [['-v'], { version: true }],
     [['--version'], { version: true }],
     [['--help', '--version'], { help: true, version: true }],
-    [['--json'], { json: true }],
-    [['--csv'], { csv: true }],
     [['--usage'], { usage: true }],
-    [['--usage', '--json'], { usage: true, json: true }],
     [['--platform', 'IOS'], { platform: 'ios' }], // lowercased
     [['--platform=android'], { platform: 'android' }],
     [['--history', '5'], { history: 5 }],
@@ -35,8 +30,6 @@ describe('parseArgs', () => {
     [['--history', '100'], { history: 100 }], // at MAX_HISTORY
     [['--history', '3', '--platform', 'ios'], { history: 3, platform: 'ios' }],
     [['--plan'], { plan: true }],
-    [['--plan', '--json'], { plan: true, json: true }],
-    [['--plan', '--csv'], { plan: true, csv: true }],
     [['--plan', '--platform', 'ios'], { plan: true, platform: 'ios' }],
     [['--usage', '--month', '6'], { usage: true, month: 6 }],
     [['--usage', '--month=12'], { usage: true, month: 12 }], // at MAX_MONTH
@@ -51,9 +44,11 @@ describe('parseArgs', () => {
   // non-numeric, non-integer, missing value.
   it.each([
     [['--bogus'], /Unknown option: --bogus/],
-    // --account was removed in issue #22 (displayName replaced slug filtering)
+    // --account was removed (displayName replaced slug filtering)
     [['--account', 'myorg'], /Unknown option: --account/],
-    [['--json', '--csv'], /cannot be used together/],
+    // --json/--csv were removed
+    [['--json'], /Unknown option: --json/],
+    [['--csv'], /Unknown option: --csv/],
     [['--platform', 'windows'], /Invalid --platform value/],
     [['--platform'], /--platform requires a value/],
     [['--history'], /--history requires a value/],

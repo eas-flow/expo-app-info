@@ -1,21 +1,15 @@
-// `--plan` display mode (issue #19). Moved out of src/cli.mjs (issue #30)
-// so every display mode lives in its own file under src/commands/.
+// `--plan` display mode. Moved out of src/cli.mjs so every display mode
+// lives in its own file under src/commands/.
 
 import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
-import {
-  formatCSV,
-  formatJSON,
-  PLAN_FIELDS,
-  planConcurrencyHeader,
-  toPlanDisplayRows,
-} from '../format.mjs';
+import { planConcurrencyHeader, toPlanDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
  * `--plan`: one row per account with its current subscription only (plan,
  * plan ID, status, concurrency, trial end) — no build counts or billing
- * period, that's `--usage` (issue #19).
+ * period, that's `--usage`.
  *
  * Unlike `runUsage`, accounts are fetched with `mapWithConcurrency` rather
  * than a sequential loop: each account's subscription lookup is independent
@@ -24,7 +18,7 @@ import { dim, renderTable } from '../render.mjs';
  * Plan fields are billing-scoped, so a token without billing permission on
  * an account gets a GraphQL error for that account only. That is not fatal:
  * the row is still printed with "-" in the plan columns, and the reason is
- * reported on stderr so it stays out of --json/--csv output.
+ * reported on stderr so it stays out of stdout.
  */
 export async function runPlan(client, accounts, opts, accountDisplayNames) {
   const warnings = [];
@@ -62,15 +56,6 @@ export async function runPlan(client, accounts, opts, accountDisplayNames) {
       trialEnd: subscription?.trialEnd ?? null,
     };
   });
-
-  if (opts.json) {
-    console.log(formatJSON(entries));
-    return;
-  }
-  if (opts.csv) {
-    console.log(formatCSV(entries, PLAN_FIELDS));
-    return;
-  }
 
   console.log(
     renderTable(

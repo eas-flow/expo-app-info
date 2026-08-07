@@ -86,7 +86,7 @@ describe('run', () => {
       accountsResponse(),
       appsResponse(),
       // Out of order on purpose — the CLI must not depend on the API
-      // returning builds newest-first (issue #17).
+      // returning builds newest-first.
       buildsResponse({
         ios: [
           iosBuild({
@@ -103,15 +103,15 @@ describe('run', () => {
       }),
     ]);
 
-    await run(['--history', '2', '--json']);
+    await run(['--history', '2']);
 
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 2 });
 
-    const parsed = JSON.parse(logSpy.mock.calls.at(-1)[0]);
-    expect(parsed).toHaveLength(2);
-    expect(parsed[0].build).toBe('41');
-    expect(parsed[1].build).toBe('40');
+    const output = tableOutput();
+    expect(output).toContain('2 row(s)');
+    // Build 41 (newest) must appear before build 40, confirming client-side sort.
+    expect(output.indexOf('41')).toBeLessThan(output.indexOf('40'));
   });
 
   it('--history 1 produces identical output to leaving --history off', async () => {
@@ -140,7 +140,7 @@ describe('run', () => {
     );
   });
 
-  it('shows the account display name in the table when the account has one set (issue #22)', async () => {
+  it('shows the account display name in the table when the account has one set', async () => {
     stubFetch([
       accountsResponse([{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }]),
       appsResponse(),
@@ -150,19 +150,6 @@ describe('run', () => {
     await run([]);
 
     expect(tableOutput()).toContain('My Organization');
-  });
-
-  it('keeps the account slug — not the display name — in --json/--csv output (issue #22)', async () => {
-    stubFetch([
-      accountsResponse([{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }]),
-      appsResponse(),
-      buildsResponse({ ios: [iosBuild()] }),
-    ]);
-
-    await run(['--json']);
-
-    const parsed = JSON.parse(logSpy.mock.calls.at(-1)[0]);
-    expect(parsed[0].account).toBe('myorg');
   });
 
   it('--platform filters output to matching builds only', async () => {
@@ -182,18 +169,12 @@ describe('run', () => {
       }),
     ]);
 
-    await run(['--platform', 'android', '--json']);
+    await run(['--platform', 'android']);
 
-    const parsed = JSON.parse(logSpy.mock.calls.at(-1)[0]);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].platform).toBe('android');
-  });
-
-  it('--csv prints just the header row when there are no apps', async () => {
-    stubFetch([accountsResponse(), appsResponse([])]);
-
-    await run(['--csv']);
-    expect(logSpy).toHaveBeenCalledWith('account,app,slug,platform,version,build,lastBuildAt');
+    const output = tableOutput();
+    expect(output).toContain('1 row(s)');
+    expect(output).toContain('38'); // the android build number
+    expect(output).not.toContain('41'); // the ios build number, filtered out
   });
 
   it('prints "No apps found." when the account has zero apps', async () => {

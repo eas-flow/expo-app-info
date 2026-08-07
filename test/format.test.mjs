@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  formatCSV,
-  formatJSON,
-  PLAN_FIELDS,
   planConcurrencyHeader,
   toDisplayRows,
   toPlanDisplayRows,
   toUsageDisplayRows,
-  USAGE_FIELDS,
   usageBuildsHeaders,
 } from '../src/format.mjs';
 
@@ -48,7 +44,7 @@ describe('toDisplayRows', () => {
     expect(toDisplayRows([withBuild])[0][0]).toBe('myorg');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
     expect(toDisplayRows([withBuild], { accountDisplayNames })[0][0]).toBe('My Organization');
   });
@@ -56,41 +52,6 @@ describe('toDisplayRows', () => {
   it('falls back to the slug when the map has no entry for this account', () => {
     const accountDisplayNames = new Map([['other', 'Other Org']]);
     expect(toDisplayRows([withBuild], { accountDisplayNames })[0][0]).toBe('myorg');
-  });
-});
-
-describe('formatJSON', () => {
-  it('serializes entries as a pretty-printed array, preserving null', () => {
-    const out = formatJSON([noBuild]);
-    expect(JSON.parse(out)).toEqual([noBuild]);
-    expect(out).toContain('\n'); // pretty-printed, not a single line
-  });
-
-  it('serializes an empty array as "[]"', () => {
-    expect(formatJSON([])).toBe('[]');
-  });
-});
-
-describe('formatCSV', () => {
-  it('writes a header row plus one row per entry', () => {
-    const out = formatCSV([withBuild]);
-    const lines = out.split('\n');
-    expect(lines[0]).toBe('account,app,slug,platform,version,build,lastBuildAt');
-    expect(lines[1]).toBe('myorg,Storefront,storefront,ios,3.2.1,41,2026-07-26T00:00:00.000Z');
-  });
-
-  it('renders null fields as empty cells', () => {
-    const out = formatCSV([noBuild]);
-    expect(out.split('\n')[1]).toBe('myorg,Prototype,prototype,,,,');
-  });
-
-  it('quotes values containing commas, quotes, or newlines', () => {
-    const out = formatCSV([{ ...withBuild, app: 'Foo, "Bar"\nBaz' }]);
-    expect(out).toContain('"Foo, ""Bar""\nBaz"');
-  });
-
-  it('writes just the header row for an empty array', () => {
-    expect(formatCSV([])).toBe('account,app,slug,platform,version,build,lastBuildAt');
   });
 });
 
@@ -173,7 +134,7 @@ describe('toUsageDisplayRows', () => {
     expect(row[1]).toBe('-');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
     const row = toUsageDisplayRows([pastMonthEntry], { accountDisplayNames, now: NOW })[0];
     expect(row[0]).toBe('My Organization');
@@ -203,22 +164,6 @@ describe('usageBuildsHeaders', () => {
 
   it('returns only the android header when platform is android', () => {
     expect(usageBuildsHeaders('android')).toEqual(['SUCCESSFUL BUILDS (AND)']);
-  });
-});
-
-describe('formatCSV with USAGE_FIELDS', () => {
-  it('emits the usage header and raw values', () => {
-    const csv = formatCSV([pastMonthEntry], USAGE_FIELDS);
-    expect(csv.split('\n')[0]).toBe('account,buildsIos,buildsAndroid,periodStart,periodEnd');
-    expect(csv.split('\n')[1]).toBe(
-      'myorg,14,15,2026-06-01T00:00:00.000Z,2026-07-01T00:00:00.000Z'
-    );
-  });
-
-  it('emits empty cells for a row with no build data', () => {
-    expect(formatCSV([degradedMonthEntry], USAGE_FIELDS).split('\n')[1]).toBe(
-      'other,,,2026-06-01T00:00:00.000Z,2026-07-01T00:00:00.000Z'
-    );
   });
 });
 
@@ -286,7 +231,7 @@ describe('toPlanDisplayRows', () => {
     expect(row[4]).toBe('0 / 0 / 0');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only, issue #22)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only)', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
     const row = toPlanDisplayRows([planEntry], { accountDisplayNames })[0];
     expect(row[0]).toBe('My Organization');
@@ -303,21 +248,5 @@ describe('planConcurrencyHeader', () => {
     expect(planConcurrencyHeader(null)).toBe('CONCURRENCY (TOTAL/IOS/AND)');
     expect(planConcurrencyHeader('ios')).toBe('CONCURRENCY (IOS)');
     expect(planConcurrencyHeader('android')).toBe('CONCURRENCY (ANDROID)');
-  });
-});
-
-describe('formatCSV with PLAN_FIELDS', () => {
-  it('emits the plan header and raw values', () => {
-    const csv = formatCSV([planEntryTrialing], PLAN_FIELDS);
-    expect(csv.split('\n')[0]).toBe(
-      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,trialEnd'
-    );
-    expect(csv.split('\n')[1]).toBe(
-      'myorg,Production,production,trialing,2,1,1,2026-08-15T00:00:00.000Z'
-    );
-  });
-
-  it('emits empty cells for a row with no plan data', () => {
-    expect(formatCSV([planEntryNoPlan], PLAN_FIELDS).split('\n')[1]).toBe('other,,,,,,,');
   });
 });
