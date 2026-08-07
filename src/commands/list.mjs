@@ -3,7 +3,7 @@
 // every display mode lives in its own file under src/commands/.
 
 import { CONCURRENCY, mapWithConcurrency } from '../api.mjs';
-import { formatCSV, formatJSON, toDisplayRows } from '../format.mjs';
+import { toDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
@@ -56,15 +56,6 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
 
   const filtered =
     opts.platform !== null ? entries.filter((e) => e.platform === opts.platform) : entries;
-
-  if (opts.json) {
-    console.log(formatJSON(filtered));
-    return;
-  }
-  if (opts.csv) {
-    console.log(formatCSV(filtered));
-    return;
-  }
 
   if (filtered.length === 0) {
     console.log('No apps found.');

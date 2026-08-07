@@ -63,59 +63,18 @@ describe('run --plan', () => {
     expect(tableOutput()).not.toContain('BUILDS');
   });
 
-  it('emits the plan fields for --json', async () => {
-    stubFetch([accountsResponse(), subscriptionResponseFor()]);
-
-    await run(['--plan', '--json']);
-
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed).toEqual([
-      {
-        account: 'myorg',
-        plan: 'Production',
-        planId: 'production',
-        status: 'active',
-        concurrencyTotal: 2,
-        concurrencyIos: 1,
-        concurrencyAndroid: 1,
-        trialEnd: null,
-      },
-    ]);
-  });
-
-  // The exact header/row strings are format.test.mjs's contract; this only
-  // proves runPlan wires PLAN_FIELDS into the --csv branch.
-  it('emits the plan header for --csv', async () => {
-    stubFetch([accountsResponse(), subscriptionResponseFor()]);
-
-    await run(['--plan', '--csv']);
-
-    const csv = logSpy.mock.calls[0][0];
-    expect(csv.split('\n')[0]).toBe(
-      'account,plan,planId,status,concurrencyTotal,concurrencyIos,concurrencyAndroid,trialEnd'
-    );
-  });
-
-  it('keeps the row and warns on stderr when the token lacks billing permission', async () => {
+  it('keeps the row and shows "-" in the plan columns when the token lacks billing permission', async () => {
     stubFetch([
       accountsResponse(),
       jsonResponse({ errors: [{ message: 'Entity not authorized: Account[acc-1]' }] }),
     ]);
 
-    await run(['--plan', '--json']);
+    await run(['--plan']);
 
-    expect(JSON.parse(logSpy.mock.calls[0][0])).toEqual([
-      {
-        account: 'myorg',
-        plan: null,
-        planId: null,
-        status: null,
-        concurrencyTotal: null,
-        concurrencyIos: null,
-        concurrencyAndroid: null,
-        trialEnd: null,
-      },
-    ]);
+    const output = tableOutput();
+    expect(output).toContain('myorg');
+    expect(output).toContain('-');
+    expect(output).not.toContain('Production');
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('plan unavailable');
   });
 
@@ -141,10 +100,11 @@ describe('run --plan', () => {
       subscriptionResponseFor('acc-2'),
     ]);
 
-    await run(['--plan', '--json']);
+    await run(['--plan']);
 
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed).toHaveLength(2);
-    expect(parsed.map((e) => e.account)).toEqual(['myorg', 'otherorg']);
+    const output = tableOutput();
+    expect(output).toContain('2 account(s)');
+    // Row order must match input account order despite parallel fetching.
+    expect(output.indexOf('myorg')).toBeLessThan(output.indexOf('otherorg'));
   });
 });

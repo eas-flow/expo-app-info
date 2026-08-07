@@ -50,8 +50,8 @@ export async function run(argv = process.argv.slice(2)) {
   const accounts = await client.fetchAccounts();
   if (accounts.length === 0) throw new CliError('No accounts found for this token.');
 
-  // Table-only cosmetic slug -> "Display name" mapping (issue #22); --json/--csv
-  // always emit the slug (see toDisplayRows/toUsageDisplayRows in format.mjs).
+  // Table-only cosmetic slug -> "Display name" mapping (issue #22); see
+  // toDisplayRows/toUsageDisplayRows in format.mjs.
   const accountDisplayNames = new Map(accounts.map((a) => [a.name, a.displayName || a.name]));
 
   if (opts.usage) {

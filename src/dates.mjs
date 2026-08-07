@@ -44,8 +44,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
  * next period starts (e.g. a July period ends at 2026-08-01T00:00:00Z), not
  * the last moment of the period. Displayed as-is that reads like "runs into
  * August" for a period that is entirely July, so the human table shows the
- * last day the period actually covers instead: `end` minus one day. Only
- * cosmetic — `--json`/`--csv` still emit the raw, unmodified `periodEnd`.
+ * last day the period actually covers instead: `end` minus one day.
  */
 export function inclusiveEnd(iso) {
   return new Date(new Date(iso).getTime() - ONE_DAY_MS).toISOString();
@@ -59,8 +58,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
  * the relative "3d ago" style so the exact build time is visible without
  * doing the math). Always UTC, matching every other date shown by this CLI
  * (`isoDate`, `inclusiveEnd` above) so output does not depend on the
- * machine's local timezone. `--json`/`--csv` are unaffected — they keep the
- * raw ISO 8601 `lastBuildAt` value.
+ * machine's local timezone.
  */
 export function formatBuildDate(iso) {
   if (!iso) return '-';

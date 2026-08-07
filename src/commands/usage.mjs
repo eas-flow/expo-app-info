@@ -4,13 +4,7 @@
 import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_USAGE_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
-import {
-  formatCSV,
-  formatJSON,
-  toUsageDisplayRows,
-  USAGE_FIELDS,
-  usageBuildsHeaders,
-} from '../format.mjs';
+import { toUsageDisplayRows, usageBuildsHeaders } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
@@ -31,8 +25,7 @@ import { dim, renderTable } from '../render.mjs';
  * The only failure mode left is app-list/build-fetch failure (subscription/
  * billing queries are no longer used by --usage at all): if either fails for
  * an account, that whole account's rows for every month degrade to "-"
- * (null in --json/--csv) rather than failing the run, and the reason is
- * reported on stderr.
+ * rather than failing the run, and the reason is reported on stderr.
  */
 export async function runUsage(client, accounts, opts, accountDisplayNames, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_USAGE_MONTHS, now);
@@ -86,15 +79,6 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       });
     });
   });
-
-  if (opts.json) {
-    console.log(formatJSON(entries));
-    return;
-  }
-  if (opts.csv) {
-    console.log(formatCSV(entries, USAGE_FIELDS));
-    return;
-  }
 
   console.log(
     renderTable(

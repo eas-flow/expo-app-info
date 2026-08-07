@@ -1,6 +1,6 @@
 // Progress reporting for long-running fetches. Written to stderr (and only
-// when stderr is a TTY) so stdout stays clean for --json/--csv consumers —
-// the same rule every warning in this CLI follows.
+// when stderr is a TTY) so stdout stays clean for the results only — the
+// same rule every warning in this CLI follows.
 
 import { dim } from './render.mjs';
 

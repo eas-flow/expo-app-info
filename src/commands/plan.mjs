@@ -2,13 +2,7 @@
 // so every display mode lives in its own file under src/commands/.
 
 import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
-import {
-  formatCSV,
-  formatJSON,
-  PLAN_FIELDS,
-  planConcurrencyHeader,
-  toPlanDisplayRows,
-} from '../format.mjs';
+import { planConcurrencyHeader, toPlanDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
@@ -24,7 +18,7 @@ import { dim, renderTable } from '../render.mjs';
  * Plan fields are billing-scoped, so a token without billing permission on
  * an account gets a GraphQL error for that account only. That is not fatal:
  * the row is still printed with "-" in the plan columns, and the reason is
- * reported on stderr so it stays out of --json/--csv output.
+ * reported on stderr so it stays out of stdout.
  */
 export async function runPlan(client, accounts, opts, accountDisplayNames) {
   const warnings = [];
@@ -62,15 +56,6 @@ export async function runPlan(client, accounts, opts, accountDisplayNames) {
       trialEnd: subscription?.trialEnd ?? null,
     };
   });
-
-  if (opts.json) {
-    console.log(formatJSON(entries));
-    return;
-  }
-  if (opts.csv) {
-    console.log(formatCSV(entries, PLAN_FIELDS));
-    return;
-  }
 
   console.log(
     renderTable(

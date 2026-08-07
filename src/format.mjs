@@ -1,50 +1,16 @@
 // Converts the raw "entries" produced by the display-mode flows in
-// src/commands/ into each of the
-// supported output formats. Kept separate from src/render.mjs, which only
-// knows about the human-oriented table.
+// src/commands/ into human-oriented table rows. There is no machine-readable
+// output mode (--json/--csv was removed in issue #43); the table below is
+// the only supported output and carries no compatibility guarantee.
 
 import { formatBuildDate, inclusiveEnd, isoDate } from './dates.mjs';
-
-const FIELDS = ['account', 'app', 'slug', 'platform', 'version', 'build', 'lastBuildAt'];
-
-/**
- * `--usage`: one entry per account *per UTC calendar month* (issue #18),
- * instead of one per app/platform or one per account. `buildsIos`/
- * `buildsAndroid` are "successful build" counts counted client-side from
- * finished builds via the API — not EAS's own billing/usage metric (which
- * can't be sliced into arbitrary calendar ranges). No plan/status/
- * concurrency fields here; those moved to `--plan` (issue #19) since they
- * are "current" facts that would otherwise be repeated identically across
- * every month's row.
- */
-export const USAGE_FIELDS = ['account', 'buildsIos', 'buildsAndroid', 'periodStart', 'periodEnd'];
-
-/**
- * `--plan`: one entry per account, current subscription only (no billing
- * period / build counts — that's `--usage`). No price field: not confirmed
- * to exist in the schema yet (issue #19's pre-verification note); add one
- * later only once that's checked against a real token.
- */
-export const PLAN_FIELDS = [
-  'account',
-  'plan',
-  'planId',
-  'status',
-  'concurrencyTotal',
-  'concurrencyIos',
-  'concurrencyAndroid',
-  'trialEnd',
-];
 
 /**
  * Table rows: display strings, "-" for null/missing, absolute build dates.
  *
  * `accountDisplayNames` (account slug -> EAS "Display name") is an optional
- * cosmetic, table-only lookup (issue #22): when given and it has an entry
- * for a row's account, the human table shows that instead of the slug. This
- * never touches `e.account` itself or any other field, so --json/--csv
- * (which pass entries straight to formatJSON/formatCSV, not through this
- * function) keep emitting the slug unconditionally.
+ * lookup (issue #22): when given and it has an entry for a row's account,
+ * the table shows that instead of the slug.
  */
 export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {}) {
   return entries.map((e) => [
@@ -154,26 +120,4 @@ export function planConcurrencyHeader(platform = null) {
   if (platform === 'ios') return 'CONCURRENCY (IOS)';
   if (platform === 'android') return 'CONCURRENCY (ANDROID)';
   return 'CONCURRENCY (TOTAL/IOS/AND)';
-}
-
-/** `--json`: an array of entries, raw values (null, ISO 8601 dates). */
-export function formatJSON(entries) {
-  return JSON.stringify(entries, null, 2);
-}
-
-function csvEscape(value) {
-  const s = value === null || value === undefined ? '' : String(value);
-  return /["\n,]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-/**
- * `--csv`: header row + one row per entry, raw values (empty cell for null).
- * `fields` is a parameter so `--usage` can reuse this with its own columns.
- */
-export function formatCSV(entries, fields = FIELDS) {
-  const lines = [fields.join(',')];
-  for (const e of entries) {
-    lines.push(fields.map((f) => csvEscape(e[f])).join(','));
-  }
-  return lines.join('\n');
 }

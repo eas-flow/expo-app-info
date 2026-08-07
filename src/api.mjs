@@ -4,7 +4,7 @@
 export class ApiError extends Error {}
 
 // `displayName` (nullable) backs the human table's friendlier ACCOUNT name;
-// --json/--csv always emit the unique `name` slug instead (issue #22).
+// `name` is always the unique slug (issue #22).
 const Q_ACCOUNTS = `query CurrentAccounts { meActor { id accounts { id name displayName } } }`;
 
 const Q_APPS = `query AccountApps($accountId: String!, $after: String) {

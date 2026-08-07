@@ -80,46 +80,25 @@ describe('run --usage', () => {
     expect(tableOutput()).not.toContain('SLUG');
   });
 
+  // Reads the IOS/AND build-count cells out of the `│`-delimited table row
+  // whose PERIOD cell contains `periodStartPrefix` (e.g. '2026-07-01').
+  const buildCountsForPeriod = (output, periodStartPrefix) => {
+    const line = output.split('\n').find((l) => l.includes(periodStartPrefix));
+    const cells = line.split('│').map((c) => c.trim());
+    return [cells[3], cells[4]]; // [ACCOUNT, PERIOD, IOS, AND, ...]
+  };
+
   it('emits 3 rows (one per account per month, newest first) with client-side successful-build counts', async () => {
     stubFetch(happyResponses());
 
-    await run(['--usage', '--json']);
+    await run(['--usage']);
 
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed).toEqual([
-      {
-        account: 'myorg',
-        buildsIos: 2,
-        buildsAndroid: 1,
-        periodStart: '2026-07-01T00:00:00.000Z',
-        periodEnd: '2026-08-01T00:00:00.000Z',
-      },
-      {
-        account: 'myorg',
-        buildsIos: 1,
-        buildsAndroid: 2,
-        periodStart: '2026-06-01T00:00:00.000Z',
-        periodEnd: '2026-07-01T00:00:00.000Z',
-      },
-      {
-        account: 'myorg',
-        buildsIos: 1,
-        buildsAndroid: 0,
-        periodStart: '2026-05-01T00:00:00.000Z',
-        periodEnd: '2026-06-01T00:00:00.000Z',
-      },
-    ]);
-  });
-
-  // The exact header/row strings are format.test.mjs's contract; this only
-  // proves runUsage wires USAGE_FIELDS into the --csv branch.
-  it('emits the usage header for --csv', async () => {
-    stubFetch(happyResponses());
-
-    await run(['--usage', '--csv']);
-
-    const csv = logSpy.mock.calls[0][0];
-    expect(csv.split('\n')[0]).toBe('account,buildsIos,buildsAndroid,periodStart,periodEnd');
+    const output = tableOutput();
+    expect(output).toContain('3 row(s)');
+    // July (current): 2 ios / 1 android. June: 1 ios / 2 android. May: 1 ios / 0 android.
+    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['2', '1']);
+    expect(buildCountsForPeriod(output, '2026-06-01')).toEqual(['1', '2']);
+    expect(buildCountsForPeriod(output, '2026-05-01')).toEqual(['1', '0']);
   });
 
   it('shows "(today)" for the current month and the inclusive last day for finished months', async () => {
@@ -135,11 +114,11 @@ describe('run --usage', () => {
   it('--month widens the window (e.g. --month 1 shows only the current month)', async () => {
     stubFetch(happyResponses());
 
-    await run(['--usage', '--month', '1', '--json']);
+    await run(['--usage', '--month', '1']);
 
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0].periodStart).toBe('2026-07-01T00:00:00.000Z');
+    const output = tableOutput();
+    expect(output).toContain('1 row(s)');
+    expect(output).toContain('2026-07-01');
   });
 
   it('shows only the requested platform column with --platform', async () => {
@@ -151,19 +130,18 @@ describe('run --usage', () => {
     expect(tableOutput()).not.toContain('SUCCESSFUL BUILDS (AND)');
   });
 
-  it('degrades a whole account to null build counts (not a failed run) when its apps/builds fetch fails', async () => {
+  it('degrades a whole account to "-" build counts (not a failed run) when its apps/builds fetch fails', async () => {
     stubFetch([accountsResponse(), jsonResponse({ errors: [{ message: 'boom' }] })]);
 
-    await run(['--usage', '--json']);
+    await run(['--usage']);
 
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed).toHaveLength(3);
-    for (const row of parsed) {
-      expect(row.buildsIos).toBeNull();
-      expect(row.buildsAndroid).toBeNull();
-      expect(row.periodStart).not.toBeNull();
-      expect(row.periodEnd).not.toBeNull();
-    }
+    const output = tableOutput();
+    expect(output).toContain('3 row(s)');
+    // periodStart/periodEnd are known upfront from `now` regardless of the
+    // fetch failure — only the build counts degrade to "-".
+    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['-', '-']);
+    expect(buildCountsForPeriod(output, '2026-06-01')).toEqual(['-', '-']);
+    expect(buildCountsForPeriod(output, '2026-05-01')).toEqual(['-', '-']);
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
   });
 
@@ -195,11 +173,12 @@ describe('run --usage', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
 
-    await run(['--usage', '--month', '1', '--json']);
+    await run(['--usage', '--month', '1']);
 
     expect(calls).toBe(5); // 1 accounts + 2 apps + 2 builds pages
-    const parsed = JSON.parse(logSpy.mock.calls[0][0]);
-    expect(parsed).toHaveLength(2);
-    expect(parsed.map((e) => e.account).sort()).toEqual(['myorg', 'otherorg']);
+    const output = tableOutput();
+    expect(output).toContain('2 row(s)');
+    expect(output).toContain('myorg');
+    expect(output).toContain('otherorg');
   });
 });

@@ -28,7 +28,6 @@ $ npx expo-app-info
 If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-app-info` walks your whole account via the EAS GraphQL API and prints one table.
 
 - Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
-- `--json` / `--csv` output for CI and spreadsheets
 - `--platform` filter to narrow to `ios` or `android`
 - `--history <N>` — show the `N` most recent builds per platform, not just the latest
 - `--usage` — successful build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
@@ -66,12 +65,10 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 ## 🛠️ Usage
 
-Filter by platform, or switch the output format for scripts:
+Filter by platform:
 
 ```bash
 npx expo-app-info --platform ios
-npx expo-app-info --json  > apps.json
-npx expo-app-info --csv   > apps.csv
 ```
 
 Show more than just the latest build per platform:
@@ -90,7 +87,7 @@ npx expo-app-info --history 5
 └─────────┘────────────┘────────────┘──────────┘─────────┘───────┘─────────────────────┘
 ```
 
-`--history <N>` (1–100, default: 1) prints the `N` most recent **successful** builds per platform as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, `--json`, and `--csv`, but cannot be combined with `--usage`. `--history 1` prints exactly the same output as leaving the flag off entirely.
+`--history <N>` (1–100, default: 1) prints the `N` most recent **successful** builds per platform as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--usage`. `--history 1` prints exactly the same output as leaving the flag off entirely.
 
 Or ask about successful build counts per calendar month instead of app versions:
 
@@ -131,7 +128,7 @@ npx expo-app-info --plan
 
 | Column         | Source                                                                                 |
 | -------------- | -------------------------------------------------------------------------------------- |
-| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug (table only — see below) |
+| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug                          |
 | `APP` / `SLUG` | EAS project name and slug                                                              |
 | `PLATFORM`     | `ios` / `android`                                                                      |
 | `VERSION`      | `appVersion` of the latest **successful** build                                        |
@@ -143,7 +140,7 @@ With `--usage`, one row per account **per UTC calendar month** instead (last 3 m
 | Column                    | Source                                                                                                                                                                                                                                                |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `ACCOUNT`                 | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                                                                                                         |
-| `PERIOD`                  | A UTC calendar month. The table shows `(today)` as the end for the still-in-progress current month, else the last inclusive day; `--json`/`--csv` `periodStart`/`periodEnd` are always the raw UTC calendar-month boundaries (`periodEnd` exclusive). |
+| `PERIOD`                  | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
 | `SUCCESSFUL BUILDS (IOS)` | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                                                                                                        |
 | `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                                                                                                    |
 
@@ -164,7 +161,7 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 **`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
 
-**`ACCOUNT` is cosmetic — table only.** It shows the account's EAS "Display name" when the account has one set, falling back to the unique slug otherwise, since the display name is friendlier to read and is not guaranteed to be unique. `--json`/`--csv` always emit the slug in the `account` field regardless, since scripts may rely on it as a unique key.
+**`ACCOUNT` shows the "Display name" when set, falling back to the unique slug otherwise**, since the display name is friendlier to read and is not guaranteed to be unique.
 
 ### Filtering
 
@@ -176,42 +173,9 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 There is no `--account` filter at the moment — it was removed (see [#22](https://github.com/eas-flow/expo-app-info/issues/22)) rather than kept alongside the new `ACCOUNT` display-name behavior. Filtering by account may return once the shape it should take (slug, display name, or both) is settled.
 
-### Machine-readable output (`--json` / `--csv`)
-
-Both emit one entry per row shown in the table, with raw values instead of display strings — `null` (JSON) / an empty cell (CSV) where the table shows `-`, and a full ISO 8601 timestamp (`lastBuildAt`) instead of the table's formatted build date:
-
-```bash
-$ npx expo-app-info --json
-[
-  {
-    "account": "myorg",
-    "app": "Storefront",
-    "slug": "storefront",
-    "platform": "ios",
-    "version": "3.2.1",
-    "build": "41",
-    "lastBuildAt": "2026-07-26T09:12:00.000Z"
-  }
-]
-```
-
-```bash
-$ npx expo-app-info --csv
-account,app,slug,platform,version,build,lastBuildAt
-myorg,Storefront,storefront,ios,3.2.1,41,2026-07-26T09:12:00.000Z
-```
-
-`--json` and `--csv` are mutually exclusive, and both can be combined with `--platform`.
-
-With `--usage` they emit one entry per account per month instead: `account`, `buildsIos`, `buildsAndroid`, `periodStart`, `periodEnd`. `buildsIos`/`buildsAndroid` are always both present regardless of `--platform` — that flag only changes which column(s) the human table shows. `periodStart`/`periodEnd` are the raw UTC calendar-month boundaries (`periodEnd` exclusive) even for the current, still-in-progress month — the `(today)` marker is table-only.
-
-With `--plan` they emit: `account`, `plan`, `planId`, `status`, `concurrencyTotal`, `concurrencyIos`, `concurrencyAndroid`, `trialEnd`. All three concurrency fields are always present regardless of `--platform` — that flag only changes which number the human table shows in `CONCURRENCY`.
-
 ### Output stability
 
-The default table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release.
-
-`--json` and `--csv` are for scripts and follow semver: existing fields are never renamed or removed, and their meaning never changes, without a major version bump. New fields may be added in a minor release; scripts should ignore fields they don't recognize.
+The table (columns, wording, colors, spacing) is for humans and is **not** covered by any compatibility guarantee — it can change in any release. There is no machine-readable output mode: `--json`/`--csv` were removed in [v1.0.0](https://github.com/eas-flow/expo-app-info/issues/43) since the table was their only consumer, so the contract was retired rather than frozen. It may return in a future minor release if there's demand — [open an issue](https://github.com/eas-flow/expo-app-info/issues) if you need it.
 
 ## 📚 Documentation
 
@@ -238,13 +202,13 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
 ## 🗺️ Roadmap
 
-- [x] `--json` / `--csv` output for CI and spreadsheets
 - [x] `--platform` filter
 - [x] `--usage`: subscription plan, build concurrency, and monthly build counts per platform ([#15](https://github.com/eas-flow/expo-app-info/issues/15))
 - [x] `--history <N>`: show the N most recent builds per platform, not just the latest ([#17](https://github.com/eas-flow/expo-app-info/issues/17))
 - [x] `ACCOUNT` shows the EAS "Display name" (falls back to the slug); `--account` removed ([#22](https://github.com/eas-flow/expo-app-info/issues/22))
 - [x] `--plan`: current account subscription (plan, plan ID, status, concurrency, trial end) on its own, separate from `--usage`'s build counts ([#19](https://github.com/eas-flow/expo-app-info/issues/19))
 - [x] `--usage`: one row per account per UTC calendar month (last 3 by default, `--month <n>` up to 12), client-side "successful build" counts instead of EAS's billing-period metric ([#18](https://github.com/eas-flow/expo-app-info/issues/18))
+- [x] `--json` / `--csv` removed — table was the only consumer, so the machine-readable contract was retired rather than frozen going into v1.0.0 ([#43](https://github.com/eas-flow/expo-app-info/issues/43))
 - [ ] Diff against local `app.json` to surface version drift between source and shipped builds
 - [ ] Show the latest submitted store version alongside the build version
 
@@ -262,7 +226,7 @@ A robot token can only see the account that issued it. Use a personal access tok
 
 **What happens if a token can't read an account's apps or builds?**
 
-`--usage` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` (or `null` in `--json`/`--csv`) and the reason goes to stderr — the run does not fail.
+`--usage` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
 
 **Why do some accounts show `-` in the `--plan` columns?**
 
