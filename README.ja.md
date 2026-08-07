@@ -49,7 +49,7 @@ npm install -g expo-app-info
 expo-app-info
 ```
 
-Node.js **20以降**が必要です（この CLI はグローバルの `fetch` を使用します）。Node 20 は2026年4月にサポート終了(EOL)を迎えたため、Node 22 LTS 以降を推奨します。
+Node.js **22以降**が必要です（この CLI はグローバルの `fetch` を使用します）。
 
 ## 🔑 認証
 
