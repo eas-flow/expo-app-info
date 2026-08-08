@@ -2,7 +2,7 @@
 // the latest successful build(s). Moved out of src/cli.mjs so every display
 // mode lives in its own file under src/commands/.
 
-import { CONCURRENCY, mapWithConcurrency } from '../api.mjs';
+import { mapWithConcurrency } from '../api.mjs';
 import { toDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
@@ -18,7 +18,7 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
     const apps = await client.fetchApps(account.id);
 
     let done = 0;
-    const buildsPerApp = await mapWithConcurrency(apps, CONCURRENCY, async (app) => {
+    const buildsPerApp = await mapWithConcurrency(apps, async (app) => {
       const builds = await client.fetchBuilds(app.id, { limit: opts.history ?? 1 });
       progress(`${account.name}: ${++done}/${apps.length} apps…`);
       return builds;
