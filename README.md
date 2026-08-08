@@ -9,8 +9,8 @@ any directory.
 Each tool is its own independently versioned and published npm package under
 `packages/*`.
 
-| Package                                              | What it does                                    |
-| ----------------------------------------------------- | ------------------------------------------------ |
+| Package                                               | What it does                                                                          |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | [`@my-shelfio/expo-shelfit`](./packages/expo-shelfit) | List every Expo (EAS) app in your account, with its latest build version per platform |
 
 More tools (e.g. for GitHub, Qiita) may be added under `packages/` over time.

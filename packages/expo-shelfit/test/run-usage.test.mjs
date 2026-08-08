@@ -122,12 +122,18 @@ describe('run --usage', () => {
   });
 
   it('shows only the requested platform column with --platform', async () => {
-    stubFetch(happyResponses());
+    const fetchImpl = stubFetch(happyResponses());
 
     await run(['--usage', '--platform', 'ios']);
 
     expect(tableOutput()).toContain('SUCCESSFUL BUILDS (IOS)');
     expect(tableOutput()).not.toContain('SUCCESSFUL BUILDS (AND)');
+
+    // #59: --platform narrows the query itself, not just the client-side
+    // display — the request must never even ask for the other platform's alias.
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.query).toContain('ios:');
+    expect(buildsCallBody.query).not.toContain('android:');
   });
 
   it('degrades a whole account to "-" build counts (not a failed run) when its apps/builds fetch fails', async () => {

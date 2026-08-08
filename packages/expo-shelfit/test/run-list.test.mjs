@@ -43,7 +43,7 @@ describe('run', () => {
 
   it('prints the package version for --version', async () => {
     await run(['--version']);
-    expect(logSpy).toHaveBeenCalledWith('1.0.1');
+    expect(logSpy).toHaveBeenCalledWith('1.0.2');
   });
 
   // One representative test that parseArgs failures propagate out of run()
@@ -153,7 +153,7 @@ describe('run', () => {
   });
 
   it('--platform filters output to matching builds only', async () => {
-    stubFetch([
+    const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
       buildsResponse({
@@ -175,6 +175,12 @@ describe('run', () => {
     expect(output).toContain('1 row(s)');
     expect(output).toContain('38'); // the android build number
     expect(output).not.toContain('41'); // the ios build number, filtered out
+
+    // #59: --platform narrows the query itself, not just the client-side
+    // display — the request must never even ask for the other platform's alias.
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.query).toContain('android:');
+    expect(buildsCallBody.query).not.toContain('ios:');
   });
 
   it('prints "No apps found." when the account has zero apps', async () => {

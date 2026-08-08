@@ -42,7 +42,7 @@ npm run lint    # Biome (lint + format check)
 npm run format  # Biome (write formatting fixes)
 ```
 
-All of the above run in CI on every PR (Node 20 / 22 / 24). Please make sure
+All of the above run in CI on every PR (Node 22 / 24). Please make sure
 they pass locally before opening a PR — see `.github/pull_request_template.md`
 for the checklist.
 
@@ -60,10 +60,10 @@ src/commands/
   usage.mjs           --usage (successful builds per UTC calendar month)
   plan.mjs            --plan (current subscription per account)
 src/api.mjs           EAS GraphQL client (throws, never exits/prints) +
-                      mapWithConcurrency/CONCURRENCY
-src/format.mjs        entries → JSON/CSV/display-row conversion (FIELDS/
-                      USAGE_FIELDS/PLAN_FIELDS are the machine-readable
-                      output contract)
+                      createSemaphore/mapWithConcurrency/CONCURRENCY
+src/format.mjs        entries → display-row conversion (there is no
+                      machine-readable output mode; the table is the only
+                      supported output)
 src/render.mjs        Table rendering and column widths
 src/dates.mjs         UTC date helpers (calendar-month boundaries, display
                       formatting) — every date this CLI shows is UTC
@@ -74,8 +74,9 @@ test/                 Vitest tests, one file per src module (run-*.test.mjs
 ```
 
 Imports flow one way — `bin → cli → args / commands/* → api / format /
-render / dates / progress`, with `format` also using `dates`/`render` — and
-never in reverse (e.g. `api.mjs` must not import from `commands/`).
+render / dates / progress`, with `format` also using `dates` and `progress`
+using `render` — and never in reverse (e.g. `api.mjs` must not import from
+`commands/`).
 
 `src/*` files never call `process.exit` or read directly from `process.argv`
 so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.
@@ -100,8 +101,12 @@ Releases are the source of truth for release notes, see
 `.github/RELEASE_TEMPLATE.md`.
 
 1. Bump the `version` field in the affected package(s)' `package.json` by
-   hand (e.g. `packages/expo-shelfit/package.json`). Do this as part of the
-   `develop` → `main` release PR, or as a small standalone version-bump PR.
+   hand (e.g. `packages/expo-shelfit/package.json`), then run
+   `npm install --package-lock-only` from the repo root so
+   `package-lock.json` follows — its `packages/*` entries carry a `version`
+   too, and a stale lockfile makes `npm ci` fail in the release workflow. Do
+   this as part of the `develop` → `main` release PR, or as a small
+   standalone version-bump PR.
 2. Merge that PR into `main`.
 3. Create a GitHub Release with a bare `v*.*.*` tag (e.g. `v1.0.1`) —
    drafting the tag on the Release page is enough, a separate `git tag`
@@ -114,6 +119,19 @@ Releases are the source of truth for release notes, see
    `npm publish` (via Trusted Publishing, no token needed) for whichever
    package(s) differ. Packages whose version didn't change are left alone,
    so one Release can cover version bumps in more than one package at once.
+
+Note that if you forget the bump, step 4 publishes nothing and still exits
+successfully (with a `::warning::`), and npm won't let you re-publish a
+version that already exists — recovering means cutting a patch version.
+
+If you use Claude Code, two skills in `.claude/skills/` do the above for
+you and guard those footguns: `/shelfit-release-draft <package>@<version>`
+covers steps 1–3 (bump + lockfile, release PR, **draft** Release — nothing
+is published yet), and `/shelfit-publish` covers step 4 after the PR is
+merged (local lint/test, a dry check that some version actually differs
+from npm, then publishing the draft Release). See the repo-root `CLAUDE.md`.
+The manual steps above remain the source of truth — the skills just follow
+them.
 
 ## Reporting bugs / requesting features
 

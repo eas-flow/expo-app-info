@@ -54,7 +54,8 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
   let pairsDone = 0;
   const pairResults = await mapWithConcurrency(pairs, async ({ accountIndex, app }) => {
     try {
-      return { accountIndex, counts: await client.countBuildsByMonth(app.id, months), error: null };
+      const counts = await client.countBuildsByMonth(app.id, months, { platform: opts.platform });
+      return { accountIndex, counts, error: null };
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
       return { accountIndex, counts: null, error: err };

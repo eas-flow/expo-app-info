@@ -131,19 +131,6 @@ export function parseArgs(argv) {
       );
     }
     opts.history = parsed;
-
-    if (opts.usage) {
-      throw new CliError('--history cannot be combined with --usage.');
-    }
-  }
-
-  if (opts.plan) {
-    if (opts.usage) {
-      throw new CliError('--plan cannot be combined with --usage.');
-    }
-    if (opts.history !== null) {
-      throw new CliError('--plan cannot be combined with --history.');
-    }
   }
 
   if (opts.month !== null) {
@@ -154,13 +141,31 @@ export function parseArgs(argv) {
       );
     }
     opts.month = parsed;
+  }
 
-    if (!opts.usage) {
-      throw new CliError('--month can only be used with --usage.');
+  // Display modes are mutually exclusive. Order here also decides which
+  // pair gets reported first when 3 are set at once (#57).
+  const activeModes = EXCLUSIVE_MODES.filter((mode) => isModeActive(opts, mode));
+  if (activeModes.length >= 2) {
+    const [subject, other] = activeModes;
+    throw new CliError(`--${subject} cannot be combined with --${other}.`);
+  }
+
+  // Flags that only make sense alongside a specific display mode.
+  for (const [flag, requiredMode] of Object.entries(MODE_ONLY_FLAGS)) {
+    if (opts[flag] !== null && !opts[requiredMode]) {
+      throw new CliError(`--${flag} can only be used with --${requiredMode}.`);
     }
   }
 
   return opts;
+}
+
+const EXCLUSIVE_MODES = ['plan', 'history', 'usage'];
+const MODE_ONLY_FLAGS = { month: 'usage' };
+
+function isModeActive(opts, mode) {
+  return mode === 'history' ? opts.history !== null : opts[mode] === true;
 }
 
 function requireValue(argv, index, flag) {

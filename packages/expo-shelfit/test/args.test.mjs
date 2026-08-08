@@ -59,6 +59,8 @@ describe('parseArgs', () => {
     [['--usage', '--history', '5'], /--history cannot be combined with --usage/],
     [['--plan', '--usage'], /--plan cannot be combined with --usage/],
     [['--plan', '--history', '3'], /--plan cannot be combined with --history/],
+    // 3 exclusive modes at once (#57): reports only the first colliding pair.
+    [['--usage', '--plan', '--history', '3'], /--plan cannot be combined with --history/],
     [['--usage', '--month'], /--month requires a value/],
     [['--usage', '--month', 'abc'], /Invalid --month value/],
     [['--usage', '--month', '0'], /Invalid --month value/],
