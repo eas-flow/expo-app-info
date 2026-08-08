@@ -1,9 +1,9 @@
 // `--plan` display mode. Moved out of src/cli.mjs so every display mode
 // lives in its own file under src/commands/.
 
-import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
+import { ApiError, mapWithConcurrency } from '../api.mjs';
 import { planConcurrencyHeader, toPlanDisplayRows } from '../format.mjs';
-import { clearProgress, progress } from '../progress.mjs';
+import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
@@ -21,30 +21,30 @@ import { dim, renderTable } from '../render.mjs';
  * reported on stderr so it stays out of stdout.
  */
 export async function runPlan(client, accounts, opts, accountDisplayNames) {
-  const warnings = [];
   let done = 0;
 
-  const subscriptions = await mapWithConcurrency(accounts, CONCURRENCY, async (account) => {
+  // Results are gathered per account, then warnings are printed by walking
+  // `accounts` in order below — not pushed inside the task above, which
+  // would order them by response arrival instead of account order.
+  const results = await mapWithConcurrency(accounts, async (account) => {
     try {
-      const subscription = await client.fetchSubscription(account.id);
-      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
-      return subscription;
+      return { subscription: await client.fetchSubscription(account.id), error: null };
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
-      warnings.push(`${account.name}: ${err.message}`);
-      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
-      return null;
+      return { subscription: null, error: err };
+    } finally {
+      progressCount('Fetching plan', ++done, accounts.length, 'accounts');
     }
   });
 
   clearProgress();
 
-  for (const warning of warnings) {
-    console.error(dim(`  ! plan unavailable — ${warning}`));
-  }
+  results.forEach(({ error }, i) => {
+    if (error) console.error(dim(`  ! plan unavailable — ${accounts[i].name}: ${error.message}`));
+  });
 
   const entries = accounts.map((account, i) => {
-    const subscription = subscriptions[i];
+    const subscription = results[i].subscription;
     return {
       account: account.name,
       plan: subscription?.name ?? null,

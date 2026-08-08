@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, createApiClient, mapWithConcurrency } from '../src/api.mjs';
+import { ApiError, createApiClient, createSemaphore, mapWithConcurrency } from '../src/api.mjs';
 
 function jsonResponse(body, { status = 200, ok = true } = {}) {
   return { status, ok, json: async () => body };
@@ -21,7 +21,7 @@ describe('gql (via createApiClient)', () => {
 
   it('throws ApiError on a non-2xx status that is not 401/403', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 500, ok: false }));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl, maxRetries: 0 });
     await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 500/);
   });
 
@@ -55,7 +55,7 @@ describe('gql (via createApiClient)', () => {
         throw new SyntaxError('Unexpected token < in JSON');
       },
     });
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl, maxRetries: 0 });
     await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 502/);
   });
 
@@ -102,6 +102,93 @@ describe('gql (via createApiClient)', () => {
   });
 });
 
+describe('gql retry/timeout', () => {
+  const accountsData = jsonResponse({ data: { meActor: { accounts: [] } } });
+
+  it('does not retry on 401 — fails on the first attempt', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 401, ok: false }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).rejects.toThrow(/Authentication failed/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a retryable HTTP status, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({}, { status: 500, ok: false }))
+        .mockResolvedValueOnce(jsonResponse({}, { status: 500, ok: false }))
+        .mockResolvedValueOnce(accountsData);
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const promise = client.fetchAccounts();
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toEqual([]);
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a network-level fetch failure, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn()
+        .mockRejectedValueOnce(new TypeError('fetch failed'))
+        .mockResolvedValueOnce(accountsData);
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const promise = client.fetchAccounts();
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toEqual([]);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after maxRetries and reports the attempt count', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 503, ok: false }));
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl, maxRetries: 2 });
+
+      const promise = client.fetchAccounts();
+      const assertion = expect(promise).rejects.toThrow(/HTTP 503.*after 3 attempt\(s\)/);
+      await vi.runAllTimersAsync();
+      await assertion;
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors Retry-After on a 429 instead of the default backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      const res429 = {
+        status: 429,
+        ok: false,
+        headers: { get: (name) => (name === 'retry-after' ? '2' : null) },
+        json: async () => ({}),
+      };
+      const fetchImpl = vi.fn().mockResolvedValueOnce(res429).mockResolvedValueOnce(accountsData);
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const promise = client.fetchAccounts();
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(promise).resolves.toEqual([]);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('fetchApps', () => {
   it('follows cursor pagination until hasNextPage is false', async () => {
     const pages = [
@@ -143,6 +230,15 @@ describe('fetchApps', () => {
       { id: 'a2', name: 'App Two', slug: 'app-two' },
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws ApiError (not TypeError) when the account is missing from the response', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { account: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchApps('acc')).rejects.toThrow(ApiError);
   });
 });
 
@@ -277,36 +373,133 @@ describe('fetchBuilds', () => {
 
     expect(builds.map((b) => b.appBuildVersion)).toEqual(['30', '20', '10', '6', '5']);
   });
+
+  it('throws ApiError (not TypeError) when the app is missing from the response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ data: { app: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchBuilds('app-1')).rejects.toThrow(ApiError);
+  });
 });
 
 describe('mapWithConcurrency', () => {
-  it('never runs more than `limit` tasks at once', async () => {
+  it('never runs more than the semaphore limit tasks at once', async () => {
     let inFlight = 0;
     let maxInFlight = 0;
+    const semaphore = createSemaphore(2);
 
-    await mapWithConcurrency([1, 2, 3, 4, 5, 6], 2, async (item) => {
-      inFlight++;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      inFlight--;
-      return item * 2;
-    });
+    await mapWithConcurrency(
+      [1, 2, 3, 4, 5, 6],
+      async (item) => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight--;
+        return item * 2;
+      },
+      { semaphore }
+    );
 
     expect(maxInFlight).toBeLessThanOrEqual(2);
   });
 
   it('preserves result order matching input order regardless of completion order', async () => {
     const delays = [30, 10, 20, 0];
-    const results = await mapWithConcurrency(delays, 4, async (delay, i) => {
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return i;
-    });
+    const results = await mapWithConcurrency(
+      delays,
+      async (delay, i) => {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return i;
+      },
+      { semaphore: createSemaphore(4) }
+    );
     expect(results).toEqual([0, 1, 2, 3]);
   });
 
   it('handles an empty items array', async () => {
-    const results = await mapWithConcurrency([], 4, async () => 1);
+    const results = await mapWithConcurrency([], async () => 1, { semaphore: createSemaphore(4) });
     expect(results).toEqual([]);
+  });
+
+  it('shares one semaphore across independent (non-nested) calls, so combined in-flight count never exceeds its limit', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const semaphore = createSemaphore(3);
+
+    const track = async () => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+    };
+
+    await mapWithConcurrency([1, 2, 3, 4], () => track(), { semaphore });
+    await mapWithConcurrency([1, 2, 3, 4], () => track(), { semaphore });
+
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+  });
+
+  it('releases the token when a task throws, so later tasks are not deadlocked', async () => {
+    const semaphore = createSemaphore(1);
+
+    await expect(
+      mapWithConcurrency(
+        [1, 2],
+        async (item) => {
+          if (item === 1) throw new Error('boom');
+          return item;
+        },
+        { semaphore }
+      )
+    ).rejects.toThrow('boom');
+
+    await semaphore.acquire();
+    semaphore.release();
+  });
+
+  it('grants slots in FIFO order — whoever acquired first runs first', async () => {
+    const semaphore = createSemaphore(1);
+    const order = [];
+
+    await mapWithConcurrency(
+      [1, 2, 3],
+      async (item) => {
+        order.push(item);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      },
+      { semaphore }
+    );
+
+    expect(order).toEqual([1, 2, 3]);
+  });
+});
+
+describe('createSemaphore', () => {
+  it('lets up to `limit` acquires resolve immediately', async () => {
+    const semaphore = createSemaphore(2);
+    let resolved = 0;
+    semaphore.acquire().then(() => resolved++);
+    semaphore.acquire().then(() => resolved++);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolved).toBe(2);
+  });
+
+  it('queues an acquire beyond the limit until a release frees a slot', async () => {
+    const semaphore = createSemaphore(1);
+    let secondResolved = false;
+
+    await semaphore.acquire();
+    const second = semaphore.acquire().then(() => {
+      secondResolved = true;
+    });
+
+    await Promise.resolve();
+    expect(secondResolved).toBe(false);
+
+    semaphore.release();
+    await second;
+    expect(secondResolved).toBe(true);
   });
 });
 
@@ -408,6 +601,36 @@ describe('countBuildsByMonth', () => {
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(ApiError);
   });
+
+  it('does not count a build with an unparseable createdAt into any month', async () => {
+    // Date.parse('not-a-date') is NaN, so the build must fall into no
+    // bucket (index -1) rather than throwing or landing in month 0.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage(['2026-07-20T00:00:00.000Z', 'not-a-date'], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
+      { ios: 1, android: 0 },
+      { ios: 0, android: 0 },
+    ]);
+  });
+
+  it('throws ApiError (not TypeError) when the app is missing from a builds page response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ data: { app: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(ApiError);
+  });
+
+  it('stops after MAX_BUILD_PAGES instead of looping forever on a non-terminating page sequence', async () => {
+    const fullPage = Array.from({ length: 50 }, () => '2026-07-15T00:00:00.000Z');
+    const fetchImpl = vi.fn().mockImplementation(async () => buildsPage(fullPage, []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(/exceeded 200 pages/);
+    expect(fetchImpl).toHaveBeenCalledTimes(200);
+  });
 });
 
 describe('fetchSubscription', () => {
@@ -472,5 +695,14 @@ describe('fetchSubscription', () => {
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.fetchSubscription('acc-1')).rejects.toThrow(ApiError);
+  });
+
+  it('returns null (not a TypeError) when the account itself is missing from the response', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { account: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
   });
 });

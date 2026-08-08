@@ -78,6 +78,17 @@ describe('run --plan', () => {
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('plan unavailable');
   });
 
+  it('shows "-" without a warning when the account is missing from a malformed (but 2xx) response', async () => {
+    stubFetch([accountsResponse(), jsonResponse({ data: { account: { byId: null } } })]);
+
+    await run(['--plan']);
+
+    const output = tableOutput();
+    expect(output).toContain('myorg');
+    expect(output).toContain('-');
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   it("reports only that platform's concurrency when combined with --platform", async () => {
     stubFetch([accountsResponse(), subscriptionResponseFor()]);
 
@@ -85,6 +96,37 @@ describe('run --plan', () => {
 
     expect(tableOutput()).toContain('CONCURRENCY (IOS)');
     expect(tableOutput()).not.toContain('2 / 1 / 1');
+  });
+
+  it('reports warnings in account order even when the slower account resolves last', async () => {
+    vi.useFakeTimers();
+    try {
+      const twoAccounts = accountsResponse([
+        { id: 'acc-1', name: 'first' },
+        { id: 'acc-2', name: 'second' },
+      ]);
+      const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+        const body = JSON.parse(options.body);
+        if (body.query.includes('CurrentAccounts')) return twoAccounts;
+        // acc-2 (second in account order) resolves before acc-1.
+        const delay = body.variables.accountId === 'acc-1' ? 50 : 10;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return jsonResponse({ errors: [{ message: `boom-${body.variables.accountId}` }] });
+      });
+      vi.stubGlobal('fetch', fetchImpl);
+
+      const promise = run(['--plan']);
+      await vi.runAllTimersAsync();
+      await promise;
+
+      const errorLines = errorSpy.mock.calls.map((args) => args[0]);
+      const firstIdx = errorLines.findIndex((l) => l.includes('first'));
+      const secondIdx = errorLines.findIndex((l) => l.includes('second'));
+      expect(firstIdx).toBeGreaterThanOrEqual(0);
+      expect(secondIdx).toBeGreaterThan(firstIdx);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('fetches accounts in parallel (mapWithConcurrency) rather than a strictly sequential loop', async () => {
