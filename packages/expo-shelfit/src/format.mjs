@@ -103,15 +103,9 @@ export function toPlanDisplayRows(
 
 function planConcurrencyCell(entry, platform) {
   const { concurrencyTotal, concurrencyIos, concurrencyAndroid } = entry;
-  if (platform === 'ios') {
-    return concurrencyIos === null || concurrencyIos === undefined ? '-' : String(concurrencyIos);
-  }
-  if (platform === 'android') {
-    return concurrencyAndroid === null || concurrencyAndroid === undefined
-      ? '-'
-      : String(concurrencyAndroid);
-  }
-  if (concurrencyTotal === null || concurrencyTotal === undefined) return '-';
+  if (platform === 'ios') return cellOrDash(concurrencyIos);
+  if (platform === 'android') return cellOrDash(concurrencyAndroid);
+  if (cellOrDash(concurrencyTotal) === '-') return '-';
   return `${concurrencyTotal} / ${concurrencyIos} / ${concurrencyAndroid}`;
 }
 
