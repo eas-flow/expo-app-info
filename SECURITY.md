@@ -4,7 +4,7 @@ English | [日本語](./SECURITY.ja.md)
 
 ## Supported Versions
 
-Only the latest published version of `expo-app-info` receives security fixes.
+Only the latest published version of `shelfit` receives security fixes.
 
 | Version | Supported |
 | ------- | --------- |
@@ -16,7 +16,7 @@ Please **do not open a public issue** for security problems.
 
 Report privately through GitHub Security Advisories:
 
-1. Go to the [Security tab](https://github.com/eas-flow/expo-app-info/security/advisories)
+1. Go to the [Security tab](https://github.com/my-shelfio/shelfit/security/advisories)
 2. Click **Report a vulnerability**
 
 You should get an initial response within 7 days. Once a fix is released, you
@@ -24,7 +24,7 @@ will be credited in the advisory unless you prefer to stay anonymous.
 
 ## How this CLI handles your access token
 
-`expo-app-info` reads a single credential: the **`EXPO_TOKEN`** environment
+`shelfit` reads a single credential: the **`EXPO_TOKEN`** environment
 variable. The following are deliberate design constraints, and a violation of
 any of them should be reported as a security issue:
 
@@ -45,7 +45,7 @@ any of them should be reported as a security issue:
 
 ## Dependencies
 
-`expo-app-info` ships with **zero runtime dependencies** — the published
+`shelfit` ships with **zero runtime dependencies** — the published
 package (`bin/`, `src/`) contains only first-party code, so there is no
 transitive supply chain to audit at install time.
 

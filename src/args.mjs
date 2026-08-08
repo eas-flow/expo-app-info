@@ -17,11 +17,11 @@ export const DEFAULT_USAGE_MONTHS = 3;
 const MAX_MONTH = 12;
 
 export const HELP = `
-  expo-app-info — List every Expo (EAS) app with its latest build version per platform.
+  shelfit — List every Expo (EAS) app with its latest build version per platform.
 
   Usage
     $ export EXPO_TOKEN=xxxxx
-    $ npx expo-app-info [options]
+    $ npx @my-shelfio/expo-shelfit [options]
 
   Options
     -h, --help              Show this help
@@ -109,7 +109,7 @@ export function parseArgs(argv) {
     } else if (arg.startsWith('--month=')) {
       opts.month = arg.slice('--month='.length);
     } else {
-      throw new CliError(`Unknown option: ${arg}\n  Run \`expo-app-info --help\` to see usage.`);
+      throw new CliError(`Unknown option: ${arg}\n  Run \`shelfit --help\` to see usage.`);
     }
   }
 
