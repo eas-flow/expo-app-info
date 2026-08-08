@@ -5,7 +5,7 @@ import { ApiError, mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_USAGE_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
 import { toUsageDisplayRows, usageBuildsHeaders } from '../format.mjs';
-import { clearProgress, progress } from '../progress.mjs';
+import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
@@ -41,7 +41,7 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       if (!(err instanceof ApiError)) throw err;
       return { apps: [], error: err };
     } finally {
-      progress(`Fetching usage: ${++accountsDone}/${accounts.length} accounts (apps)…`);
+      progressCount('Fetching usage', ++accountsDone, accounts.length, 'accounts (apps)');
     }
   });
 
@@ -59,7 +59,7 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       if (!(err instanceof ApiError)) throw err;
       return { accountIndex, counts: null, error: err };
     } finally {
-      progress(`Fetching usage: ${++pairsDone}/${pairs.length} app(s)…`);
+      progressCount('Fetching usage', ++pairsDone, pairs.length, 'app(s)');
     }
   });
 

@@ -156,6 +156,32 @@ describe('run --usage', () => {
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
   });
 
+  it('reports warnings in account order even when the slower account resolves last', async () => {
+    const twoAccounts = accountsResponse([
+      { id: 'acc-1', name: 'first' },
+      { id: 'acc-2', name: 'second' },
+    ]);
+    const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes('CurrentAccounts')) return twoAccounts;
+      // acc-2 (second in account order) resolves before acc-1.
+      const delay = body.variables.accountId === 'acc-1' ? 50 : 10;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return jsonResponse({ errors: [{ message: `boom-${body.variables.accountId}` }] });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const promise = run(['--usage']);
+    await vi.runAllTimersAsync();
+    await promise;
+
+    const errorLines = errorSpy.mock.calls.map((args) => args[0]);
+    const firstIdx = errorLines.findIndex((l) => l.includes('first'));
+    const secondIdx = errorLines.findIndex((l) => l.includes('second'));
+    expect(firstIdx).toBeGreaterThanOrEqual(0);
+    expect(secondIdx).toBeGreaterThan(firstIdx);
+  });
+
   it('fetches accounts (and their apps/builds) in parallel rather than a strictly sequential loop', async () => {
     // Both accounts' apps/builds fetches can legitimately interleave under
     // mapWithConcurrency (unlike --plan's single-hop fetchSubscription, this
