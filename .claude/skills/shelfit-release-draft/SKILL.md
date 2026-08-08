@@ -16,11 +16,16 @@ allowed-tools:
   - Bash(git push *)
   - Bash(ls packages)
   - Bash(npm install --package-lock-only)
+  - Bash(grep *)
   - Bash(gh release list *)
   - Bash(gh pr create *)
   - Bash(gh release create *)
   - Read(packages/*/package.json)
   - Edit(packages/*/package.json)
+  - Read(packages/*/test/*.mjs)
+  - Edit(packages/*/test/*.mjs)
+  - Read(.github/ISSUE_TEMPLATE/*.yml)
+  - Edit(.github/ISSUE_TEMPLATE/*.yml)
 ---
 
 あなたはリリースエンジニアとして以下の手順を順番に実行します。途中でエラーが発生した場合は処理を停止してユーザーに報告してください。
@@ -126,10 +131,28 @@ git diff --name-only
 
 `packages/<package>/package.json` と `package-lock.json` の**両方**が変更されていなければ停止して報告する。
 
-#### 3-3. コミット＆プッシュ
+#### 3-3. バージョン文字列のハードコードの追従（必須）
+
+`package.json` の `version` 以外にも、旧バージョン文字列をそのまま書いている箇所がないか確認する。**特に以下は既知の見落としポイント**:
+
+- `packages/<package>/test/run-list.test.mjs` の `--version` 出力を検証するテスト
+  （例: `expect(logSpy).toHaveBeenCalledWith('1.0.1')`）。実装（`src/cli.mjs`）は
+  `package.json` の `version` をそのまま出力するだけなので、このテストの期待値を
+  更新し忘れると `npm test` が新バージョンで確実に失敗する（CI も PR も red になる）。
+- `.github/ISSUE_TEMPLATE/bug_report.yml` の `cli-version` フィールドの `placeholder`
+  （例: `"1.0.1"`）。テスト失敗には繋がらないが、Issue テンプレートの例示が古いままになる。
+
+```bash
+grep -rn "<現行バージョン>" packages/<package>/test .github/ISSUE_TEMPLATE
+```
+
+ヒットした箇所は Edit で新バージョンに書き換える。無関係な一致（たまたま同じ数字列）でないか目視で確認してから書き換えること。何もヒットしなければこのステップは何もせず次へ進む。
+
+#### 3-4. コミット＆プッシュ
 
 ```bash
 git add packages/<package>/package.json package-lock.json
+# 3-3 で変更したファイルがあればここに追加する
 git commit -m "chore(release): @my-shelfio/<package> v<version>"
 git push origin develop
 ```
