@@ -24,17 +24,17 @@ jobs:
           node-version: 22
 
       - name: Run against the live EAS API
-        run: node bin/cli.mjs
+        run: node packages/expo-shelfit/bin/cli.mjs
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --usage (issue #18) no longer queries subscription/billingPeriod at
-      # all — it pages app.byId(...).builds(offset, limit, filter) per app
-      # and buckets client-side by UTC calendar month. Separate step so a
-      # break in that pagination shape is distinguishable from a break in
-      # the plain app/build queries above.
+      # --usage no longer queries subscription/billingPeriod at all — it
+      # pages app.byId(...).builds(offset, limit, filter) per app and
+      # buckets client-side by UTC calendar month. Separate step so a break
+      # in that pagination shape is distinguishable from a break in the
+      # plain app/build queries above.
       - name: Run --usage against the live EAS API
-        run: node bin/cli.mjs --usage
+        run: node packages/expo-shelfit/bin/cli.mjs --usage
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -42,23 +42,23 @@ jobs:
       # than changing query shape, but a separate step still catches an
       # unexpected error/timeout from the deeper paging on its own.
       - name: Run --usage --month 6 against the live EAS API
-        run: node bin/cli.mjs --usage --month 6
+        run: node packages/expo-shelfit/bin/cli.mjs --usage --month 6
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Q_BUILDS gained a $limit variable for --history (issue #17); a
-      # separate step so a break in that variable/shape is distinguishable
-      # from a break in the plain (limit: 1) query above.
+      # Q_BUILDS gained a $limit variable for --history; a separate step so
+      # a break in that variable/shape is distinguishable from a break in
+      # the plain (limit: 1) query above.
       - name: Run --history against the live EAS API
-        run: node bin/cli.mjs --history 5
+        run: node packages/expo-shelfit/bin/cli.mjs --history 5
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --plan (issue #19) queries `subscription` on its own, without
+      # --plan queries `subscription` on its own, without
       # `billingPeriod`/`usageMetrics` — a separate step so a break here is
       # distinguishable from a break in --usage's larger query above.
       - name: Run --plan against the live EAS API
-        run: node bin/cli.mjs --plan
+        run: node packages/expo-shelfit/bin/cli.mjs --plan
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 

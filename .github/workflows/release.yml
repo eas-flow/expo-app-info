@@ -2,22 +2,26 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
   contents: read
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
     environment: npm-publish
     permissions:
       id-token: write
-      contents: read
+      contents: write
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -31,10 +35,21 @@ jobs:
 
       - run: npm run lint
 
-      - run: npm test
+      - run: npm test --workspaces --if-present
 
-      - run: npm pack --dry-run
-
-      # No NODE_AUTH_TOKEN: publish authenticates via OIDC through the
-      # Trusted Publisher configuration on the npm package page (see issue #2).
-      - run: npm publish --provenance --access public
+      # This is a monorepo — packages/* are versioned and published
+      # independently. changesets/action either:
+      #   - opens/updates a "Version Packages" PR when unreleased changesets
+      #     exist on main, or
+      #   - runs the publish script (below) when that PR has just been
+      #     merged and package.json versions were bumped, publishing every
+      #     package whose version changed.
+      # No manual `npm version` / `git tag` step either way.
+      - name: Create Release PR or Publish to npm
+        uses: changesets/action@v1
+        with:
+          publish: npm run release
+          title: 'chore: version packages'
+          commit: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

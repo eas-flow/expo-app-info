@@ -1,0 +1,54 @@
+{
+  "name": "@my-shelfio/expo-shelfit",
+  "version": "0.3.1",
+  "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
+  "keywords": [
+    "expo",
+    "eas",
+    "eas-cli",
+    "react-native",
+    "cli",
+    "npx",
+    "version",
+    "app-version",
+    "build",
+    "build-number",
+    "monorepo",
+    "devtools",
+    "shelf",
+    "portfolio"
+  ],
+  "license": "MIT",
+  "author": "it0 (https://github.com/my-shelfio/shelfit)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/my-shelfio/shelfit.git",
+    "directory": "packages/expo-shelfit"
+  },
+  "bugs": {
+    "url": "https://github.com/my-shelfio/shelfit/issues"
+  },
+  "homepage": "https://github.com/my-shelfio/shelfit/tree/main/packages/expo-shelfit#readme",
+  "type": "module",
+  "bin": {
+    "shelfit": "bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node bin/cli.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

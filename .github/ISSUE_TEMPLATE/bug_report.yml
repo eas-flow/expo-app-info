@@ -17,7 +17,7 @@ body:
       label: What happened?
       description: A clear description of the bug, including the exact command you ran.
       placeholder: |
-        Ran `npx expo-app-info` and got ...
+        Ran `npx @my-shelfio/expo-shelfit` and got ...
     validations:
       required: true
 
@@ -31,8 +31,8 @@ body:
   - type: input
     id: cli-version
     attributes:
-      label: expo-app-info version
-      description: Output of `npx expo-app-info --version`
+      label: shelfit version
+      description: Output of `npx @my-shelfio/expo-shelfit --version`
       placeholder: "0.1.1"
     validations:
       required: true
