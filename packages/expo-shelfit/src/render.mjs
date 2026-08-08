@@ -1,20 +1,53 @@
 // Table rendering and column-width helpers.
 // Kept dependency-free and pure so they are easy to unit test.
 
-/** Display width, counting East Asian wide characters as 2 columns. */
+// East Asian Wide characters and the main emoji blocks -> 2 columns.
+const WIDE_RANGES = [
+  [0x1100, 0x115f],
+  [0x2e80, 0xa4cf],
+  [0xac00, 0xd7a3],
+  [0xf900, 0xfaff],
+  [0xfe30, 0xfe6f],
+  [0xff00, 0xff60],
+  [0xffe0, 0xffe6],
+  [0x1f300, 0x1f64f], // emoji: pictographs / emoticons
+  [0x1f680, 0x1f6ff], // emoji: transport & map symbols
+  [0x1f900, 0x1f9ff], // emoji: supplemental symbols & pictographs
+];
+
+// Combining marks and variation selectors render on top of the previous
+// glyph rather than taking their own column -> 0 columns.
+const ZERO_WIDTH_RANGES = [
+  [0x0300, 0x036f], // combining diacritics
+  [0xfe00, 0xfe0f], // variation selectors
+];
+
+const ZWJ = 0x200d;
+
+const inRanges = (c, ranges) => ranges.some(([lo, hi]) => c >= lo && c <= hi);
+
+/**
+ * Display width, counting East Asian wide characters and emoji as 2
+ * columns. ZWJ-joined sequences (e.g. family emoji) are approximated by
+ * treating the codepoint right after a ZWJ as already counted — not full
+ * grapheme-cluster segmentation, but enough to keep a joined emoji at 2
+ * columns instead of ballooning per component.
+ */
 export function width(str) {
   let w = 0;
+  let afterZWJ = false;
   for (const ch of String(str)) {
     const c = ch.codePointAt(0);
-    const wide =
-      (c >= 0x1100 && c <= 0x115f) ||
-      (c >= 0x2e80 && c <= 0xa4cf) ||
-      (c >= 0xac00 && c <= 0xd7a3) ||
-      (c >= 0xf900 && c <= 0xfaff) ||
-      (c >= 0xfe30 && c <= 0xfe6f) ||
-      (c >= 0xff00 && c <= 0xff60) ||
-      (c >= 0xffe0 && c <= 0xffe6);
-    w += wide ? 2 : 1;
+    if (c === ZWJ) {
+      afterZWJ = true;
+      continue;
+    }
+    if (afterZWJ) {
+      afterZWJ = false;
+      continue;
+    }
+    if (inRanges(c, ZERO_WIDTH_RANGES)) continue;
+    w += inRanges(c, WIDE_RANGES) ? 2 : 1;
   }
   return w;
 }
@@ -31,8 +64,22 @@ export function bold(s, isTTY = process.stdout.isTTY) {
   return isTTY ? `\x1b[1m${s}\x1b[0m` : s;
 }
 
+// Single pass over rows rather than Math.max(...rows.map(...)) per column,
+// which turns row count into Math.max's argument count and blows the call
+// stack on large tables (#61).
+function computeWidths(headers, rows) {
+  const widths = headers.map((h) => width(h));
+  for (const row of rows) {
+    for (let i = 0; i < widths.length; i++) {
+      const w = width(row[i] ?? '');
+      if (w > widths[i]) widths[i] = w;
+    }
+  }
+  return widths;
+}
+
 export function renderTable(headers, rows, { isTTY = process.stdout.isTTY } = {}) {
-  const widths = headers.map((h, i) => Math.max(width(h), ...rows.map((r) => width(r[i] ?? ''))));
+  const widths = computeWidths(headers, rows);
   const line = (l, m, r) => dim(l + widths.map((w) => '─'.repeat(w + 2)).join(m) + r, isTTY);
 
   const out = [];

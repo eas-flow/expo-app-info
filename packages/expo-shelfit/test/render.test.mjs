@@ -14,12 +14,20 @@ describe('width', () => {
     expect(width('ios日本')).toBe(3 + 4);
   });
 
-  it('counts emoji as 1 column (outside the wide ranges checked)', () => {
-    expect(width('🚀')).toBe(1);
+  it('counts emoji as 2 columns (#61)', () => {
+    expect(width('🚀')).toBe(2);
   });
 
   it('counts full-width punctuation as 2 columns', () => {
     expect(width('！')).toBe(2);
+  });
+
+  it('counts a ZWJ-joined emoji sequence (e.g. family emoji) as 2 columns, not per-component', () => {
+    expect(width('👨‍👩‍👧')).toBe(2);
+  });
+
+  it('counts a variation-selector character the same as its base character', () => {
+    expect(width('⚠️')).toBe(width('⚠'));
   });
 });
 
@@ -70,5 +78,10 @@ describe('renderTable', () => {
   it('treats missing cells as empty strings', () => {
     const out = renderTable(['A', 'B'], [['x', undefined]], { isTTY: false });
     expect(out).toContain('x');
+  });
+
+  it('does not throw RangeError on a large number of rows (#61)', () => {
+    const rows = Array.from({ length: 200_000 }, (_, i) => [String(i)]);
+    expect(() => renderTable(['A'], rows, { isTTY: false })).not.toThrow();
   });
 });
