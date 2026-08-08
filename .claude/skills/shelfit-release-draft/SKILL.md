@@ -63,8 +63,8 @@ git rev-parse HEAD origin/develop
 
 以下のいずれかに該当する場合は停止してユーザーに報告する。
 
-| 条件                                    | 停止時のメッセージ                                                                      |
-| --------------------------------------- | --------------------------------------------------------------------------------------- |
+| 条件                                    | 停止時のメッセージ                                                                       |
+| --------------------------------------- | ---------------------------------------------------------------------------------------- |
 | 現在のブランチが `develop` でない       | `develop` ブランチに切り替えてから実行してください                                       |
 | uncommitted な変更がある                | 変更内容をリストアップし、コミットまたは退避してから実行するよう伝える                   |
 | `HEAD` が `origin/develop` と一致しない | ローカルが `origin/develop` と乖離しています。`git pull origin develop` してから再実行を |
@@ -151,10 +151,10 @@ git log origin/main..develop --name-only --pretty=format:"---%h %s"
 
 | プレフィックス                            | リリースノートの分類 |
 | ----------------------------------------- | -------------------- |
-| `feat:`                                   | 🚀 Features          |
-| `fix:`                                    | 🐛 Bug Fixes         |
-| `perf:`                                   | 📈 Performance       |
-| `<type>!:` / `BREAKING CHANGE` を含むもの | 🚨 Breaking Changes  |
+| `feat:`                                   | 🚀 Features           |
+| `fix:`                                    | 🐛 Bug Fixes          |
+| `perf:`                                   | 📈 Performance        |
+| `<type>!:` / `BREAKING CHANGE` を含むもの | 🚨 Breaking Changes   |
 | `docs:` / `chore:` / `refactor:` / test   | Notes（または省略）  |
 
 **軸2: 変更パスから判定したパッケージ**

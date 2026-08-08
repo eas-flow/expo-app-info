@@ -16,7 +16,7 @@ published package under `packages/*`. Currently there is one package:
 Run from the repo root (`npm install` here installs deps for every package):
 
 ```bash
-npm run lint                                              # Biome lint + format check, whole repo
+npm run lint                                               # Biome lint + format check, whole repo
 npm run format                                             # Biome, write formatting fixes
 npm test --workspaces --if-present                         # run every package's tests
 npm test --workspace=packages/expo-shelfit                 # this package's tests only (Vitest)
@@ -132,10 +132,10 @@ The release process above is automated by two skills, split at the human gate
 develop ──[A]──▶ release PR ──(human: review & merge)──▶ main ──[B]──▶ Release published ──▶ release.yml ──▶ npm
 ```
 
-| Skill                                                                             | What it does                                                                                                          | Example                                       |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| [shelfit-release-draft](.claude/skills/shelfit-release-draft/SKILL.md) | **A.** Bumps `package.json` + `package-lock.json`, pushes to `develop`, opens the `develop` → `main` PR, drafts the Release | `/shelfit-release-draft expo-shelfit@1.1.0` |
-| [shelfit-publish](.claude/skills/shelfit-publish/SKILL.md)             | **B.** Runs lint/test locally, dry-checks local versions against npm, then publishes the draft Release and tracks the workflow | `/shelfit-publish`                            |
+| Skill                                                                  | What it does                                                                                                                   | Example                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| [shelfit-release-draft](.claude/skills/shelfit-release-draft/SKILL.md) | **A.** Bumps `package.json` + `package-lock.json`, pushes to `develop`, opens the `develop` → `main` PR, drafts the Release    | `/shelfit-release-draft expo-shelfit@1.1.0` |
+| [shelfit-publish](.claude/skills/shelfit-publish/SKILL.md)             | **B.** Runs lint/test locally, dry-checks local versions against npm, then publishes the draft Release and tracks the workflow | `/shelfit-publish`                          |
 
 A is fully reversible (a draft Release doesn't trigger anything); B's Release
 publish is the single irreversible step and always asks for confirmation
