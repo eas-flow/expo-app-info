@@ -1,8 +1,15 @@
 name: Release
 
+# Triggered by publishing a GitHub Release with a `v*.*.*` tag (e.g. v1.0.1).
+# The tag itself doesn't identify which package(s) changed — this is a
+# monorepo, and more than one package under packages/* can move in the same
+# release. Instead, every package's local package.json version is compared
+# against what's currently on npm; only the ones that differ get published.
+# See CONTRIBUTING.md's "Releasing" section and issue #51.
+
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
@@ -10,18 +17,18 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  publish:
+    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     environment: npm-publish
     permissions:
       id-token: write
-      contents: write
-      pull-requests: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          ref: ${{ github.event.release.tag_name }}
 
       - uses: actions/setup-node@v7
         with:
@@ -37,19 +44,24 @@ jobs:
 
       - run: npm test --workspaces --if-present
 
-      # This is a monorepo — packages/* are versioned and published
-      # independently. changesets/action either:
-      #   - opens/updates a "Version Packages" PR when unreleased changesets
-      #     exist on main, or
-      #   - runs the publish script (below) when that PR has just been
-      #     merged and package.json versions were bumped, publishing every
-      #     package whose version changed.
-      # No manual `npm version` / `git tag` step either way.
-      - name: Create Release PR or Publish to npm
-        uses: changesets/action@v1
-        with:
-          publish: npm run release
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish changed packages
+        run: |
+          set -e
+          published_any=false
+          for dir in packages/*/; do
+            dir="${dir%/}"
+            name=$(node -p "require('./$dir/package.json').name")
+            local_version=$(node -p "require('./$dir/package.json').version")
+            published_version=$(npm view "$name" version 2>/dev/null || echo "")
+            if [ "$local_version" != "$published_version" ]; then
+              echo "Publishing $name@$local_version (npm currently has: ${published_version:-none})"
+              npm pack --dry-run --workspace="$dir"
+              npm publish --workspace="$dir" --provenance --access public
+              published_any=true
+            else
+              echo "Skipping $name — already at $local_version on npm"
+            fi
+          done
+          if [ "$published_any" = false ]; then
+            echo "::warning::No package version differs from what's published on npm — nothing was published. Did you forget to bump package.json before tagging this release?"
+          fi

@@ -12,7 +12,7 @@ shelfit ファミリーのCLIツール群のモノレポです。いずれも非
 
 今後、GitHub・Qiita向けなどのツールが `packages/` 配下に追加される可能性があります。
 
-インストール・使い方は各パッケージ自身のREADMEを、開発環境のセットアップ・チェック・リリースプロセスは [CONTRIBUTING.md](./packages/expo-shelfit/CONTRIBUTING.md) を参照してください（本リポジトリは npm workspaces と [Changesets](https://github.com/changesets/changesets) によるパッケージ独立バージョニングを採用しています）。
+インストール・使い方は各パッケージ自身のREADMEを、開発環境のセットアップ・チェック・リリースプロセスは [CONTRIBUTING.md](./packages/expo-shelfit/CONTRIBUTING.md) を参照してください（本リポジトリは npm workspaces によるパッケージ独立バージョニング・公開を採用しています）。
 
 ## ライセンス
 

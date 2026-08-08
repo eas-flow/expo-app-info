@@ -49,7 +49,7 @@ any of them should be reported as a security issue:
 package (`bin/`, `src/`) contains only first-party code, so there is no
 transitive supply chain to audit at install time.
 
-Development-only tooling (Vitest, Biome, Changesets) is listed under
+Development-only tooling (Vitest, Biome) is listed under
 `devDependencies` and is never included in the published tarball — see
 `files` in `package.json` and `npm pack --dry-run` to verify. Dependabot
 (`.github/dependabot.yml`) keeps these, and the GitHub Actions used in CI,

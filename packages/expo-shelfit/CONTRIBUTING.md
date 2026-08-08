@@ -84,8 +84,8 @@ so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.
 
 - `develop` — integration branch, where day-to-day work merges
 - `main` — released branch; a release PR moves `develop` → `main`. Publishing
-  to npm happens automatically from there (see Releasing below) — there is
-  no manual tagging step.
+  to npm is triggered from there by creating a GitHub Release (see Releasing
+  below).
 
 ## Commit / PR conventions
 
@@ -95,22 +95,25 @@ the PR template's Verification checklist.
 ## Releasing (maintainers)
 
 This is a monorepo, so each package under `packages/*` is versioned and
-published independently via [Changesets](https://github.com/changesets/changesets)
-(changelog generation is disabled — GitHub Releases are the source of truth
-for release notes, see `.github/RELEASE_TEMPLATE.md`). From the repo root:
+published independently. There's no changelog-generation tooling — GitHub
+Releases are the source of truth for release notes, see
+`.github/RELEASE_TEMPLATE.md`.
 
-```bash
-npx changeset          # describe your change, pick a package + bump type
-```
-
-Add a changeset in the same PR as the change it describes — `changeset` will
-ask which package(s) in `packages/*` are affected. Once changesets land on
-`main` (via the `develop` → `main` release PR), `.github/workflows/release.yml`
-(using [`changesets/action`](https://github.com/changesets/action)) opens or
-updates a "Version Packages" PR that bumps the affected package(s)'
-`package.json`. Merging that PR triggers the actual `npm publish` — via
-Trusted Publishing, no token needed — for every package whose version
-changed. No manual `npm version` / `git tag` step.
+1. Bump the `version` field in the affected package(s)' `package.json` by
+   hand (e.g. `packages/expo-shelfit/package.json`). Do this as part of the
+   `develop` → `main` release PR, or as a small standalone version-bump PR.
+2. Merge that PR into `main`.
+3. Create a GitHub Release with a bare `v*.*.*` tag (e.g. `v1.0.1`) —
+   drafting the tag on the Release page is enough, a separate `git tag`
+   push isn't needed. The tag doesn't encode which package(s) it covers, so
+   **say explicitly in the Release body which package(s) changed** (the
+   RELEASE_TEMPLATE.md format already has a spot for this per bullet).
+4. Publishing the Release triggers `.github/workflows/release.yml`, which
+   scans every package under `packages/*`, compares its local
+   `package.json` version against what's currently on npm, and runs
+   `npm publish` (via Trusted Publishing, no token needed) for whichever
+   package(s) differ. Packages whose version didn't change are left alone,
+   so one Release can cover version bumps in more than one package at once.
 
 ## Reporting bugs / requesting features
 
