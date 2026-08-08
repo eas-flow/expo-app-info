@@ -50,13 +50,13 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
           totals[i].android += c.android;
         });
       }
-      progress(`Fetching usage: ${++accountsDone}/${accounts.length} accounts…`);
       return totals;
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
       warnings.push(`${account.name}: ${err.message}`);
-      progress(`Fetching usage: ${++accountsDone}/${accounts.length} accounts…`);
       return null;
+    } finally {
+      progress(`Fetching usage: ${++accountsDone}/${accounts.length} accounts…`);
     }
   });
 

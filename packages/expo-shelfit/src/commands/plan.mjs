@@ -26,14 +26,13 @@ export async function runPlan(client, accounts, opts, accountDisplayNames) {
 
   const subscriptions = await mapWithConcurrency(accounts, CONCURRENCY, async (account) => {
     try {
-      const subscription = await client.fetchSubscription(account.id);
-      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
-      return subscription;
+      return await client.fetchSubscription(account.id);
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
       warnings.push(`${account.name}: ${err.message}`);
-      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
       return null;
+    } finally {
+      progress(`Fetching plan: ${++done}/${accounts.length} accounts…`);
     }
   });
 
