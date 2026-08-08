@@ -78,6 +78,17 @@ describe('run --plan', () => {
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('plan unavailable');
   });
 
+  it('shows "-" without a warning when the account is missing from a malformed (but 2xx) response', async () => {
+    stubFetch([accountsResponse(), jsonResponse({ data: { account: { byId: null } } })]);
+
+    await run(['--plan']);
+
+    const output = tableOutput();
+    expect(output).toContain('myorg');
+    expect(output).toContain('-');
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   it("reports only that platform's concurrency when combined with --platform", async () => {
     stubFetch([accountsResponse(), subscriptionResponseFor()]);
 
