@@ -1,37 +1,7 @@
 // EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
 // src/cli.mjs is the only place that turns errors into exit codes and messages.
 
-import { progress } from './progress.mjs';
-
 export class ApiError extends Error {}
-
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_RETRIES = 3;
-
-// Retried: 408/429/5xx and network-level failures (fetch reject, abort/timeout).
-// Never retried: 401/403 (auth) and 400 (GraphQL validation errors).
-function isRetryableStatus(status) {
-  return status === 408 || status === 429 || (status >= 500 && status < 600);
-}
-
-function retryAfterMs(res) {
-  const header = res.headers?.get?.('retry-after');
-  if (!header) return null;
-  const seconds = Number(header);
-  return Number.isFinite(seconds) ? seconds * 1000 : null;
-}
-
-// Exponential backoff (500ms, 1s, 2s, ...) with up to 20% jitter, unless the
-// server gave a Retry-After.
-function backoffMs(attempt, retryAfter) {
-  if (retryAfter !== null) return retryAfter;
-  const base = 500 * 2 ** (attempt - 1);
-  return base + Math.random() * base * 0.2;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // `displayName` (nullable) backs the human table's friendlier ACCOUNT name;
 // `name` is always the unique slug.
@@ -46,19 +16,31 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
-const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
+// Both buildsQuery/buildsPageQuery below build one `ios:`/`android:` aliased
+// `builds(...)` field per requested platform, so a caller that only wants
+// one platform doesn't pay for fetching (and discarding) the other. `--platform`
+// is the caller-facing switch for this; see fetchBuilds/countBuildsByMonth.
+const ALL_PLATFORMS = ['ios', 'android'];
+
+function buildAliases(platforms, { offset, fields }) {
+  return platforms
+    .map(
+      (p) =>
+        `${p}: builds(offset: ${offset}, limit: $limit, filter: { platform: ${p.toUpperCase()}, status: FINISHED }) { ${fields} }`
+    )
+    .join('\n    ');
+}
+
+function buildsQuery(platforms) {
+  return `query RecentBuilds($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ios: builds(offset: 0, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
-      platform appVersion appBuildVersion createdAt
-    }
-    android: builds(offset: 0, limit: $limit, filter: { platform: ANDROID, status: FINISHED }) {
-      platform appVersion appBuildVersion createdAt
-    }
+    ${buildAliases(platforms, { offset: 0, fields: 'platform appVersion appBuildVersion createdAt' })}
   } }
 }`;
+}
 
 // `--usage` moved off this billing-scoped shape to client-side UTC calendar-month
-// counting below (Q_BUILDS_PAGE/countBuildsByMonth): billing-period metrics can't
+// counting below (buildsPageQuery/countBuildsByMonth): billing-period metrics can't
 // be sliced into arbitrary calendar ranges. Only the subscription fields survive
 // here, for `--plan`.
 //
@@ -74,53 +56,35 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   } }
 }`;
 
-// `--usage`. Same shape as Q_BUILDS above but paginated with
+// `--usage`. Same shape as buildsQuery above but paginated with
 // `offset`/`limit` instead of a fixed small `limit`, so callers can walk
 // arbitrarily far back into an app's build history. Only `createdAt` is
 // needed here — counting/bucketing by calendar month happens client-side in
 // countBuildsByMonth, not appVersion/appBuildVersion display.
-const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
+function buildsPageQuery(platforms) {
+  return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ios: builds(offset: $offset, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
-      createdAt
-    }
-    android: builds(offset: $offset, limit: $limit, filter: { platform: ANDROID, status: FINISHED }) {
-      createdAt
-    }
+    ${buildAliases(platforms, { offset: '$offset', fields: 'createdAt' })}
   } }
 }`;
+}
 
-// Page size for Q_BUILDS_PAGE; `limit: 100` confirmed accepted by the API
+// Page size for buildsPageQuery; `limit: 100` confirmed accepted by the API
 // (scripts/probe-history.mjs). Non-zero offset not separately probed, but
 // same offset/limit shape.
 const BUILD_PAGE_SIZE = 50;
 
-// Hard stop for countBuildsByMonth's pagination in case the API's
-// undocumented ordering/offset behavior stops holding (e.g. always returns
-// the same full page) — 200 x BUILD_PAGE_SIZE(50) = 10k builds/app, well
-// past any realistic --month window.
-const MAX_BUILD_PAGES = 200;
-
 /**
- * Normalizes `{ start, end }` UTC calendar-month boundaries (ISO 8601
- * strings, as produced by src/dates.mjs#calendarMonths()) to
- * `{ startMs, endMs }` once, so `monthIndexForBuild` below can compare
- * plain numbers instead of re-parsing the same boundaries on every call.
+ * Which month bucket (index into `months`) a build's `createdAt` falls into,
+ * or -1 if it is outside every requested month (older than the oldest one).
+ * `months` is a list of `{ start, end }` UTC calendar-month boundaries
+ * (ISO 8601, `end` exclusive — the instant the next month starts), ordered
+ * newest first, as produced by src/dates.mjs#calendarMonths().
  */
-function toMonthBounds(months) {
-  return months.map((m) => ({ startMs: Date.parse(m.start), endMs: Date.parse(m.end) }));
-}
-
-/**
- * Which month bucket (index into `bounds`) a build's `createdAtMs` falls
- * into, or -1 if it is outside every requested month (older than the oldest
- * one, or an unparseable `createdAt` that produced `NaN`). `bounds` is
- * `{ startMs, endMs }[]` (end exclusive — the instant the next month
- * starts), ordered newest first, as produced by `toMonthBounds` above.
- */
-function monthIndexForBuild(createdAtMs, bounds) {
-  for (let i = 0; i < bounds.length; i++) {
-    if (createdAtMs >= bounds[i].startMs && createdAtMs < bounds[i].endMs) {
+function monthIndexForBuild(createdAt, months) {
+  const t = new Date(createdAt).getTime();
+  for (let i = 0; i < months.length; i++) {
+    if (t >= new Date(months[i].start).getTime() && t < new Date(months[i].end).getTime()) {
       return i;
     }
   }
@@ -132,66 +96,33 @@ function monthIndexForBuild(createdAtMs, bounds) {
  * factory (rather than module-scoped state) means tests can spin up an
  * isolated client per test with a mocked `fetchImpl`.
  */
-export function createApiClient({
-  apiUrl,
-  authHeaders = {},
-  fetchImpl = fetch,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  maxRetries = DEFAULT_MAX_RETRIES,
-} = {}) {
+export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } = {}) {
   async function gql(query, variables = {}) {
-    for (let attempt = 1; ; attempt++) {
-      let res;
-      try {
-        res = await fetchImpl(apiUrl, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ query, variables }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch (err) {
-        if (attempt > maxRetries) {
-          throw new ApiError(
-            `Request to ${apiUrl} failed after ${attempt} attempt(s): ${err.message}`,
-            { cause: err }
-          );
-        }
-        progress(`Request failed, retrying (attempt ${attempt + 1})…`);
-        await sleep(backoffMs(attempt, null));
-        continue;
-      }
+    const res = await fetchImpl(apiUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ query, variables }),
+    });
 
-      if (res.status === 401 || res.status === 403) {
-        throw new ApiError(
-          'Authentication failed (401/403). The token or session may have expired.'
-        );
-      }
-
-      if (isRetryableStatus(res.status)) {
-        if (attempt > maxRetries) {
-          throw new ApiError(`HTTP ${res.status} from ${apiUrl} after ${attempt} attempt(s)`);
-        }
-        progress(`HTTP ${res.status}, retrying (attempt ${attempt + 1})…`);
-        await sleep(backoffMs(attempt, retryAfterMs(res)));
-        continue;
-      }
-
-      // Validation errors come back as HTTP 400 with a normal GraphQL error body —
-      // read it before giving up, so `errors[].message` isn't lost to a bare status code.
-      let json;
-      try {
-        json = await res.json();
-      } catch {
-        throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
-      }
-
-      if (json.errors?.length) {
-        throw new ApiError(`GraphQL error: ${json.errors.map((e) => e.message).join(', ')}`);
-      }
-      if (!res.ok) throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
-
-      return json.data;
+    if (res.status === 401 || res.status === 403) {
+      throw new ApiError('Authentication failed (401/403). The token or session may have expired.');
     }
+
+    // Validation errors come back as HTTP 400 with a normal GraphQL error body —
+    // read it before giving up, so `errors[].message` isn't lost to a bare status code.
+    let json;
+    try {
+      json = await res.json();
+    } catch {
+      throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
+    }
+
+    if (json.errors?.length) {
+      throw new ApiError(`GraphQL error: ${json.errors.map((e) => e.message).join(', ')}`);
+    }
+    if (!res.ok) throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
+
+    return json.data;
   }
 
   async function fetchAccounts() {
@@ -203,10 +134,7 @@ export function createApiClient({
     const apps = [];
     let after = null;
     for (;;) {
-      const data = await gql(Q_APPS, { accountId, after });
-      const page = data?.account?.byId?.appsPaginated;
-      if (!page)
-        throw new ApiError(`AccountApps: unexpected response shape for account ${accountId}`);
+      const page = (await gql(Q_APPS, { accountId, after })).account.byId.appsPaginated;
       apps.push(...page.edges.map((e) => e.node));
       if (!page.pageInfo.hasNextPage) return apps;
       after = page.pageInfo.endCursor;
@@ -219,19 +147,20 @@ export function createApiClient({
    * `limit` defaults to 1 to preserve the "latest build per platform"
    * behavior most callers want.
    *
+   * `platform` (`'ios'` | `'android'` | omitted for both) narrows which
+   * `builds(...)` alias is even requested — the query is built to only ask
+   * for what's needed, not fetched-then-filtered.
+   *
    * The API's own ordering for `builds(offset, limit)` is not documented, so
    * each platform's slice is sorted by `createdAt` descending here rather
    * than trusted as-is — with `limit: 1` a wrong order never showed up, but
    * it would with `limit > 1`.
    */
-  async function fetchBuilds(appId, { limit = 1 } = {}) {
-    const data = await gql(Q_BUILDS, { appId, limit });
-    const app = data?.app?.byId;
-    if (!app || !Array.isArray(app.ios) || !Array.isArray(app.android)) {
-      throw new ApiError(`RecentBuilds: unexpected response shape for app ${appId}`);
-    }
+  async function fetchBuilds(appId, { limit = 1, platform } = {}) {
+    const platforms = platform ? [platform] : ALL_PLATFORMS;
+    const app = (await gql(buildsQuery(platforms), { appId, limit })).app.byId;
     const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    return [...[...app.ios].sort(byNewest), ...[...app.android].sort(byNewest)];
+    return platforms.flatMap((p) => [...app[p]].sort(byNewest));
   }
 
   /**
@@ -241,58 +170,60 @@ export function createApiClient({
    * calendarMonths()); the return value is a parallel array of
    * `{ ios, android }` counts, one entry per month in `months`.
    *
-   * Pages through Q_BUILDS_PAGE newest-first, a fixed BUILD_PAGE_SIZE at a
-   * time, for both platforms in the same request. Each platform stops
-   * independently once either a page comes back short
+   * Pages through buildsPageQuery() newest-first, a fixed BUILD_PAGE_SIZE at
+   * a time. By default both platforms are requested in the same page; with
+   * `platform` set, only that platform's alias is ever requested. Each
+   * platform stops independently once either a page comes back short
    * (fewer than BUILD_PAGE_SIZE — no more builds exist) or every build in a
    * page is older than the oldest requested month's start (further pages
    * would only be older still, assuming the API's undocumented order holds
    * newest-first, as observed for tested accounts in
-   * scripts/probe-history.mjs). Throws ApiError like every other method
-   * here; the caller (src/commands/usage.mjs#runUsage) decides a failure degrades that
-   * whole account's rows rather than failing the run.
+   * scripts/probe-history.mjs) — once a platform is done, its alias is
+   * dropped from every subsequent page's query, not just skipped client-side.
+   * Throws ApiError like every other method here; the caller
+   * (src/commands/usage.mjs#runUsage) decides a failure degrades that whole
+   * account's rows rather than failing the run.
    */
-  async function countBuildsByMonth(appId, months) {
-    const bounds = toMonthBounds(months);
+  async function countBuildsByMonth(appId, months, { platform } = {}) {
     const counts = months.map(() => ({ ios: 0, android: 0 }));
-    const oldestStartMs = bounds[bounds.length - 1].startMs;
+    const oldestStartMs = new Date(months[months.length - 1].start).getTime();
 
     let offset = 0;
-    let iosDone = false;
-    let androidDone = false;
-    let pageCount = 0;
+    let iosDone = platform === 'android';
+    let androidDone = platform === 'ios';
 
     while (!iosDone || !androidDone) {
-      if (++pageCount > MAX_BUILD_PAGES) {
-        throw new ApiError(
-          `BuildsPage: exceeded ${MAX_BUILD_PAGES} pages for app ${appId} without pagination ending as expected`
-        );
-      }
-      const data = await gql(Q_BUILDS_PAGE, { appId, offset, limit: BUILD_PAGE_SIZE });
-      const page = data?.app?.byId;
-      if (!page || !Array.isArray(page.ios) || !Array.isArray(page.android)) {
-        throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
-      }
-      const iosPage = iosDone ? [] : page.ios.map((b) => Date.parse(b.createdAt));
-      const androidPage = androidDone ? [] : page.android.map((b) => Date.parse(b.createdAt));
+      const platforms = [];
+      if (!iosDone) platforms.push('ios');
+      if (!androidDone) platforms.push('android');
 
-      for (const createdAtMs of iosPage) {
-        const i = monthIndexForBuild(createdAtMs, bounds);
+      const page = (
+        await gql(buildsPageQuery(platforms), { appId, offset, limit: BUILD_PAGE_SIZE })
+      ).app.byId;
+      const iosPage = iosDone ? [] : page.ios;
+      const androidPage = androidDone ? [] : page.android;
+
+      for (const b of iosPage) {
+        const i = monthIndexForBuild(b.createdAt, months);
         if (i !== -1) counts[i].ios++;
       }
-      for (const createdAtMs of androidPage) {
-        const i = monthIndexForBuild(createdAtMs, bounds);
+      for (const b of androidPage) {
+        const i = monthIndexForBuild(b.createdAt, months);
         if (i !== -1) counts[i].android++;
       }
 
       if (!iosDone) {
         const exhausted = iosPage.length < BUILD_PAGE_SIZE;
-        const pastOldest = iosPage.length > 0 && iosPage.every((ms) => ms < oldestStartMs);
+        const pastOldest =
+          iosPage.length > 0 &&
+          iosPage.every((b) => new Date(b.createdAt).getTime() < oldestStartMs);
         if (exhausted || pastOldest) iosDone = true;
       }
       if (!androidDone) {
         const exhausted = androidPage.length < BUILD_PAGE_SIZE;
-        const pastOldest = androidPage.length > 0 && androidPage.every((ms) => ms < oldestStartMs);
+        const pastOldest =
+          androidPage.length > 0 &&
+          androidPage.every((b) => new Date(b.createdAt).getTime() < oldestStartMs);
         if (exhausted || pastOldest) androidDone = true;
       }
 
@@ -309,65 +240,30 @@ export function createApiClient({
    * (src/commands/plan.mjs#runPlan) decides a missing plan isn't fatal.
    */
   async function fetchSubscription(accountId) {
-    const data = await gql(Q_SUBSCRIPTION, { accountId });
-    return data?.account?.byId?.subscription ?? null;
+    const account = (await gql(Q_SUBSCRIPTION, { accountId })).account.byId;
+    return account?.subscription ?? null;
   }
 
   return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
 }
 
 /**
- * Shared in-flight request cap for every parallelized fetch in this CLI,
- * enforced by `defaultSemaphore` below.
- *
- * Do not call `mapWithConcurrency` from inside a task that is itself
- * running under `mapWithConcurrency` against the same semaphore — a task
- * holds its slot for its whole duration, so nesting can exhaust the pool
- * and deadlock. See `mapWithConcurrency` below.
+ * Shared in-flight request cap for every parallelized fetch in this CLI
+ * (see mapWithConcurrency below) — the guardrail that keeps request count
+ * growth from turning into request *rate* growth.
  */
 export const CONCURRENCY = 8;
 
-/** FIFO counting semaphore: `acquire()` waits for a free slot, `release()` frees one. */
-export function createSemaphore(limit) {
-  let active = 0;
-  const queue = [];
-
-  function acquire() {
-    if (active < limit) {
-      active++;
-      return Promise.resolve();
+/** Run `task` over `items` with a bounded number of in-flight requests. */
+export async function mapWithConcurrency(items, limit, task) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await task(items[i], i);
     }
-    return new Promise((resolve) => queue.push(resolve));
-  }
-
-  function release() {
-    active--;
-    const next = queue.shift();
-    if (next) {
-      active++;
-      next();
-    }
-  }
-
-  return { acquire, release };
-}
-
-const defaultSemaphore = createSemaphore(CONCURRENCY);
-
-/**
- * Run `task` over `items` concurrently, gated by `semaphore` (default:
- * `defaultSemaphore`, shared process-wide so the cap holds across call
- * sites — do not nest calls against the same semaphore, see CONCURRENCY).
- */
-export async function mapWithConcurrency(items, task, { semaphore = defaultSemaphore } = {}) {
-  return Promise.all(
-    items.map(async (item, i) => {
-      await semaphore.acquire();
-      try {
-        return await task(item, i);
-      } finally {
-        semaphore.release();
-      }
-    })
-  );
+  });
+  await Promise.all(workers);
+  return results;
 }

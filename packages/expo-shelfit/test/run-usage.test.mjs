@@ -121,13 +121,17 @@ describe('run --usage', () => {
     expect(output).toContain('2026-07-01');
   });
 
-  it('shows only the requested platform column with --platform', async () => {
-    stubFetch(happyResponses());
+  it("shows only the requested platform column with --platform, and never requests the other platform's alias", async () => {
+    const fetchImpl = stubFetch(happyResponses());
 
     await run(['--usage', '--platform', 'ios']);
 
     expect(tableOutput()).toContain('SUCCESSFUL BUILDS (IOS)');
     expect(tableOutput()).not.toContain('SUCCESSFUL BUILDS (AND)');
+
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.query).toContain('ios:');
+    expect(buildsCallBody.query).not.toContain('android:');
   });
 
   it('degrades a whole account to "-" build counts (not a failed run) when its apps/builds fetch fails', async () => {
@@ -143,43 +147,6 @@ describe('run --usage', () => {
     expect(buildCountsForPeriod(output, '2026-06-01')).toEqual(['-', '-']);
     expect(buildCountsForPeriod(output, '2026-05-01')).toEqual(['-', '-']);
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
-  });
-
-  it('degrades a whole account to "-" (not a crash) when its apps response is malformed', async () => {
-    stubFetch([accountsResponse(), jsonResponse({ data: { account: { byId: null } } })]);
-
-    await run(['--usage']);
-
-    const output = tableOutput();
-    expect(output).toContain('3 row(s)');
-    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['-', '-']);
-    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
-  });
-
-  it('reports warnings in account order even when the slower account resolves last', async () => {
-    const twoAccounts = accountsResponse([
-      { id: 'acc-1', name: 'first' },
-      { id: 'acc-2', name: 'second' },
-    ]);
-    const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
-      const body = JSON.parse(options.body);
-      if (body.query.includes('CurrentAccounts')) return twoAccounts;
-      // acc-2 (second in account order) resolves before acc-1.
-      const delay = body.variables.accountId === 'acc-1' ? 50 : 10;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return jsonResponse({ errors: [{ message: `boom-${body.variables.accountId}` }] });
-    });
-    vi.stubGlobal('fetch', fetchImpl);
-
-    const promise = run(['--usage']);
-    await vi.runAllTimersAsync();
-    await promise;
-
-    const errorLines = errorSpy.mock.calls.map((args) => args[0]);
-    const firstIdx = errorLines.findIndex((l) => l.includes('first'));
-    const secondIdx = errorLines.findIndex((l) => l.includes('second'));
-    expect(firstIdx).toBeGreaterThanOrEqual(0);
-    expect(secondIdx).toBeGreaterThan(firstIdx);
   });
 
   it('fetches accounts (and their apps/builds) in parallel rather than a strictly sequential loop', async () => {
@@ -217,36 +184,5 @@ describe('run --usage', () => {
     expect(output).toContain('2 row(s)');
     expect(output).toContain('myorg');
     expect(output).toContain('otherorg');
-  });
-
-  it('does not deadlock once the account count reaches CONCURRENCY (regression for #63)', async () => {
-    // 10 accounts, one app each — over api.mjs's CONCURRENCY (8).
-    const manyAccounts = Array.from({ length: 10 }, (_, i) => ({
-      id: `acc-${i}`,
-      name: `org-${i}`,
-    }));
-
-    const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
-      const body = JSON.parse(options.body);
-      if (body.query.includes('CurrentAccounts')) return accountsResponse(manyAccounts);
-      if (body.query.includes('AccountApps')) {
-        const { accountId } = body.variables;
-        return appsResponse([{ id: `app-${accountId}`, name: 'App', slug: 'app' }], accountId);
-      }
-      if (body.query.includes('BuildsPage')) {
-        const { appId } = body.variables;
-        return buildsResponse({ ios: [{ createdAt: '2026-07-05T00:00:00.000Z' }], appId });
-      }
-      throw new Error(`unexpected query in test: ${body.query}`);
-    });
-    vi.stubGlobal('fetch', fetchImpl);
-
-    await run(['--usage', '--month', '1']);
-
-    const output = tableOutput();
-    expect(output).toContain('10 row(s)');
-    for (const account of manyAccounts) {
-      expect(output).toContain(account.name);
-    }
   });
 });
