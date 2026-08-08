@@ -7,8 +7,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before filing, check the Roadmap section in the README — your idea
-        might already be planned.
+        Before filing, search the existing issues — your idea might already
+        have been proposed.
 
   - type: textarea
     id: problem

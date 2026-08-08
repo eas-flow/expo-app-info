@@ -42,7 +42,7 @@ npm run lint    # Biome (lint + format check)
 npm run format  # Biome (write formatting fixes)
 ```
 
-All of the above run in CI on every PR (Node 20 / 22 / 24). Please make sure
+All of the above run in CI on every PR (Node 22 / 24). Please make sure
 they pass locally before opening a PR — see `.github/pull_request_template.md`
 for the checklist.
 
@@ -60,10 +60,10 @@ src/commands/
   usage.mjs           --usage (successful builds per UTC calendar month)
   plan.mjs            --plan (current subscription per account)
 src/api.mjs           EAS GraphQL client (throws, never exits/prints) +
-                      mapWithConcurrency/CONCURRENCY
-src/format.mjs        entries → JSON/CSV/display-row conversion (FIELDS/
-                      USAGE_FIELDS/PLAN_FIELDS are the machine-readable
-                      output contract)
+                      createSemaphore/mapWithConcurrency/CONCURRENCY
+src/format.mjs        entries → display-row conversion (there is no
+                      machine-readable output mode; the table is the only
+                      supported output)
 src/render.mjs        Table rendering and column widths
 src/dates.mjs         UTC date helpers (calendar-month boundaries, display
                       formatting) — every date this CLI shows is UTC
@@ -74,8 +74,9 @@ test/                 Vitest tests, one file per src module (run-*.test.mjs
 ```
 
 Imports flow one way — `bin → cli → args / commands/* → api / format /
-render / dates / progress`, with `format` also using `dates`/`render` — and
-never in reverse (e.g. `api.mjs` must not import from `commands/`).
+render / dates / progress`, with `format` also using `dates` and `progress`
+using `render` — and never in reverse (e.g. `api.mjs` must not import from
+`commands/`).
 
 `src/*` files never call `process.exit` or read directly from `process.argv`
 so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.

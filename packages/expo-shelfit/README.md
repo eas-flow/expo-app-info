@@ -13,14 +13,14 @@ English | [日本語](./README.ja.md)
 ```
 $ npx @my-shelfio/expo-shelfit
 
-┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
 ├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
 │ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:05:02 │
 │ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ 2026/05/28-18:40:11 │
 │ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -                   │
-└─────────┘────────────┘────────────┘──────────┘─────────┘───────┘─────────────────────┘
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
 ```
 
 ## 🚀 Features
@@ -65,6 +65,13 @@ This is deliberately the only option. The token is never read from `argv` and ne
 
 ## 🛠️ Usage
 
+`-h` / `--help` prints the full option list, `-v` / `--version` prints the installed version.
+
+```bash
+npx @my-shelfio/expo-shelfit --help
+npx @my-shelfio/expo-shelfit --version
+```
+
 Filter by platform:
 
 ```bash
@@ -78,16 +85,16 @@ npx @my-shelfio/expo-shelfit --history 5
 ```
 
 ```
-┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
 ├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.0   │ 40    │ 2026/06/30-14:05:02 │
 │ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:03:47 │
-└─────────┘────────────┘────────────┘──────────┘─────────┘───────┘─────────────────────┘
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
 ```
 
-`--history <N>` (1–100, default: 1) prints the `N` most recent **successful** builds per platform as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--usage`. `--history 1` prints exactly the same output as leaving the flag off entirely.
+`--history <N>` (1–100, default: 1) prints the `N` most recent **successful** builds per platform as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--usage` or `--plan`. `--history 1` prints exactly the same output as leaving the flag off entirely.
 
 Or ask about successful build counts per calendar month instead of app versions:
 
@@ -96,13 +103,13 @@ npx @my-shelfio/expo-shelfit --usage
 ```
 
 ```
-┌─────────┬─────────────────────────┬──────────────────────────┬──────────────────────────┐
-│ ACCOUNT │ PERIOD                  │ SUCCESSFUL BUILDS (IOS)  │ SUCCESSFUL BUILDS (AND)  │
-├─────────┼─────────────────────────┼──────────────────────────┼──────────────────────────┤
-│ myorg   │ 2026-07-01 → (today)    │ 18                       │ 16                       │
-│ myorg   │ 2026-06-01 → 2026-06-30 │ 14                       │ 15                       │
-│ myorg   │ 2026-05-01 → 2026-05-31 │ 21                       │ 20                       │
-└─────────┴─────────────────────────┴──────────────────────────┴──────────────────────────┘
+┌─────────┬─────────────────────────┬─────────────────────────┬─────────────────────────┐
+│ ACCOUNT │ PERIOD                  │ SUCCESSFUL BUILDS (IOS) │ SUCCESSFUL BUILDS (AND) │
+├─────────┼─────────────────────────┼─────────────────────────┼─────────────────────────┤
+│ myorg   │ 2026-07-01 → (today)    │ 18                      │ 16                      │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ 14                      │ 15                      │
+│ myorg   │ 2026-05-01 → 2026-05-31 │ 21                      │ 20                      │
+└─────────┴─────────────────────────┴─────────────────────────┴─────────────────────────┘
 ```
 
 One row per account **per UTC calendar month** — the last 3 months by default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed client-side from finished builds via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. Pass `--platform ios` or `--platform android` to narrow to just that platform's column. The still-in-progress current month's row shows `(today)` as its end, since it isn't a finished count yet.
@@ -115,11 +122,11 @@ npx @my-shelfio/expo-shelfit --plan
 ```
 
 ```
-┌─────────┐────────────┐────────────┐────────┐─────────────────────────────┐───────────┐
+┌─────────┬────────────┬────────────┬────────┬─────────────────────────────┬───────────┐
 │ ACCOUNT │ PLAN       │ PLAN ID    │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
 ├─────────┼────────────┼────────────┼────────┼─────────────────────────────┼───────────┤
 │ myorg   │ Production │ production │ active │ 2 / 1 / 1                   │ -         │
-└─────────┘────────────┘────────────┘────────┘─────────────────────────────┘───────────┘
+└─────────┴────────────┴────────────┴────────┴─────────────────────────────┴───────────┘
 ```
 
 `--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--usage` or `--history`, since all three are separate display modes.
@@ -179,11 +186,11 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(limit, filter: { platform, status: FINISHED })` — the `N` most recent builds per platform (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
+3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform, status: FINISHED })` — the `N` most recent builds per platform (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
-`--usage` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { status: FINISHED })` for each app and buckets every build by platform + UTC calendar month on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Both accounts and, within each account, apps are fetched with a concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
+`--usage` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { status: FINISHED })` for each app and buckets every build by platform + UTC calendar month on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Accounts and apps are fetched as two flat passes — first every account's app list, then every (account, app) pair — rather than nesting one concurrency-limited pass inside another, which would deadlock against the shared semaphore. Both passes run under the same overall concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
 
 `--plan` skips 2 and 3 entirely, and runs a smaller query per account: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
 

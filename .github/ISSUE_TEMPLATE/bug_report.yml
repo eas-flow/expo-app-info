@@ -31,9 +31,9 @@ body:
   - type: input
     id: cli-version
     attributes:
-      label: shelfit version
+      label: expo-shelfit version
       description: Output of `npx @my-shelfio/expo-shelfit --version`
-      placeholder: "0.1.1"
+      placeholder: "1.0.1"
     validations:
       required: true
 
@@ -53,7 +53,8 @@ body:
       description: >
         A robot token can only see the account that issued it. If you're only
         seeing one account when you expect more, that is very likely the
-        cause — see the README's "On robot tokens" note before filing.
+        cause — see the README FAQ entry "Can I use a robot token instead of
+        a personal access token?" before filing.
       options:
         - Personal access token
         - Robot token

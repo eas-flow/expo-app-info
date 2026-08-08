@@ -5,10 +5,7 @@ English | [日本語](./SECURITY.ja.md)
 ## Supported Versions
 
 Only the latest published version of `expo-shelfit` receives security fixes.
-
-| Version | Supported |
-| ------- | --------- |
-| 0.1.x   | ✅         |
+Older versions are not patched — upgrade before reporting.
 
 ## Reporting a Vulnerability
 
