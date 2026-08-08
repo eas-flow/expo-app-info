@@ -20,5 +20,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-CLAUDE.md
-.claude
+
+# CLAUDE.md and .claude/ are intentionally tracked — they document the repo
+# and carry the release skills. Keep local-only overrides in
+# CLAUDE.local.md / .claude/settings.local.json instead.
+CLAUDE.local.md
+.claude/settings.local.json

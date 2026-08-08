@@ -85,10 +85,14 @@ render / dates / progress`（`format` は `dates` を、`progress` は `render` 
 
 モノレポのため、`packages/*` 配下の各パッケージはそれぞれ独立してバージョン管理・公開されます。CHANGELOGを自動生成する仕組みはありません — GitHub Releasesがリリースノートの正です（`.github/RELEASE_TEMPLATE.md` を参照）。
 
-1. 対象パッケージの `package.json`（例: `packages/expo-shelfit/package.json`）の `version` を手動で編集します。`develop` → `main` のリリースPRに含めるか、軽量な version bump 用の別PRとして行ってください。
+1. 対象パッケージの `package.json`（例: `packages/expo-shelfit/package.json`）の `version` を手動で編集し、続けてリポジトリルートで `npm install --package-lock-only` を実行して `package-lock.json` を追従させます。`package-lock.json` の `packages/*` エントリにも `version` が記録されているため、追従させないとリリースワークフローの `npm ci` が lock 不整合で失敗します。`develop` → `main` のリリースPRに含めるか、軽量な version bump 用の別PRとして行ってください。
 2. そのPRを `main` にマージします。
 3. `v*.*.*` 形式のベアなタグ（例: `v1.0.1`）でGitHub Releaseを作成します — Releaseページでタグを指定するだけでよく、別途 `git tag` をpushする必要はありません。タグにはどのパッケージが対象か含まれないため、**Releaseの本文にどのパッケージが変更されたかを明記してください**（RELEASE_TEMPLATE.mdの各項目にその記載欄があります）。
 4. Releaseを公開すると `.github/workflows/release.yml` がトリガーされ、`packages/*` の全パッケージを走査してローカルの `package.json` バージョンとnpm上の公開済みバージョンを比較し、差分があるパッケージだけ `npm publish` を実行します（Trusted Publishing経由、トークン不要）。バージョンが変わっていないパッケージには手を付けないため、1回のReleaseで複数パッケージのバージョンアップをまとめて扱えます。
+
+なお、バージョンの更新を忘れた場合、手順4は何も publish せずに（`::warning::` を出して）正常終了します。また npm は同一バージョンの再 publish を許さないため、公開後に問題が見つかった場合はパッチ版を切り直すことになります。
+
+Claude Code を使用している場合、上記を代行しつつこれらの罠を防ぐスキルが `.claude/skills/` にあります。`/shelfit-release-draft <package>@<version>` が手順1〜3（バージョン更新＋lockファイル追従、リリースPR、**ドラフト** Release の作成。この時点では何も公開されません）を、`/shelfit-publish` がPRマージ後の手順4（ローカルでの lint/test、npm上のバージョンと差分があるかのドライチェック、ドラフト Release の公開）を担当します。詳細はリポジトリルートの `CLAUDE.md` を参照してください。上記の手作業手順が正であり、スキルはそれをなぞるだけです。
 
 ## バグ報告・機能リクエスト
 
