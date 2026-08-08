@@ -408,6 +408,20 @@ describe('countBuildsByMonth', () => {
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(ApiError);
   });
+
+  it('does not count a build with an unparseable createdAt into any month', async () => {
+    // Date.parse('not-a-date') is NaN, so the build must fall into no
+    // bucket (index -1) rather than throwing or landing in month 0.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage(['2026-07-20T00:00:00.000Z', 'not-a-date'], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
+      { ios: 1, android: 0 },
+      { ios: 0, android: 0 },
+    ]);
+  });
 });
 
 describe('fetchSubscription', () => {

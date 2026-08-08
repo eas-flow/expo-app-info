@@ -66,16 +66,25 @@ const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: 
 const BUILD_PAGE_SIZE = 50;
 
 /**
- * Which month bucket (index into `months`) a build's `createdAt` falls into,
- * or -1 if it is outside every requested month (older than the oldest one).
- * `months` is a list of `{ start, end }` UTC calendar-month boundaries
- * (ISO 8601, `end` exclusive — the instant the next month starts), ordered
- * newest first, as produced by src/dates.mjs#calendarMonths().
+ * Normalizes `{ start, end }` UTC calendar-month boundaries (ISO 8601
+ * strings, as produced by src/dates.mjs#calendarMonths()) to
+ * `{ startMs, endMs }` once, so `monthIndexForBuild` below can compare
+ * plain numbers instead of re-parsing the same boundaries on every call.
  */
-function monthIndexForBuild(createdAt, months) {
-  const t = new Date(createdAt).getTime();
-  for (let i = 0; i < months.length; i++) {
-    if (t >= new Date(months[i].start).getTime() && t < new Date(months[i].end).getTime()) {
+function toMonthBounds(months) {
+  return months.map((m) => ({ startMs: Date.parse(m.start), endMs: Date.parse(m.end) }));
+}
+
+/**
+ * Which month bucket (index into `bounds`) a build's `createdAtMs` falls
+ * into, or -1 if it is outside every requested month (older than the oldest
+ * one, or an unparseable `createdAt` that produced `NaN`). `bounds` is
+ * `{ startMs, endMs }[]` (end exclusive — the instant the next month
+ * starts), ordered newest first, as produced by `toMonthBounds` above.
+ */
+function monthIndexForBuild(createdAtMs, bounds) {
+  for (let i = 0; i < bounds.length; i++) {
+    if (createdAtMs >= bounds[i].startMs && createdAtMs < bounds[i].endMs) {
       return i;
     }
   }
@@ -168,8 +177,9 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * whole account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months) {
+    const bounds = toMonthBounds(months);
     const counts = months.map(() => ({ ios: 0, android: 0 }));
-    const oldestStartMs = new Date(months[months.length - 1].start).getTime();
+    const oldestStartMs = bounds[bounds.length - 1].startMs;
 
     let offset = 0;
     let iosDone = false;
@@ -177,30 +187,26 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
 
     while (!iosDone || !androidDone) {
       const page = (await gql(Q_BUILDS_PAGE, { appId, offset, limit: BUILD_PAGE_SIZE })).app.byId;
-      const iosPage = iosDone ? [] : page.ios;
-      const androidPage = androidDone ? [] : page.android;
+      const iosPage = iosDone ? [] : page.ios.map((b) => Date.parse(b.createdAt));
+      const androidPage = androidDone ? [] : page.android.map((b) => Date.parse(b.createdAt));
 
-      for (const b of iosPage) {
-        const i = monthIndexForBuild(b.createdAt, months);
+      for (const createdAtMs of iosPage) {
+        const i = monthIndexForBuild(createdAtMs, bounds);
         if (i !== -1) counts[i].ios++;
       }
-      for (const b of androidPage) {
-        const i = monthIndexForBuild(b.createdAt, months);
+      for (const createdAtMs of androidPage) {
+        const i = monthIndexForBuild(createdAtMs, bounds);
         if (i !== -1) counts[i].android++;
       }
 
       if (!iosDone) {
         const exhausted = iosPage.length < BUILD_PAGE_SIZE;
-        const pastOldest =
-          iosPage.length > 0 &&
-          iosPage.every((b) => new Date(b.createdAt).getTime() < oldestStartMs);
+        const pastOldest = iosPage.length > 0 && iosPage.every((ms) => ms < oldestStartMs);
         if (exhausted || pastOldest) iosDone = true;
       }
       if (!androidDone) {
         const exhausted = androidPage.length < BUILD_PAGE_SIZE;
-        const pastOldest =
-          androidPage.length > 0 &&
-          androidPage.every((b) => new Date(b.createdAt).getTime() < oldestStartMs);
+        const pastOldest = androidPage.length > 0 && androidPage.every((ms) => ms < oldestStartMs);
         if (exhausted || pastOldest) androidDone = true;
       }
 
