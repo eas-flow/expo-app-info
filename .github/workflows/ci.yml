@@ -23,18 +23,18 @@ jobs:
 
       - run: npm run lint
 
-      - run: npm test
+      - run: npm test --workspaces --if-present
 
-      - run: npm pack --dry-run
+      - run: npm pack --dry-run --workspace=packages/expo-shelfit
 
       - name: Smoke test — --help exits 0
-        run: node bin/cli.mjs --help
+        run: node packages/expo-shelfit/bin/cli.mjs --help
 
       - name: Smoke test — missing EXPO_TOKEN exits 1
         run: |
           set +e
           unset EXPO_TOKEN
-          node bin/cli.mjs
+          node packages/expo-shelfit/bin/cli.mjs
           code=$?
           set -e
           if [ "$code" -ne 1 ]; then

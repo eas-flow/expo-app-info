@@ -6,7 +6,7 @@
 
 ## 開発環境のセットアップ
 
-Node.js **22 LTS以降**が必要です（`engines` フィールドで22以降が必須です）。
+このパッケージは `shelfit` モノレポ（npm workspaces）内にあります。Node.js **22 LTS以降**が必要です（`engines` フィールドで22以降が必須です）。
 
 ```bash
 git clone https://github.com/my-shelfio/shelfit.git
@@ -14,25 +14,36 @@ cd shelfit
 npm install
 ```
 
+リポジトリルートで `npm install` を実行すると、`packages/*` 配下の全パッケージ（このパッケージを含む）の依存関係がインストールされます。
+
 CLIをローカルで実行する:
 
 ```bash
 export EXPO_TOKEN=xxxxx
-npm start
+npm start --workspace=packages/expo-shelfit
 ```
 
 ## チェック
 
+リポジトリルートから、このパッケージを指定して実行します:
+
 ```bash
-npm test              # Vitest
-npm run test:coverage # Vitest（カバレッジ付き）
-npm run lint           # Biome（lint + フォーマットチェック）
-npm run format         # Biome（フォーマットを自動修正）
+npm test --workspace=packages/expo-shelfit               # Vitest
+npm run test:coverage --workspace=packages/expo-shelfit  # Vitest（カバレッジ付き）
+```
+
+lint/format はモノレポ全体に適用され、リポジトリルートから実行します:
+
+```bash
+npm run lint    # Biome（lint + フォーマットチェック）
+npm run format  # Biome（フォーマットを自動修正）
 ```
 
 上記はすべて、PRごとにCI（Node 20 / 22 / 24）で実行されます。PRを開く前にローカルで通過することを確認してください — チェックリストは `.github/pull_request_template.md` を参照してください。
 
 ## プロジェクト構成
+
+以下のパスは `packages/expo-shelfit/` からの相対パスです:
 
 ```
 bin/cli.mjs           シンプルな実行エントリポイント（shebang + src/cli.mjs#run を呼ぶだけ）
@@ -64,7 +75,7 @@ render / dates / progress`（`format` は `dates`/`render` も使用） — 逆�
 ## ブランチ戦略
 
 - `develop` — 統合ブランチ。日々の作業はここにマージされる
-- `main` — リリース済みブランチ。リリースPRで `develop` → `main` に反映した後、`vX.Y.Z` タグをpushして公開ワークフローをトリガーする
+- `main` — リリース済みブランチ。リリースPRで `develop` → `main` に反映される。npmへの公開はそこから自動で行われる（下記リリース参照）— 手動でのタグ付けは不要
 
 ## コミット / PRの規約
 
@@ -72,19 +83,13 @@ render / dates / progress`（`format` は `dates`/`render` も使用） — 逆�
 
 ## リリース（メンテナー向け）
 
-このリポジトリはバージョンアップに [Changesets](https://github.com/changesets/changesets) を使用しています（CHANGELOG生成は無効化しています — GitHub Releasesがリリースノートの正となります。`.github/RELEASE_TEMPLATE.md` を参照）:
+モノレポのため、`packages/*` 配下の各パッケージはそれぞれ独立してバージョン管理・公開されます。バージョンアップには [Changesets](https://github.com/changesets/changesets) を使用しています（CHANGELOG生成は無効化しています — GitHub Releasesがリリースノートの正となります。`.github/RELEASE_TEMPLATE.md` を参照）。リポジトリルートから:
 
 ```bash
-npx changeset          # 変更内容を記述し、バンプ種別を選択
+npx changeset          # 変更内容を記述し、対象パッケージとバンプ種別を選択
 ```
 
-変更を説明するchangesetは、その変更と同じPRに追加してください。リリース時には `npx changeset version` を実行して `package.json` をバンプし、それをコミットして `main` にマージした後、タグを付けてpushします:
-
-```bash
-git tag vX.Y.Z && git push origin vX.Y.Z
-```
-
-タグのpushにより `.github/workflows/release.yml` がトリガーされ、Trusted Publishing経由でnpmに公開されます（トークン不要）。
+変更を説明するchangesetは、その変更と同じPRに追加してください（`changeset` 実行時に `packages/*` のどのパッケージが対象か聞かれます）。changesetが `main` に反映されると（`develop` → `main` のリリースPR経由）、`.github/workflows/release.yml`（[`changesets/action`](https://github.com/changesets/action) を使用）が対象パッケージの `package.json` をバンプする "Version Packages" PR を自動作成・更新します。そのPRをマージすると、バージョンが変わった各パッケージについて実際の `npm publish` がトリガーされます — Trusted Publishing経由（トークン不要）。手動での `npm version` / `git tag` は不要です。
 
 ## バグ報告・機能リクエスト
 

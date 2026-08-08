@@ -1,57 +1,22 @@
 {
-  "name": "@my-shelfio/expo-shelfit",
-  "version": "0.3.1",
-  "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
-  "keywords": [
-    "expo",
-    "eas",
-    "eas-cli",
-    "react-native",
-    "cli",
-    "npx",
-    "version",
-    "app-version",
-    "build",
-    "build-number",
-    "monorepo",
-    "devtools",
-    "shelf",
-    "portfolio"
-  ],
+  "name": "shelfit",
+  "private": true,
+  "description": "Monorepo for the shelfit family of CLI tools — list what you've built, per platform.",
   "license": "MIT",
-  "author": "it0 (https://github.com/my-shelfio/shelfit)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/my-shelfio/shelfit.git"
   },
-  "bugs": {
-    "url": "https://github.com/my-shelfio/shelfit/issues"
-  },
-  "homepage": "https://github.com/my-shelfio/shelfit#readme",
   "type": "module",
-  "bin": {
-    "shelfit": "bin/cli.mjs"
-  },
-  "files": [
-    "bin",
-    "src",
-    "README.md",
-    "LICENSE"
+  "workspaces": [
+    "packages/*"
   ],
-  "engines": {
-    "node": ">=22"
-  },
   "scripts": {
-    "start": "node bin/cli.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "changeset": "changeset"
-  },
-  "publishConfig": {
-    "access": "public"
+    "test": "npm test --workspaces --if-present",
+    "changeset": "changeset",
+    "release": "changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.6",
