@@ -1,17 +1,23 @@
 # Release notes template
 
-This is a monorepo — each package under `packages/*` is released and tagged
-independently by Changesets, using a `<package-name>@<version>` tag (e.g.
-`@my-shelfio/expo-shelfit@1.0.1`), not a bare `vX.Y.Z` tag.
+This is a monorepo — `packages/*` are versioned and published
+independently, but a single Release uses one bare `vX.Y.Z` tag (e.g.
+`v1.0.1`), not a per-package `<package-name>@<version>` tag. The tag alone
+doesn't say which package(s) it covers, so **each bullet below must name
+the affected package** (e.g. `` `@my-shelfio/expo-shelfit`: ... ``) — the
+release workflow relies on comparing `package.json` versions against npm,
+not on parsing this text, but readers (and you, later) need the mapping.
+A single Release can cover version bumps in more than one package at once;
+just list each package's changes under its own bullets or a subheading.
 
-Copy this into the GitHub Release body for the relevant package tag, and
-fill in the placeholders. Drop any category section that has nothing in it
-(e.g. a release with no bug fixes just omits 🐛 Bug Fixes).
+Copy this into the GitHub Release body for the tag, and fill in the
+placeholders. Drop any category section that has nothing in it (e.g. a
+release with no bug fixes just omits 🐛 Bug Fixes).
 
 ```markdown
 ## 🚀 Features
 
-- <!-- New functionality -->
+- <!-- New functionality — prefix each bullet with the package name -->
 
 ## 🐛 Bug Fixes
 
@@ -29,12 +35,12 @@ fill in the placeholders. Drop any category section that has nothing in it
 
 <!-- Optional: breaking changes, upgrade steps, known issues. Omit if none -->
 
-**Full Changelog**: https://github.com/my-shelfio/shelfit/compare/{previous_package_tag}...{package_tag}
+**Full Changelog**: https://github.com/my-shelfio/shelfit/compare/{previous_tag}...{tag}
 ```
 
-For a package's very first release (no previous tag to diff against),
-replace the `Full Changelog` line with a link to the commit history instead:
+For the very first release (no previous tag to diff against), replace the
+`Full Changelog` line with a link to the commit history instead:
 
 ```markdown
-**Full Changelog**: https://github.com/my-shelfio/shelfit/commits/{package_tag}
+**Full Changelog**: https://github.com/my-shelfio/shelfit/commits/{tag}
 ```
