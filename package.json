@@ -1,5 +1,5 @@
 {
-  "name": "expo-app-info",
+  "name": "@my-shelfio/expo-shelfit",
   "version": "0.3.1",
   "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
   "keywords": [
@@ -14,21 +14,23 @@
     "build",
     "build-number",
     "monorepo",
-    "devtools"
+    "devtools",
+    "shelf",
+    "portfolio"
   ],
   "license": "MIT",
-  "author": "it0 (https://github.com/eas-flow/expo-app-info)",
+  "author": "it0 (https://github.com/my-shelfio/shelfit)",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eas-flow/expo-app-info.git"
+    "url": "git+https://github.com/my-shelfio/shelfit.git"
   },
   "bugs": {
-    "url": "https://github.com/eas-flow/expo-app-info/issues"
+    "url": "https://github.com/my-shelfio/shelfit/issues"
   },
-  "homepage": "https://github.com/eas-flow/expo-app-info#readme",
+  "homepage": "https://github.com/my-shelfio/shelfit#readme",
   "type": "module",
   "bin": {
-    "expo-app-info": "bin/cli.mjs"
+    "shelfit": "bin/cli.mjs"
   },
   "files": [
     "bin",

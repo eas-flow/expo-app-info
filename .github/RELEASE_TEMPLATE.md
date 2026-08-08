@@ -25,12 +25,12 @@ release with no bug fixes just omits 🐛 Bug Fixes).
 
 <!-- Optional: breaking changes, upgrade steps, known issues. Omit if none -->
 
-**Full Changelog**: https://github.com/eas-flow/expo-app-info/compare/{previous_tag}...{tag}
+**Full Changelog**: https://github.com/my-shelfio/shelfit/compare/{previous_tag}...{tag}
 ```
 
 For the very first release (no previous tag to diff against), replace the
 `Full Changelog` line with a link to the commit history instead:
 
 ```markdown
-**Full Changelog**: https://github.com/eas-flow/expo-app-info/commits/{tag}
+**Full Changelog**: https://github.com/my-shelfio/shelfit/commits/{tag}
 ```
