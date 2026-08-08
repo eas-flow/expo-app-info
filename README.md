@@ -1,19 +1,19 @@
-# expo-app-info
+# shelfit
 
 English | [日本語](./README.ja.md)
 
-[![npm version](https://img.shields.io/npm/v/expo-app-info.svg)](https://www.npmjs.com/package/expo-app-info)
-[![license](https://img.shields.io/npm/l/expo-app-info.svg)](./LICENSE)
-[![node](https://img.shields.io/node/v/expo-app-info.svg)](https://nodejs.org)
+[![npm version](https://img.shields.io/npm/v/@my-shelfio/expo-shelfit.svg)](https://www.npmjs.com/package/@my-shelfio/expo-shelfit)
+[![license](https://img.shields.io/npm/l/@my-shelfio/expo-shelfit.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/@my-shelfio/expo-shelfit.svg)](https://nodejs.org)
 
 > List every Expo (EAS) app in your account — with its latest build version per platform — from **any** directory.
 
-> **Unofficial.** Not affiliated with or endorsed by Expo.
+> **Unofficial.** Not affiliated with or endorsed by Expo. The name is a nod to lining up every app you've shipped on one shelf.
 
 ```
-$ npx expo-app-info
+$ npx @my-shelfio/expo-shelfit
 
-┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
+┌─────────┐────────────┐───────────┐─────────┐─────────┐───────┐─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
 ├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
@@ -25,7 +25,7 @@ $ npx expo-app-info
 
 ## 🚀 Features
 
-If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-app-info` walks your whole account via the EAS GraphQL API and prints one table.
+If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `shelfit` walks your whole account via the EAS GraphQL API and prints one table.
 
 - Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
 - `--platform` filter to narrow to `ios` or `android`
@@ -38,14 +38,14 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 ## 📦 Install
 
 ```bash
-npx expo-app-info
+npx @my-shelfio/expo-shelfit
 ```
 
 No install required. If you prefer:
 
 ```bash
-npm install -g expo-app-info
-expo-app-info
+npm install -g @my-shelfio/expo-shelfit
+shelfit
 ```
 
 Requires Node.js **22 or later** (the CLI uses the global `fetch`).
@@ -56,7 +56,7 @@ A personal access token in the **`EXPO_TOKEN`** environment variable — that is
 
 ```bash
 export EXPO_TOKEN=xxxxxxxx
-npx expo-app-info
+npx @my-shelfio/expo-shelfit
 ```
 
 Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
@@ -68,17 +68,17 @@ This is deliberately the only option. The token is never read from `argv` and ne
 Filter by platform:
 
 ```bash
-npx expo-app-info --platform ios
+npx @my-shelfio/expo-shelfit --platform ios
 ```
 
 Show more than just the latest build per platform:
 
 ```bash
-npx expo-app-info --history 5
+npx @my-shelfio/expo-shelfit --history 5
 ```
 
 ```
-┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
+┌─────────┐───────────┐───────────┐─────────┐─────────┐───────┐─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
 ├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
@@ -92,17 +92,17 @@ npx expo-app-info --history 5
 Or ask about successful build counts per calendar month instead of app versions:
 
 ```bash
-npx expo-app-info --usage
+npx @my-shelfio/expo-shelfit --usage
 ```
 
 ```
-┌─────────┬─────────────────────────┬──────────────────────────┬──────────────────────────┐
+┌────────┬─────────────────────┐──────────────────────┐──────────────────────┐
 │ ACCOUNT │ PERIOD                  │ SUCCESSFUL BUILDS (IOS)  │ SUCCESSFUL BUILDS (AND)  │
-├─────────┼─────────────────────────┼──────────────────────────┼──────────────────────────┤
+├─────────┼─────────────────────┼──────────────────────┼──────────────────────┤
 │ myorg   │ 2026-07-01 → (today)    │ 18                       │ 16                       │
 │ myorg   │ 2026-06-01 → 2026-06-30 │ 14                       │ 15                       │
 │ myorg   │ 2026-05-01 → 2026-05-31 │ 21                       │ 20                       │
-└─────────┴─────────────────────────┴──────────────────────────┴──────────────────────────┘
+└────────┴─────────────────────┴──────────────────────┴──────────────────────┘
 ```
 
 One row per account **per UTC calendar month** — the last 3 months by default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed client-side from finished builds via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. Pass `--platform ios` or `--platform android` to narrow to just that platform's column. The still-in-progress current month's row shows `(today)` as its end, since it isn't a finished count yet.
@@ -111,15 +111,15 @@ Or just the account's current subscription, with no build counts or billing
 period at all:
 
 ```bash
-npx expo-app-info --plan
+npx @my-shelfio/expo-shelfit --plan
 ```
 
 ```
-┌─────────┐────────────┐────────────┐────────┐─────────────────────────────┐───────────┐
+┌─────────┐───────────┐───────────┐────────┐────────────────────────┐─────────┐
 │ ACCOUNT │ PLAN       │ PLAN ID    │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
-├─────────┼────────────┼────────────┼────────┼─────────────────────────────┼───────────┤
+├─────────┼────────────┼────────────┼────────┼────────────────────────┼─────────┤
 │ myorg   │ Production │ production │ active │ 2 / 1 / 1                   │ -         │
-└─────────┘────────────┘────────────┘────────┘─────────────────────────────┘───────────┘
+└─────────┘───────────┘────────────┘────────┘────────────────────────┘─────────┘
 ```
 
 `--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--usage` or `--history`, since all three are separate display modes.
@@ -130,7 +130,7 @@ npx expo-app-info --plan
 | -------------- | ------------------------------------------------------------- |
 | `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug |
 | `APP` / `SLUG` | EAS project name and slug                                     |
-| `PLATFORM`     | `ios` / `android`                                             |
+| `PLATFORM`     | `ios` / `android`                                              |
 | `VERSION`      | `appVersion` of the latest **successful** build               |
 | `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)    |
 | `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)         |
