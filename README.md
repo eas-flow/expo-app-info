@@ -13,7 +13,7 @@ English | [日本語](./README.ja.md)
 ```
 $ npx @my-shelfio/expo-shelfit
 
-┌─────────┐────────────┐───────────┐─────────┐─────────┐───────┐─────────────────────┐
+┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
 ├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
@@ -78,7 +78,7 @@ npx @my-shelfio/expo-shelfit --history 5
 ```
 
 ```
-┌─────────┐───────────┐───────────┐─────────┐─────────┐───────┐─────────────────────┐
+┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
 ├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
 │ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
@@ -96,13 +96,13 @@ npx @my-shelfio/expo-shelfit --usage
 ```
 
 ```
-┌────────┬─────────────────────┐──────────────────────┐──────────────────────┐
+┌─────────┬─────────────────────────┬──────────────────────────┬──────────────────────────┐
 │ ACCOUNT │ PERIOD                  │ SUCCESSFUL BUILDS (IOS)  │ SUCCESSFUL BUILDS (AND)  │
-├─────────┼─────────────────────┼──────────────────────┼──────────────────────┤
+├─────────┼─────────────────────────┼──────────────────────────┼──────────────────────────┤
 │ myorg   │ 2026-07-01 → (today)    │ 18                       │ 16                       │
 │ myorg   │ 2026-06-01 → 2026-06-30 │ 14                       │ 15                       │
 │ myorg   │ 2026-05-01 → 2026-05-31 │ 21                       │ 20                       │
-└────────┴─────────────────────┴──────────────────────┴──────────────────────┘
+└─────────┴─────────────────────────┴──────────────────────────┴──────────────────────────┘
 ```
 
 One row per account **per UTC calendar month** — the last 3 months by default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed client-side from finished builds via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. Pass `--platform ios` or `--platform android` to narrow to just that platform's column. The still-in-progress current month's row shows `(today)` as its end, since it isn't a finished count yet.
@@ -115,11 +115,11 @@ npx @my-shelfio/expo-shelfit --plan
 ```
 
 ```
-┌─────────┐───────────┐───────────┐────────┐────────────────────────┐─────────┐
+┌─────────┐────────────┐────────────┐────────┐─────────────────────────────┐───────────┐
 │ ACCOUNT │ PLAN       │ PLAN ID    │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
-├─────────┼────────────┼────────────┼────────┼────────────────────────┼─────────┤
+├─────────┼────────────┼────────────┼────────┼─────────────────────────────┼───────────┤
 │ myorg   │ Production │ production │ active │ 2 / 1 / 1                   │ -         │
-└─────────┘───────────┘────────────┘────────┘────────────────────────┘─────────┘
+└─────────┘────────────┘────────────┘────────┘─────────────────────────────┘───────────┘
 ```
 
 `--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--usage` or `--history`, since all three are separate display modes.
@@ -130,7 +130,7 @@ npx @my-shelfio/expo-shelfit --plan
 | -------------- | ------------------------------------------------------------- |
 | `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug |
 | `APP` / `SLUG` | EAS project name and slug                                     |
-| `PLATFORM`     | `ios` / `android`                                              |
+| `PLATFORM`     | `ios` / `android`                                             |
 | `VERSION`      | `appVersion` of the latest **successful** build               |
 | `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)    |
 | `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)         |
@@ -149,7 +149,7 @@ Pass `--platform ios` or `--platform android` to show only that platform's colum
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
 | Column                        | Source                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
 | `ACCOUNT`                     | Same as above                                                                               |
 | `PLAN`                        | `subscription.name`                                                                         |
 | `PLAN ID`                     | `subscription.planId`                                                                       |
