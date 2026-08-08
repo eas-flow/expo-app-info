@@ -231,22 +231,57 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
 }
 
 /**
- * Shared in-flight request cap for every parallelized fetch in this CLI
- * (see mapWithConcurrency below) — the guardrail that keeps request count
- * growth from turning into request *rate* growth.
+ * Shared in-flight request cap for every parallelized fetch in this CLI,
+ * enforced by `defaultSemaphore` below.
+ *
+ * Do not call `mapWithConcurrency` from inside a task that is itself
+ * running under `mapWithConcurrency` against the same semaphore — a task
+ * holds its slot for its whole duration, so nesting can exhaust the pool
+ * and deadlock. See `mapWithConcurrency` below.
  */
 export const CONCURRENCY = 8;
 
-/** Run `task` over `items` with a bounded number of in-flight requests. */
-export async function mapWithConcurrency(items, limit, task) {
-  const results = new Array(items.length);
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const i = cursor++;
-      results[i] = await task(items[i], i);
+/** FIFO counting semaphore: `acquire()` waits for a free slot, `release()` frees one. */
+export function createSemaphore(limit) {
+  let active = 0;
+  const queue = [];
+
+  function acquire() {
+    if (active < limit) {
+      active++;
+      return Promise.resolve();
     }
-  });
-  await Promise.all(workers);
-  return results;
+    return new Promise((resolve) => queue.push(resolve));
+  }
+
+  function release() {
+    active--;
+    const next = queue.shift();
+    if (next) {
+      active++;
+      next();
+    }
+  }
+
+  return { acquire, release };
+}
+
+const defaultSemaphore = createSemaphore(CONCURRENCY);
+
+/**
+ * Run `task` over `items` concurrently, gated by `semaphore` (default:
+ * `defaultSemaphore`, shared process-wide so the cap holds across call
+ * sites — do not nest calls against the same semaphore, see CONCURRENCY).
+ */
+export async function mapWithConcurrency(items, task, { semaphore = defaultSemaphore } = {}) {
+  return Promise.all(
+    items.map(async (item, i) => {
+      await semaphore.acquire();
+      try {
+        return await task(item, i);
+      } finally {
+        semaphore.release();
+      }
+    })
+  );
 }

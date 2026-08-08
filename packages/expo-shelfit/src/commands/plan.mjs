@@ -1,7 +1,7 @@
 // `--plan` display mode. Moved out of src/cli.mjs so every display mode
 // lives in its own file under src/commands/.
 
-import { ApiError, CONCURRENCY, mapWithConcurrency } from '../api.mjs';
+import { ApiError, mapWithConcurrency } from '../api.mjs';
 import { planConcurrencyHeader, toPlanDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
@@ -24,7 +24,7 @@ export async function runPlan(client, accounts, opts, accountDisplayNames) {
   const warnings = [];
   let done = 0;
 
-  const subscriptions = await mapWithConcurrency(accounts, CONCURRENCY, async (account) => {
+  const subscriptions = await mapWithConcurrency(accounts, async (account) => {
     try {
       return await client.fetchSubscription(account.id);
     } catch (err) {

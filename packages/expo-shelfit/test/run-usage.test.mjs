@@ -181,4 +181,35 @@ describe('run --usage', () => {
     expect(output).toContain('myorg');
     expect(output).toContain('otherorg');
   });
+
+  it('does not deadlock once the account count reaches CONCURRENCY (regression for #63)', async () => {
+    // 10 accounts, one app each — over api.mjs's CONCURRENCY (8).
+    const manyAccounts = Array.from({ length: 10 }, (_, i) => ({
+      id: `acc-${i}`,
+      name: `org-${i}`,
+    }));
+
+    const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes('CurrentAccounts')) return accountsResponse(manyAccounts);
+      if (body.query.includes('AccountApps')) {
+        const { accountId } = body.variables;
+        return appsResponse([{ id: `app-${accountId}`, name: 'App', slug: 'app' }], accountId);
+      }
+      if (body.query.includes('BuildsPage')) {
+        const { appId } = body.variables;
+        return buildsResponse({ ios: [{ createdAt: '2026-07-05T00:00:00.000Z' }], appId });
+      }
+      throw new Error(`unexpected query in test: ${body.query}`);
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--usage', '--month', '1']);
+
+    const output = tableOutput();
+    expect(output).toContain('10 row(s)');
+    for (const account of manyAccounts) {
+      expect(output).toContain(account.name);
+    }
+  });
 });
