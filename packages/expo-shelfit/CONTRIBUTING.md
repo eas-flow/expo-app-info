@@ -101,8 +101,12 @@ Releases are the source of truth for release notes, see
 `.github/RELEASE_TEMPLATE.md`.
 
 1. Bump the `version` field in the affected package(s)' `package.json` by
-   hand (e.g. `packages/expo-shelfit/package.json`). Do this as part of the
-   `develop` → `main` release PR, or as a small standalone version-bump PR.
+   hand (e.g. `packages/expo-shelfit/package.json`), then run
+   `npm install --package-lock-only` from the repo root so
+   `package-lock.json` follows — its `packages/*` entries carry a `version`
+   too, and a stale lockfile makes `npm ci` fail in the release workflow. Do
+   this as part of the `develop` → `main` release PR, or as a small
+   standalone version-bump PR.
 2. Merge that PR into `main`.
 3. Create a GitHub Release with a bare `v*.*.*` tag (e.g. `v1.0.1`) —
    drafting the tag on the Release page is enough, a separate `git tag`
@@ -115,6 +119,19 @@ Releases are the source of truth for release notes, see
    `npm publish` (via Trusted Publishing, no token needed) for whichever
    package(s) differ. Packages whose version didn't change are left alone,
    so one Release can cover version bumps in more than one package at once.
+
+Note that if you forget the bump, step 4 publishes nothing and still exits
+successfully (with a `::warning::`), and npm won't let you re-publish a
+version that already exists — recovering means cutting a patch version.
+
+If you use Claude Code, two skills in `.claude/skills/` do the above for
+you and guard those footguns: `/shelfit-release-draft <package>@<version>`
+covers steps 1–3 (bump + lockfile, release PR, **draft** Release — nothing
+is published yet), and `/shelfit-publish` covers step 4 after the PR is
+merged (local lint/test, a dry check that some version actually differs
+from npm, then publishing the draft Release). See the repo-root `CLAUDE.md`.
+The manual steps above remain the source of truth — the skills just follow
+them.
 
 ## Reporting bugs / requesting features
 
