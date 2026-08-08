@@ -46,19 +46,31 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
-const Q_BUILDS = `query RecentBuilds($appId: String!, $limit: Int!) {
+// Both buildsQuery/buildsPageQuery below build one `ios:`/`android:` aliased
+// `builds(...)` field per requested platform, so a caller that only wants
+// one platform doesn't pay for fetching (and discarding) the other. `--platform`
+// is the caller-facing switch for this; see fetchBuilds/countBuildsByMonth.
+const ALL_PLATFORMS = ['ios', 'android'];
+
+function buildAliases(platforms, { offset, fields }) {
+  return platforms
+    .map(
+      (p) =>
+        `${p}: builds(offset: ${offset}, limit: $limit, filter: { platform: ${p.toUpperCase()}, status: FINISHED }) { ${fields} }`
+    )
+    .join('\n    ');
+}
+
+function buildsQuery(platforms) {
+  return `query RecentBuilds($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ios: builds(offset: 0, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
-      platform appVersion appBuildVersion createdAt
-    }
-    android: builds(offset: 0, limit: $limit, filter: { platform: ANDROID, status: FINISHED }) {
-      platform appVersion appBuildVersion createdAt
-    }
+    ${buildAliases(platforms, { offset: 0, fields: 'platform appVersion appBuildVersion createdAt' })}
   } }
 }`;
+}
 
 // `--usage` moved off this billing-scoped shape to client-side UTC calendar-month
-// counting below (Q_BUILDS_PAGE/countBuildsByMonth): billing-period metrics can't
+// counting below (buildsPageQuery/countBuildsByMonth): billing-period metrics can't
 // be sliced into arbitrary calendar ranges. Only the subscription fields survive
 // here, for `--plan`.
 //
@@ -74,23 +86,20 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   } }
 }`;
 
-// `--usage`. Same shape as Q_BUILDS above but paginated with
+// `--usage`. Same shape as buildsQuery above but paginated with
 // `offset`/`limit` instead of a fixed small `limit`, so callers can walk
 // arbitrarily far back into an app's build history. Only `createdAt` is
 // needed here — counting/bucketing by calendar month happens client-side in
 // countBuildsByMonth, not appVersion/appBuildVersion display.
-const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
+function buildsPageQuery(platforms) {
+  return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ios: builds(offset: $offset, limit: $limit, filter: { platform: IOS, status: FINISHED }) {
-      createdAt
-    }
-    android: builds(offset: $offset, limit: $limit, filter: { platform: ANDROID, status: FINISHED }) {
-      createdAt
-    }
+    ${buildAliases(platforms, { offset: '$offset', fields: 'createdAt' })}
   } }
 }`;
+}
 
-// Page size for Q_BUILDS_PAGE; `limit: 100` confirmed accepted by the API
+// Page size for buildsPageQuery; `limit: 100` confirmed accepted by the API
 // (scripts/probe-history.mjs). Non-zero offset not separately probed, but
 // same offset/limit shape.
 const BUILD_PAGE_SIZE = 50;
@@ -219,19 +228,24 @@ export function createApiClient({
    * `limit` defaults to 1 to preserve the "latest build per platform"
    * behavior most callers want.
    *
+   * `platform` (`'ios'` | `'android'` | omitted for both) narrows which
+   * `builds(...)` alias is even requested — the query is built to only ask
+   * for what's needed, not fetched-then-filtered.
+   *
    * The API's own ordering for `builds(offset, limit)` is not documented, so
    * each platform's slice is sorted by `createdAt` descending here rather
    * than trusted as-is — with `limit: 1` a wrong order never showed up, but
    * it would with `limit > 1`.
    */
-  async function fetchBuilds(appId, { limit = 1 } = {}) {
-    const data = await gql(Q_BUILDS, { appId, limit });
+  async function fetchBuilds(appId, { limit = 1, platform } = {}) {
+    const platforms = platform ? [platform] : ALL_PLATFORMS;
+    const data = await gql(buildsQuery(platforms), { appId, limit });
     const app = data?.app?.byId;
-    if (!app || !Array.isArray(app.ios) || !Array.isArray(app.android)) {
+    if (!app || platforms.some((p) => !Array.isArray(app[p]))) {
       throw new ApiError(`RecentBuilds: unexpected response shape for app ${appId}`);
     }
     const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    return [...[...app.ios].sort(byNewest), ...[...app.android].sort(byNewest)];
+    return platforms.flatMap((p) => [...app[p]].sort(byNewest));
   }
 
   /**
@@ -241,25 +255,28 @@ export function createApiClient({
    * calendarMonths()); the return value is a parallel array of
    * `{ ios, android }` counts, one entry per month in `months`.
    *
-   * Pages through Q_BUILDS_PAGE newest-first, a fixed BUILD_PAGE_SIZE at a
-   * time, for both platforms in the same request. Each platform stops
-   * independently once either a page comes back short
+   * Pages through buildsPageQuery() newest-first, a fixed BUILD_PAGE_SIZE at
+   * a time. By default both platforms are requested in the same page; with
+   * `platform` set, only that platform's alias is ever requested. Each
+   * platform stops independently once either a page comes back short
    * (fewer than BUILD_PAGE_SIZE — no more builds exist) or every build in a
    * page is older than the oldest requested month's start (further pages
    * would only be older still, assuming the API's undocumented order holds
    * newest-first, as observed for tested accounts in
-   * scripts/probe-history.mjs). Throws ApiError like every other method
-   * here; the caller (src/commands/usage.mjs#runUsage) decides a failure degrades that
-   * whole account's rows rather than failing the run.
+   * scripts/probe-history.mjs) — once a platform is done, its alias is
+   * dropped from every subsequent page's query, not just skipped client-side.
+   * Throws ApiError like every other method here; the caller
+   * (src/commands/usage.mjs#runUsage) decides a failure degrades that whole
+   * account's rows rather than failing the run.
    */
-  async function countBuildsByMonth(appId, months) {
+  async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
     const counts = months.map(() => ({ ios: 0, android: 0 }));
     const oldestStartMs = bounds[bounds.length - 1].startMs;
 
     let offset = 0;
-    let iosDone = false;
-    let androidDone = false;
+    let iosDone = platform === 'android';
+    let androidDone = platform === 'ios';
     let pageCount = 0;
 
     while (!iosDone || !androidDone) {
@@ -268,9 +285,13 @@ export function createApiClient({
           `BuildsPage: exceeded ${MAX_BUILD_PAGES} pages for app ${appId} without pagination ending as expected`
         );
       }
-      const data = await gql(Q_BUILDS_PAGE, { appId, offset, limit: BUILD_PAGE_SIZE });
+      const platforms = [];
+      if (!iosDone) platforms.push('ios');
+      if (!androidDone) platforms.push('android');
+
+      const data = await gql(buildsPageQuery(platforms), { appId, offset, limit: BUILD_PAGE_SIZE });
       const page = data?.app?.byId;
-      if (!page || !Array.isArray(page.ios) || !Array.isArray(page.android)) {
+      if (!page || platforms.some((p) => !Array.isArray(page[p]))) {
         throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
       }
       const iosPage = iosDone ? [] : page.ios.map((b) => Date.parse(b.createdAt));
