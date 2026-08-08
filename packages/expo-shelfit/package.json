@@ -1,6 +1,6 @@
 {
   "name": "@my-shelfio/expo-shelfit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
   "keywords": [
     "expo",
@@ -31,7 +31,7 @@
   "homepage": "https://github.com/my-shelfio/shelfit/tree/main/packages/expo-shelfit#readme",
   "type": "module",
   "bin": {
-    "shelfit": "bin/cli.mjs"
+    "expo-shelfit": "bin/cli.mjs"
   },
   "files": [
     "bin",

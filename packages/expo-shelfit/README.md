@@ -1,4 +1,4 @@
-# shelfit
+# expo-shelfit
 
 English | [日本語](./README.ja.md)
 
@@ -25,7 +25,7 @@ $ npx @my-shelfio/expo-shelfit
 
 ## 🚀 Features
 
-If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `shelfit` walks your whole account via the EAS GraphQL API and prints one table.
+If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-shelfit` walks your whole account via the EAS GraphQL API and prints one table.
 
 - Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
 - `--platform` filter to narrow to `ios` or `android`
@@ -45,7 +45,7 @@ No install required. If you prefer:
 
 ```bash
 npm install -g @my-shelfio/expo-shelfit
-shelfit
+expo-shelfit
 ```
 
 Requires Node.js **22 or later** (the CLI uses the global `fetch`).
@@ -149,7 +149,7 @@ Pass `--platform ios` or `--platform android` to show only that platform's colum
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
 | Column                        | Source                                                                                      |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
 | `ACCOUNT`                     | Same as above                                                                               |
 | `PLAN`                        | `subscription.name`                                                                         |
 | `PLAN ID`                     | `subscription.planId`                                                                       |

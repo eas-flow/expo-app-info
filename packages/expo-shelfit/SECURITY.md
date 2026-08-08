@@ -4,7 +4,7 @@ English | [日本語](./SECURITY.ja.md)
 
 ## Supported Versions
 
-Only the latest published version of `shelfit` receives security fixes.
+Only the latest published version of `expo-shelfit` receives security fixes.
 
 | Version | Supported |
 | ------- | --------- |
@@ -24,7 +24,7 @@ will be credited in the advisory unless you prefer to stay anonymous.
 
 ## How this CLI handles your access token
 
-`shelfit` reads a single credential: the **`EXPO_TOKEN`** environment
+`expo-shelfit` reads a single credential: the **`EXPO_TOKEN`** environment
 variable. The following are deliberate design constraints, and a violation of
 any of them should be reported as a security issue:
 
@@ -45,7 +45,7 @@ any of them should be reported as a security issue:
 
 ## Dependencies
 
-`shelfit` ships with **zero runtime dependencies** — the published
+`expo-shelfit` ships with **zero runtime dependencies** — the published
 package (`bin/`, `src/`) contains only first-party code, so there is no
 transitive supply chain to audit at install time.
 
