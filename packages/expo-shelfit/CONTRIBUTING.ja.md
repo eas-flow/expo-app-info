@@ -39,7 +39,7 @@ npm run lint    # Biome（lint + フォーマットチェック）
 npm run format  # Biome（フォーマットを自動修正）
 ```
 
-上記はすべて、PRごとにCI（Node 20 / 22 / 24）で実行されます。PRを開く前にローカルで通過することを確認してください — チェックリストは `.github/pull_request_template.md` を参照してください。
+上記はすべて、PRごとにCI（Node 22 / 24）で実行されます。PRを開く前にローカルで通過することを確認してください — チェックリストは `.github/pull_request_template.md` を参照してください。
 
 ## プロジェクト構成
 
@@ -55,9 +55,9 @@ src/commands/
   usage.mjs           --usage（UTC暦月ごとの成功ビルド数）
   plan.mjs            --plan（アカウントごとの現在のサブスクリプション）
 src/api.mjs           EAS GraphQLクライアント（throwのみ、exit/printしない）+
-                      mapWithConcurrency/CONCURRENCY
-src/format.mjs        エントリ → JSON/CSV/表示行への変換（FIELDS/
-                      USAGE_FIELDS/PLAN_FIELDS が機械可読な出力契約）
+                      createSemaphore/mapWithConcurrency/CONCURRENCY
+src/format.mjs        エントリ → 表示行への変換（機械可読な出力モードは
+                      存在せず、テーブルが唯一のサポート対象出力）
 src/render.mjs        テーブル描画と列幅
 src/dates.mjs         UTC日付ヘルパー（暦月境界、表示用フォーマット） —
                       このCLIが表示する日時はすべてUTC
@@ -68,7 +68,7 @@ test/                 Vitestテスト。srcの各モジュールに1ファイル
 ```
 
 importの流れは一方向です — `bin → cli → args / commands/* → api / format /
-render / dates / progress`（`format` は `dates`/`render` も使用） — 逆方向になることはありません（例: `api.mjs` は `commands/` からimportしてはいけない）。
+render / dates / progress`（`format` は `dates` を、`progress` は `render` も使用） — 逆方向になることはありません（例: `api.mjs` は `commands/` からimportしてはいけない）。
 
 `src/*` のファイルは `process.exit` を呼んだり `process.argv` を直接読んだりしないため、単体テスト可能な状態を保っています。プロセスを終了できるのは `bin/cli.mjs` だけです。
 
