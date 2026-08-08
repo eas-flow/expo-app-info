@@ -2,7 +2,7 @@
 
 English | [日本語](./CONTRIBUTING.ja.md)
 
-Thanks for considering a contribution to `shelfit`. This is a small,
+Thanks for considering a contribution to `expo-shelfit`. This is a small,
 dependency-free CLI, so the bar for changes is: does it earn its place?
 
 ## Development setup
@@ -118,7 +118,7 @@ Releases are the source of truth for release notes, see
 ## Reporting bugs / requesting features
 
 Use the issue templates — they ask for the details that actually matter for
-this CLI (Node version, `shelfit --version`, token type), since the
+this CLI (Node version, `expo-shelfit --version`, token type), since the
 EAS API it depends on is unofficial and undocumented.
 
 ## Security issues

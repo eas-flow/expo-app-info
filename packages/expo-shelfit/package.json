@@ -31,7 +31,7 @@
   "homepage": "https://github.com/my-shelfio/shelfit/tree/main/packages/expo-shelfit#readme",
   "type": "module",
   "bin": {
-    "shelfit": "bin/cli.mjs"
+    "expo-shelfit": "bin/cli.mjs"
   },
   "files": [
     "bin",
