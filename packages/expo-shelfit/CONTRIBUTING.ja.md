@@ -75,7 +75,7 @@ render / dates / progress`（`format` は `dates`/`render` も使用） — 逆�
 ## ブランチ戦略
 
 - `develop` — 統合ブランチ。日々の作業はここにマージされる
-- `main` — リリース済みブランチ。リリースPRで `develop` → `main` に反映される。npmへの公開はそこから自動で行われる（下記リリース参照）— 手動でのタグ付けは不要
+- `main` — リリース済みブランチ。リリースPRで `develop` → `main` に反映される。npmへの公開は、そこからGitHub Releaseを作成することでトリガーされる（下記リリース参照）
 
 ## コミット / PRの規約
 
@@ -83,13 +83,12 @@ render / dates / progress`（`format` は `dates`/`render` も使用） — 逆�
 
 ## リリース（メンテナー向け）
 
-モノレポのため、`packages/*` 配下の各パッケージはそれぞれ独立してバージョン管理・公開されます。バージョンアップには [Changesets](https://github.com/changesets/changesets) を使用しています（CHANGELOG生成は無効化しています — GitHub Releasesがリリースノートの正となります。`.github/RELEASE_TEMPLATE.md` を参照）。リポジトリルートから:
+モノレポのため、`packages/*` 配下の各パッケージはそれぞれ独立してバージョン管理・公開されます。CHANGELOGを自動生成する仕組みはありません — GitHub Releasesがリリースノートの正です（`.github/RELEASE_TEMPLATE.md` を参照）。
 
-```bash
-npx changeset          # 変更内容を記述し、対象パッケージとバンプ種別を選択
-```
-
-変更を説明するchangesetは、その変更と同じPRに追加してください（`changeset` 実行時に `packages/*` のどのパッケージが対象か聞かれます）。changesetが `main` に反映されると（`develop` → `main` のリリースPR経由）、`.github/workflows/release.yml`（[`changesets/action`](https://github.com/changesets/action) を使用）が対象パッケージの `package.json` をバンプする "Version Packages" PR を自動作成・更新します。そのPRをマージすると、バージョンが変わった各パッケージについて実際の `npm publish` がトリガーされます — Trusted Publishing経由（トークン不要）。手動での `npm version` / `git tag` は不要です。
+1. 対象パッケージの `package.json`（例: `packages/expo-shelfit/package.json`）の `version` を手動で編集します。`develop` → `main` のリリースPRに含めるか、軽量な version bump 用の別PRとして行ってください。
+2. そのPRを `main` にマージします。
+3. `v*.*.*` 形式のベアなタグ（例: `v1.0.1`）でGitHub Releaseを作成します — Releaseページでタグを指定するだけでよく、別途 `git tag` をpushする必要はありません。タグにはどのパッケージが対象か含まれないため、**Releaseの本文にどのパッケージが変更されたかを明記してください**（RELEASE_TEMPLATE.mdの各項目にその記載欄があります）。
+4. Releaseを公開すると `.github/workflows/release.yml` がトリガーされ、`packages/*` の全パッケージを走査してローカルの `package.json` バージョンとnpm上の公開済みバージョンを比較し、差分があるパッケージだけ `npm publish` を実行します（Trusted Publishing経由、トークン不要）。バージョンが変わっていないパッケージには手を付けないため、1回のReleaseで複数パッケージのバージョンアップをまとめて扱えます。
 
 ## バグ報告・機能リクエスト
 

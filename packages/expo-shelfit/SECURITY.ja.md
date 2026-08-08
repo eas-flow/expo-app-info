@@ -37,7 +37,7 @@ GitHub Security Advisoriesを通じて非公開で報告してください:
 
 `shelfit` は**ランタイム依存関係ゼロ**で提供されています — 公開パッケージ（`bin/`、`src/`）にはファーストパーティのコードしか含まれないため、インストール時に監査すべき推移的なサプライチェーンが存在しません。
 
-開発専用のツール（Vitest、Biome、Changesets）は `devDependencies` に列挙されており、公開されるtarballには含まれません — `package.json` の `files` と `npm pack --dry-run` で確認できます。Dependabot（`.github/dependabot.yml`）がこれらとCIで使用するGitHub Actionsを最新に保っています。
+開発専用のツール（Vitest、Biome）は `devDependencies` に列挙されており、公開されるtarballには含まれません — `package.json` の `files` と `npm pack --dry-run` で確認できます。Dependabot（`.github/dependabot.yml`）がこれらとCIで使用するGitHub Actionsを最新に保っています。
 
 ## CIのシークレット
 

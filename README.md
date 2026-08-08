@@ -17,9 +17,8 @@ More tools (e.g. for GitHub, Qiita) may be added under `packages/` over time.
 
 See each package's own README for install/usage instructions, and
 [CONTRIBUTING.md](./packages/expo-shelfit/CONTRIBUTING.md) for development
-setup, checks, and the release process (this repo uses npm workspaces +
-[Changesets](https://github.com/changesets/changesets) for independent
-per-package versioning).
+setup, checks, and the release process (this repo uses npm workspaces for
+independent per-package versioning and publishing).
 
 ## License
 
