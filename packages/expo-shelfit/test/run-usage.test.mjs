@@ -145,6 +145,17 @@ describe('run --usage', () => {
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
   });
 
+  it('degrades a whole account to "-" (not a crash) when its apps response is malformed', async () => {
+    stubFetch([accountsResponse(), jsonResponse({ data: { account: { byId: null } } })]);
+
+    await run(['--usage']);
+
+    const output = tableOutput();
+    expect(output).toContain('3 row(s)');
+    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['-', '-']);
+    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
+  });
+
   it('fetches accounts (and their apps/builds) in parallel rather than a strictly sequential loop', async () => {
     // Both accounts' apps/builds fetches can legitimately interleave under
     // mapWithConcurrency (unlike --plan's single-hop fetchSubscription, this

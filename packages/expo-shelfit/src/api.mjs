@@ -1,7 +1,37 @@
 // EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
 // src/cli.mjs is the only place that turns errors into exit codes and messages.
 
+import { progress } from './progress.mjs';
+
 export class ApiError extends Error {}
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_RETRIES = 3;
+
+// Retried: 408/429/5xx and network-level failures (fetch reject, abort/timeout).
+// Never retried: 401/403 (auth) and 400 (GraphQL validation errors).
+function isRetryableStatus(status) {
+  return status === 408 || status === 429 || (status >= 500 && status < 600);
+}
+
+function retryAfterMs(res) {
+  const header = res.headers?.get?.('retry-after');
+  if (!header) return null;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) ? seconds * 1000 : null;
+}
+
+// Exponential backoff (500ms, 1s, 2s, ...) with up to 20% jitter, unless the
+// server gave a Retry-After.
+function backoffMs(attempt, retryAfter) {
+  if (retryAfter !== null) return retryAfter;
+  const base = 500 * 2 ** (attempt - 1);
+  return base + Math.random() * base * 0.2;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // `displayName` (nullable) backs the human table's friendlier ACCOUNT name;
 // `name` is always the unique slug.
@@ -65,6 +95,12 @@ const Q_BUILDS_PAGE = `query BuildsPage($appId: String!, $offset: Int!, $limit: 
 // same offset/limit shape.
 const BUILD_PAGE_SIZE = 50;
 
+// Hard stop for countBuildsByMonth's pagination in case the API's
+// undocumented ordering/offset behavior stops holding (e.g. always returns
+// the same full page) — 200 x BUILD_PAGE_SIZE(50) = 10k builds/app, well
+// past any realistic --month window.
+const MAX_BUILD_PAGES = 200;
+
 /**
  * Normalizes `{ start, end }` UTC calendar-month boundaries (ISO 8601
  * strings, as produced by src/dates.mjs#calendarMonths()) to
@@ -96,33 +132,66 @@ function monthIndexForBuild(createdAtMs, bounds) {
  * factory (rather than module-scoped state) means tests can spin up an
  * isolated client per test with a mocked `fetchImpl`.
  */
-export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } = {}) {
+export function createApiClient({
+  apiUrl,
+  authHeaders = {},
+  fetchImpl = fetch,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  maxRetries = DEFAULT_MAX_RETRIES,
+} = {}) {
   async function gql(query, variables = {}) {
-    const res = await fetchImpl(apiUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ query, variables }),
-    });
+    for (let attempt = 1; ; attempt++) {
+      let res;
+      try {
+        res = await fetchImpl(apiUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ query, variables }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (err) {
+        if (attempt > maxRetries) {
+          throw new ApiError(
+            `Request to ${apiUrl} failed after ${attempt} attempt(s): ${err.message}`,
+            { cause: err }
+          );
+        }
+        progress(`Request failed, retrying (attempt ${attempt + 1})…`);
+        await sleep(backoffMs(attempt, null));
+        continue;
+      }
 
-    if (res.status === 401 || res.status === 403) {
-      throw new ApiError('Authentication failed (401/403). The token or session may have expired.');
+      if (res.status === 401 || res.status === 403) {
+        throw new ApiError(
+          'Authentication failed (401/403). The token or session may have expired.'
+        );
+      }
+
+      if (isRetryableStatus(res.status)) {
+        if (attempt > maxRetries) {
+          throw new ApiError(`HTTP ${res.status} from ${apiUrl} after ${attempt} attempt(s)`);
+        }
+        progress(`HTTP ${res.status}, retrying (attempt ${attempt + 1})…`);
+        await sleep(backoffMs(attempt, retryAfterMs(res)));
+        continue;
+      }
+
+      // Validation errors come back as HTTP 400 with a normal GraphQL error body —
+      // read it before giving up, so `errors[].message` isn't lost to a bare status code.
+      let json;
+      try {
+        json = await res.json();
+      } catch {
+        throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
+      }
+
+      if (json.errors?.length) {
+        throw new ApiError(`GraphQL error: ${json.errors.map((e) => e.message).join(', ')}`);
+      }
+      if (!res.ok) throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
+
+      return json.data;
     }
-
-    // Validation errors come back as HTTP 400 with a normal GraphQL error body —
-    // read it before giving up, so `errors[].message` isn't lost to a bare status code.
-    let json;
-    try {
-      json = await res.json();
-    } catch {
-      throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
-    }
-
-    if (json.errors?.length) {
-      throw new ApiError(`GraphQL error: ${json.errors.map((e) => e.message).join(', ')}`);
-    }
-    if (!res.ok) throw new ApiError(`HTTP ${res.status} from ${apiUrl}`);
-
-    return json.data;
   }
 
   async function fetchAccounts() {
@@ -134,7 +203,10 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     const apps = [];
     let after = null;
     for (;;) {
-      const page = (await gql(Q_APPS, { accountId, after })).account.byId.appsPaginated;
+      const data = await gql(Q_APPS, { accountId, after });
+      const page = data?.account?.byId?.appsPaginated;
+      if (!page)
+        throw new ApiError(`AccountApps: unexpected response shape for account ${accountId}`);
       apps.push(...page.edges.map((e) => e.node));
       if (!page.pageInfo.hasNextPage) return apps;
       after = page.pageInfo.endCursor;
@@ -153,7 +225,11 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * it would with `limit > 1`.
    */
   async function fetchBuilds(appId, { limit = 1 } = {}) {
-    const app = (await gql(Q_BUILDS, { appId, limit })).app.byId;
+    const data = await gql(Q_BUILDS, { appId, limit });
+    const app = data?.app?.byId;
+    if (!app || !Array.isArray(app.ios) || !Array.isArray(app.android)) {
+      throw new ApiError(`RecentBuilds: unexpected response shape for app ${appId}`);
+    }
     const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     return [...[...app.ios].sort(byNewest), ...[...app.android].sort(byNewest)];
   }
@@ -184,9 +260,19 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
     let offset = 0;
     let iosDone = false;
     let androidDone = false;
+    let pageCount = 0;
 
     while (!iosDone || !androidDone) {
-      const page = (await gql(Q_BUILDS_PAGE, { appId, offset, limit: BUILD_PAGE_SIZE })).app.byId;
+      if (++pageCount > MAX_BUILD_PAGES) {
+        throw new ApiError(
+          `BuildsPage: exceeded ${MAX_BUILD_PAGES} pages for app ${appId} without pagination ending as expected`
+        );
+      }
+      const data = await gql(Q_BUILDS_PAGE, { appId, offset, limit: BUILD_PAGE_SIZE });
+      const page = data?.app?.byId;
+      if (!page || !Array.isArray(page.ios) || !Array.isArray(page.android)) {
+        throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
+      }
       const iosPage = iosDone ? [] : page.ios.map((b) => Date.parse(b.createdAt));
       const androidPage = androidDone ? [] : page.android.map((b) => Date.parse(b.createdAt));
 
@@ -223,8 +309,8 @@ export function createApiClient({ apiUrl, authHeaders = {}, fetchImpl = fetch } 
    * (src/commands/plan.mjs#runPlan) decides a missing plan isn't fatal.
    */
   async function fetchSubscription(accountId) {
-    const account = (await gql(Q_SUBSCRIPTION, { accountId })).account.byId;
-    return account?.subscription ?? null;
+    const data = await gql(Q_SUBSCRIPTION, { accountId });
+    return data?.account?.byId?.subscription ?? null;
   }
 
   return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };

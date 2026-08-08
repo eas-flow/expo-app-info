@@ -21,7 +21,7 @@ describe('gql (via createApiClient)', () => {
 
   it('throws ApiError on a non-2xx status that is not 401/403', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 500, ok: false }));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl, maxRetries: 0 });
     await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 500/);
   });
 
@@ -55,7 +55,7 @@ describe('gql (via createApiClient)', () => {
         throw new SyntaxError('Unexpected token < in JSON');
       },
     });
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl, maxRetries: 0 });
     await expect(client.fetchAccounts()).rejects.toThrow(/HTTP 502/);
   });
 
@@ -102,6 +102,93 @@ describe('gql (via createApiClient)', () => {
   });
 });
 
+describe('gql retry/timeout', () => {
+  const accountsData = jsonResponse({ data: { meActor: { accounts: [] } } });
+
+  it('does not retry on 401 — fails on the first attempt', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 401, ok: false }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+    await expect(client.fetchAccounts()).rejects.toThrow(/Authentication failed/);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a retryable HTTP status, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({}, { status: 500, ok: false }))
+        .mockResolvedValueOnce(jsonResponse({}, { status: 500, ok: false }))
+        .mockResolvedValueOnce(accountsData);
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const promise = client.fetchAccounts();
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toEqual([]);
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a network-level fetch failure, then succeeds', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi
+        .fn()
+        .mockRejectedValueOnce(new TypeError('fetch failed'))
+        .mockResolvedValueOnce(accountsData);
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const promise = client.fetchAccounts();
+      await vi.runAllTimersAsync();
+      await expect(promise).resolves.toEqual([]);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('gives up after maxRetries and reports the attempt count', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { status: 503, ok: false }));
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl, maxRetries: 2 });
+
+      const promise = client.fetchAccounts();
+      const assertion = expect(promise).rejects.toThrow(/HTTP 503.*after 3 attempt\(s\)/);
+      await vi.runAllTimersAsync();
+      await assertion;
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('honors Retry-After on a 429 instead of the default backoff', async () => {
+    vi.useFakeTimers();
+    try {
+      const res429 = {
+        status: 429,
+        ok: false,
+        headers: { get: (name) => (name === 'retry-after' ? '2' : null) },
+        json: async () => ({}),
+      };
+      const fetchImpl = vi.fn().mockResolvedValueOnce(res429).mockResolvedValueOnce(accountsData);
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const promise = client.fetchAccounts();
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(promise).resolves.toEqual([]);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('fetchApps', () => {
   it('follows cursor pagination until hasNextPage is false', async () => {
     const pages = [
@@ -143,6 +230,15 @@ describe('fetchApps', () => {
       { id: 'a2', name: 'App Two', slug: 'app-two' },
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws ApiError (not TypeError) when the account is missing from the response', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { account: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchApps('acc')).rejects.toThrow(ApiError);
   });
 });
 
@@ -276,6 +372,13 @@ describe('fetchBuilds', () => {
     const builds = await client.fetchBuilds('app-1', { limit: 3 });
 
     expect(builds.map((b) => b.appBuildVersion)).toEqual(['30', '20', '10', '6', '5']);
+  });
+
+  it('throws ApiError (not TypeError) when the app is missing from the response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ data: { app: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchBuilds('app-1')).rejects.toThrow(ApiError);
   });
 });
 
@@ -512,6 +615,22 @@ describe('countBuildsByMonth', () => {
       { ios: 0, android: 0 },
     ]);
   });
+
+  it('throws ApiError (not TypeError) when the app is missing from a builds page response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ data: { app: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(ApiError);
+  });
+
+  it('stops after MAX_BUILD_PAGES instead of looping forever on a non-terminating page sequence', async () => {
+    const fullPage = Array.from({ length: 50 }, () => '2026-07-15T00:00:00.000Z');
+    const fetchImpl = vi.fn().mockImplementation(async () => buildsPage(fullPage, []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(/exceeded 200 pages/);
+    expect(fetchImpl).toHaveBeenCalledTimes(200);
+  });
 });
 
 describe('fetchSubscription', () => {
@@ -576,5 +695,14 @@ describe('fetchSubscription', () => {
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.fetchSubscription('acc-1')).rejects.toThrow(ApiError);
+  });
+
+  it('returns null (not a TypeError) when the account itself is missing from the response', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ data: { account: { byId: null } } }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
   });
 });
