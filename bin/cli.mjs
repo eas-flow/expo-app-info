@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// expo-app-info — List every Expo (EAS) app with its latest build version per platform.
+// shelfit — List every Expo (EAS) app with its latest build version per platform.
 // MIT License. No runtime dependencies.
 //
 // Thin entry point: all logic lives in ../src so it can be unit tested via

@@ -1,17 +1,17 @@
-# expo-app-info
+# shelfit
 
 [English](./README.md) | 日本語
 
-[![npm version](https://img.shields.io/npm/v/expo-app-info.svg)](https://www.npmjs.com/package/expo-app-info)
-[![license](https://img.shields.io/npm/l/expo-app-info.svg)](./LICENSE)
-[![node](https://img.shields.io/node/v/expo-app-info.svg)](https://nodejs.org)
+[![npm version](https://img.shields.io/npm/v/@my-shelfio/expo-shelfit.svg)](https://www.npmjs.com/package/@my-shelfio/expo-shelfit)
+[![license](https://img.shields.io/npm/l/@my-shelfio/expo-shelfit.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/@my-shelfio/expo-shelfit.svg)](https://nodejs.org)
 
 > アカウント内のすべての Expo (EAS) アプリを、プラットフォームごとの最新ビルドバージョンとともに一覧表示 — **どのディレクトリからでも**実行できます。
 
-> **非公式です。** Expo による提供・承認を受けたものではありません。
+> **非公式です。** Expo による提供・承認を受けたものではありません。作り上げたアプリを本棚に並べて眺める、という意味を込めた名前です。
 
 ```
-$ npx expo-app-info
+$ npx @my-shelfio/expo-shelfit
 
 ┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
@@ -25,7 +25,7 @@ $ npx expo-app-info
 
 ## 🚀 機能
 
-複数の Expo アプリを運用している場合、「今、どのアプリがどのバージョンか」にすぐ答える方法がありません — `eas build:list` はプロジェクトディレクトリの**内側でしか**動作せず、一度に1つのプロジェクトしか表示できません。`eas project:list` というコマンドも存在せず、Expo のダッシュボードでは各プロジェクトを1つずつクリックして確認する必要があります。`expo-app-info` は EAS GraphQL API 経由でアカウント全体を走査し、1つの表にまとめて出力します。
+複数の Expo アプリを運用している場合、「今、どのアプリがどのバージョンか」にすぐ答える方法がありません — `eas build:list` はプロジェクトディレクトリの**内側でしか**動作せず、一度に1つのプロジェクトしか表示できません。`eas project:list` というコマンドも存在せず、Expo のダッシュボードでは各プロジェクトを1つずつクリックして確認する必要があります。`shelfit` は EAS GraphQL API 経由でアカウント全体を走査し、1つの表にまとめて出力します。
 
 - アカウント内のすべての Expo (EAS) アプリを、プラットフォームごとの最新の**成功した**ビルドバージョンとともに、**どのディレクトリからでも**一覧表示
 - `ios` または `android` に絞り込む `--platform` フィルター
@@ -38,14 +38,14 @@ $ npx expo-app-info
 ## 📦 インストール
 
 ```bash
-npx expo-app-info
+npx @my-shelfio/expo-shelfit
 ```
 
 インストールは不要です。もしくは:
 
 ```bash
-npm install -g expo-app-info
-expo-app-info
+npm install -g @my-shelfio/expo-shelfit
+shelfit
 ```
 
 Node.js **22以降**が必要です（この CLI はグローバルの `fetch` を使用します）。
@@ -56,7 +56,7 @@ Node.js **22以降**が必要です（この CLI はグローバルの `fetch` �
 
 ```bash
 export EXPO_TOKEN=xxxxxxxx
-npx expo-app-info
+npx @my-shelfio/expo-shelfit
 ```
 
 [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens) で作成できます。
@@ -68,13 +68,13 @@ npx expo-app-info
 プラットフォームで絞り込む:
 
 ```bash
-npx expo-app-info --platform ios
+npx @my-shelfio/expo-shelfit --platform ios
 ```
 
 プラットフォームごとの最新ビルドだけでなく、それ以上を表示する:
 
 ```bash
-npx expo-app-info --history 5
+npx @my-shelfio/expo-shelfit --history 5
 ```
 
 ```
@@ -92,7 +92,7 @@ npx expo-app-info --history 5
 アプリのバージョンではなく、暦月ごとの成功ビルド数を確認することもできます:
 
 ```bash
-npx expo-app-info --usage
+npx @my-shelfio/expo-shelfit --usage
 ```
 
 ```
@@ -110,7 +110,7 @@ npx expo-app-info --usage
 あるいは、ビルド件数や請求期間を含めず、アカウントの現在のサブスクリプションだけを確認することもできます:
 
 ```bash
-npx expo-app-info --plan
+npx @my-shelfio/expo-shelfit --plan
 ```
 
 ```
@@ -148,7 +148,7 @@ npx expo-app-info --plan
 `--plan` の場合、代わりにアカウントごとの1行になり、現在のサブスクリプションのみを表示します（ビルド件数・請求期間は含みません）:
 
 | 列                            | 出典                                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `ACCOUNT`                     | 上記と同様                                                                                                            |
 | `PLAN`                        | `subscription.name`                                                                                                   |
 | `PLAN ID`                     | `subscription.planId`                                                                                                 |

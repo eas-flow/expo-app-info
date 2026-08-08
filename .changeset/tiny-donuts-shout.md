@@ -1,5 +1,5 @@
 ---
-"expo-app-info": major
+"@my-shelfio/expo-shelfit": major
 ---
 
 Remove `--json` / `--csv` output modes. The table was the only real consumer of the machine-readable contract, so it's removed rather than frozen going into v1.0.0 — it can return in a future minor release if there's demand.

@@ -2,17 +2,16 @@
 
 English | [日本語](./CONTRIBUTING.ja.md)
 
-Thanks for considering a contribution to `expo-app-info`. This is a small,
+Thanks for considering a contribution to `shelfit`. This is a small,
 dependency-free CLI, so the bar for changes is: does it earn its place?
 
 ## Development setup
 
-Requires Node.js **22 LTS or newer** (the `engines` field allows 20+, but
-develop against 22+).
+Requires Node.js **22 LTS or newer** (the `engines` field requires 22+).
 
 ```bash
-git clone https://github.com/eas-flow/expo-app-info.git
-cd expo-app-info
+git clone https://github.com/my-shelfio/shelfit.git
+cd shelfit
 npm install
 ```
 
@@ -103,7 +102,7 @@ npm via Trusted Publishing (no token needed).
 ## Reporting bugs / requesting features
 
 Use the issue templates — they ask for the details that actually matter for
-this CLI (Node version, `expo-app-info --version`, token type), since the
+this CLI (Node version, `shelfit --version`, token type), since the
 EAS API it depends on is unofficial and undocumented.
 
 ## Security issues

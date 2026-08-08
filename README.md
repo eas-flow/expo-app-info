@@ -1,17 +1,17 @@
-# expo-app-info
+# shelfit
 
 English | [日本語](./README.ja.md)
 
-[![npm version](https://img.shields.io/npm/v/expo-app-info.svg)](https://www.npmjs.com/package/expo-app-info)
-[![license](https://img.shields.io/npm/l/expo-app-info.svg)](./LICENSE)
-[![node](https://img.shields.io/node/v/expo-app-info.svg)](https://nodejs.org)
+[![npm version](https://img.shields.io/npm/v/@my-shelfio/expo-shelfit.svg)](https://www.npmjs.com/package/@my-shelfio/expo-shelfit)
+[![license](https://img.shields.io/npm/l/@my-shelfio/expo-shelfit.svg)](./LICENSE)
+[![node](https://img.shields.io/node/v/@my-shelfio/expo-shelfit.svg)](https://nodejs.org)
 
 > List every Expo (EAS) app in your account — with its latest build version per platform — from **any** directory.
 
-> **Unofficial.** Not affiliated with or endorsed by Expo.
+> **Unofficial.** Not affiliated with or endorsed by Expo. The name is a nod to lining up every app you've shipped on one shelf.
 
 ```
-$ npx expo-app-info
+$ npx @my-shelfio/expo-shelfit
 
 ┌─────────┐────────────┐────────────┐──────────┐─────────┐───────┐─────────────────────┐
 │ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
@@ -25,7 +25,7 @@ $ npx expo-app-info
 
 ## 🚀 Features
 
-If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-app-info` walks your whole account via the EAS GraphQL API and prints one table.
+If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `shelfit` walks your whole account via the EAS GraphQL API and prints one table.
 
 - Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
 - `--platform` filter to narrow to `ios` or `android`
@@ -38,14 +38,14 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 ## 📦 Install
 
 ```bash
-npx expo-app-info
+npx @my-shelfio/expo-shelfit
 ```
 
 No install required. If you prefer:
 
 ```bash
-npm install -g expo-app-info
-expo-app-info
+npm install -g @my-shelfio/expo-shelfit
+shelfit
 ```
 
 Requires Node.js **22 or later** (the CLI uses the global `fetch`).
@@ -56,7 +56,7 @@ A personal access token in the **`EXPO_TOKEN`** environment variable — that is
 
 ```bash
 export EXPO_TOKEN=xxxxxxxx
-npx expo-app-info
+npx @my-shelfio/expo-shelfit
 ```
 
 Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
@@ -68,13 +68,13 @@ This is deliberately the only option. The token is never read from `argv` and ne
 Filter by platform:
 
 ```bash
-npx expo-app-info --platform ios
+npx @my-shelfio/expo-shelfit --platform ios
 ```
 
 Show more than just the latest build per platform:
 
 ```bash
-npx expo-app-info --history 5
+npx @my-shelfio/expo-shelfit --history 5
 ```
 
 ```
@@ -92,7 +92,7 @@ npx expo-app-info --history 5
 Or ask about successful build counts per calendar month instead of app versions:
 
 ```bash
-npx expo-app-info --usage
+npx @my-shelfio/expo-shelfit --usage
 ```
 
 ```
@@ -111,7 +111,7 @@ Or just the account's current subscription, with no build counts or billing
 period at all:
 
 ```bash
-npx expo-app-info --plan
+npx @my-shelfio/expo-shelfit --plan
 ```
 
 ```
@@ -149,7 +149,7 @@ Pass `--platform ios` or `--platform android` to show only that platform's colum
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
 | Column                        | Source                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
 | `ACCOUNT`                     | Same as above                                                                               |
 | `PLAN`                        | `subscription.name`                                                                         |
 | `PLAN ID`                     | `subscription.planId`                                                                       |

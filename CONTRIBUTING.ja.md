@@ -2,15 +2,15 @@
 
 [English](./CONTRIBUTING.md) | 日本語
 
-`expo-app-info` へのコントリビューションをご検討いただきありがとうございます。これは依存関係のない小さな CLI なので、変更を取り入れる基準は「その変更は入れる価値があるか」です。
+`shelfit` へのコントリビューションをご検討いただきありがとうございます。これは依存関係のない小さな CLI なので、変更を取り入れる基準は「その変更は入れる価値があるか」です。
 
 ## 開発環境のセットアップ
 
-Node.js **22 LTS以降**が必要です（`engines` フィールドは20以降を許容していますが、開発は22以降で行ってください）。
+Node.js **22 LTS以降**が必要です（`engines` フィールドで22以降が必須です）。
 
 ```bash
-git clone https://github.com/eas-flow/expo-app-info.git
-cd expo-app-info
+git clone https://github.com/my-shelfio/shelfit.git
+cd shelfit
 npm install
 ```
 
@@ -88,7 +88,7 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 
 ## バグ報告・機能リクエスト
 
-Issueテンプレートを使用してください — このCLIが依存するEAS APIは非公式かつ非文書化のため、実際に重要な詳細（Nodeのバージョン、`expo-app-info --version`、トークンの種類）を尋ねる内容になっています。
+Issueテンプレートを使用してください — このCLIが依存するEAS APIは非公式かつ非文書化のため、実際に重要な詳細（Nodeのバージョン、`shelfit --version`、トークンの種類）を尋ねる内容になっています。
 
 ## セキュリティに関する問題
 
