@@ -62,6 +62,15 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
+      # --platform narrows the RecentBuilds/BuildsPage query to a single
+      # `ios:`/`android:` alias instead of always requesting both (#59) — a
+      # separate step so a break in that single-alias query shape is
+      # distinguishable from a break in the always-both queries above.
+      - name: Run --platform ios against the live EAS API
+        run: node packages/expo-shelfit/bin/cli.mjs --platform ios
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: File an issue on failure
         if: failure()
         uses: actions/github-script@v9

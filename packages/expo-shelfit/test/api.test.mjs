@@ -380,6 +380,44 @@ describe('fetchBuilds', () => {
 
     await expect(client.fetchBuilds('app-1')).rejects.toThrow(ApiError);
   });
+
+  it('with platform: "ios", queries only the ios alias and returns only ios builds', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  appVersion: '3.2.1',
+                  appBuildVersion: '41',
+                  createdAt: '2026-07-01T00:00:00.000Z',
+                },
+              ],
+            },
+          },
+        },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const builds = await client.fetchBuilds('app-1', { platform: 'ios' });
+
+    expect(builds).toEqual([
+      {
+        platform: 'IOS',
+        appVersion: '3.2.1',
+        appBuildVersion: '41',
+        createdAt: '2026-07-01T00:00:00.000Z',
+      },
+    ]);
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('ios:');
+    expect(query).not.toContain('android:');
+  });
 });
 
 describe('mapWithConcurrency', () => {
@@ -630,6 +668,48 @@ describe('countBuildsByMonth', () => {
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).rejects.toThrow(/exceeded 200 pages/);
     expect(fetchImpl).toHaveBeenCalledTimes(200);
+  });
+
+  it('with { platform: "android" }, never requests the ios alias', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], ['2026-07-05T00:00:00.000Z']));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(
+      client.countBuildsByMonth('app-1', MONTHS, { platform: 'android' })
+    ).resolves.toEqual([
+      { ios: 0, android: 1 },
+      { ios: 0, android: 0 },
+    ]);
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).not.toContain('ios:');
+    expect(query).toContain('android:');
+  });
+
+  it("drops a done platform's alias from subsequent page queries once it finishes", async () => {
+    // ios stays full-page (not done yet) into page 2; android is short on
+    // page 1, so it should be done after page 1 and dropped from page 2's query.
+    const fullIosPage = Array.from({ length: 50 }, (_, i) =>
+      new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString()
+    );
+
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage(fullIosPage, ['2026-07-05T00:00:00.000Z']))
+      .mockResolvedValueOnce(buildsPage(['2026-06-01T00:00:00.000Z'], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    const firstQuery = JSON.parse(fetchImpl.mock.calls[0][1].body).query;
+    expect(firstQuery).toContain('ios:');
+    expect(firstQuery).toContain('android:');
+
+    const secondQuery = JSON.parse(fetchImpl.mock.calls[1][1].body).query;
+    expect(secondQuery).toContain('ios:');
+    expect(secondQuery).not.toContain('android:');
   });
 });
 

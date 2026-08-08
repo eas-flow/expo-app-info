@@ -19,7 +19,10 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
 
     let done = 0;
     const buildsPerApp = await mapWithConcurrency(apps, async (app) => {
-      const builds = await client.fetchBuilds(app.id, { limit: opts.history ?? 1 });
+      const builds = await client.fetchBuilds(app.id, {
+        limit: opts.history ?? 1,
+        platform: opts.platform,
+      });
       progress(`${account.name}: ${++done}/${apps.length} apps…`);
       return builds;
     });
@@ -54,8 +57,12 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
 
   clearProgress();
 
-  const filtered =
-    opts.platform !== null ? entries.filter((e) => e.platform === opts.platform) : entries;
+  // `fetchBuilds` above already only requests the platform in `opts.platform`
+  // (if any), so every remaining entry already matches it — this just drops
+  // the "no builds at all" rows (`platform: null`), matching the pre-#59
+  // behavior where those rows dropped out of the client-side `=== opts.platform`
+  // filter too.
+  const filtered = opts.platform !== null ? entries.filter((e) => e.platform !== null) : entries;
 
   if (filtered.length === 0) {
     console.log('No apps found.');
