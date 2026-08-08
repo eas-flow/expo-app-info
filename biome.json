@@ -6,7 +6,12 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["bin/**", "src/**", "test/**"]
+    "includes": [
+      "packages/*/bin/**",
+      "packages/*/src/**",
+      "packages/*/test/**",
+      "packages/*/scripts/**"
+    ]
   },
   "formatter": {
     "enabled": true,

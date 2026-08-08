@@ -7,7 +7,8 @@ dependency-free CLI, so the bar for changes is: does it earn its place?
 
 ## Development setup
 
-Requires Node.js **22 LTS or newer** (the `engines` field requires 22+).
+This package lives in a `shelfit` monorepo (npm workspaces). Requires
+Node.js **22 LTS or newer** (the `engines` field requires 22+).
 
 ```bash
 git clone https://github.com/my-shelfio/shelfit.git
@@ -15,20 +16,30 @@ cd shelfit
 npm install
 ```
 
+`npm install` at the repo root installs dependencies for every package in
+`packages/*`, including this one.
+
 Run the CLI locally:
 
 ```bash
 export EXPO_TOKEN=xxxxx
-npm start
+npm start --workspace=packages/expo-shelfit
 ```
 
 ## Checks
 
+Run from the repo root, scoped to this package:
+
 ```bash
-npm test              # Vitest
-npm run test:coverage # Vitest with coverage
-npm run lint           # Biome (lint + format check)
-npm run format         # Biome (write formatting fixes)
+npm test --workspace=packages/expo-shelfit               # Vitest
+npm run test:coverage --workspace=packages/expo-shelfit  # Vitest with coverage
+```
+
+Lint/format apply to the whole monorepo and run from the repo root:
+
+```bash
+npm run lint    # Biome (lint + format check)
+npm run format  # Biome (write formatting fixes)
 ```
 
 All of the above run in CI on every PR (Node 20 / 22 / 24). Please make sure
@@ -36,6 +47,8 @@ they pass locally before opening a PR — see `.github/pull_request_template.md`
 for the checklist.
 
 ## Project layout
+
+Paths below are relative to `packages/expo-shelfit/`:
 
 ```
 bin/cli.mjs           Thin executable entry point (shebang + calls src/cli.mjs#run)
@@ -70,8 +83,9 @@ so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.
 ## Branch strategy
 
 - `develop` — integration branch, where day-to-day work merges
-- `main` — released branch; a release PR moves `develop` → `main`, then a
-  `vX.Y.Z` tag is pushed to trigger the publish workflow
+- `main` — released branch; a release PR moves `develop` → `main`. Publishing
+  to npm happens automatically from there (see Releasing below) — there is
+  no manual tagging step.
 
 ## Commit / PR conventions
 
@@ -80,24 +94,23 @@ the PR template's Verification checklist.
 
 ## Releasing (maintainers)
 
-This repo uses [Changesets](https://github.com/changesets/changesets) for
-version bumping (changelog generation is disabled — GitHub Releases are the
-source of truth for release notes, see `.github/RELEASE_TEMPLATE.md`):
+This is a monorepo, so each package under `packages/*` is versioned and
+published independently via [Changesets](https://github.com/changesets/changesets)
+(changelog generation is disabled — GitHub Releases are the source of truth
+for release notes, see `.github/RELEASE_TEMPLATE.md`). From the repo root:
 
 ```bash
-npx changeset          # describe your change, pick a bump type
+npx changeset          # describe your change, pick a package + bump type
 ```
 
-Add a changeset in the same PR as the change it describes. When it's time to
-release, run `npx changeset version` to bump `package.json`, commit that,
-merge to `main`, then tag and push:
-
-```bash
-git tag vX.Y.Z && git push origin vX.Y.Z
-```
-
-The tag push triggers `.github/workflows/release.yml`, which publishes to
-npm via Trusted Publishing (no token needed).
+Add a changeset in the same PR as the change it describes — `changeset` will
+ask which package(s) in `packages/*` are affected. Once changesets land on
+`main` (via the `develop` → `main` release PR), `.github/workflows/release.yml`
+(using [`changesets/action`](https://github.com/changesets/action)) opens or
+updates a "Version Packages" PR that bumps the affected package(s)'
+`package.json`. Merging that PR triggers the actual `npm publish` — via
+Trusted Publishing, no token needed — for every package whose version
+changed. No manual `npm version` / `git tag` step.
 
 ## Reporting bugs / requesting features
 
