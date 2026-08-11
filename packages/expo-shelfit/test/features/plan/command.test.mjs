@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CliError, run } from '../src/cli.mjs';
-import { accountsResponse, fetchSequence, jsonResponse } from './helpers.mjs';
+import { run } from '../../../src/cli.mjs';
+import { CliError } from '../../../src/errors.mjs';
+import { accountsResponse, fetchSequence, jsonResponse } from '../../helpers.mjs';
 
 describe('run --plan', () => {
   let logSpy;
@@ -131,7 +132,7 @@ describe('run --plan', () => {
 
   it('fetches accounts in parallel (mapWithConcurrency) rather than a strictly sequential loop', async () => {
     // Order-preservation is mapWithConcurrency's job, already covered in
-    // test/api.test.mjs; this just proves runPlan uses it end to end for
+    // test/shared/api.test.mjs; this just proves runPlan uses it end to end for
     // --plan specifically.
     stubFetch([
       accountsResponse([

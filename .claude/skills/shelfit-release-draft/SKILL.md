@@ -135,7 +135,7 @@ git diff --name-only
 
 `package.json` の `version` 以外にも、旧バージョン文字列をそのまま書いている箇所がないか確認する。**特に以下は既知の見落としポイント**:
 
-- `packages/<package>/test/run-list.test.mjs` の `--version` 出力を検証するテスト
+- `packages/<package>/test/features/list/command.test.mjs` の `--version` 出力を検証するテスト
   （例: `expect(logSpy).toHaveBeenCalledWith('1.0.1')`）。実装（`src/cli.mjs`）は
   `package.json` の `version` をそのまま出力するだけなので、このテストの期待値を
   更新し忘れると `npm test` が新バージョンで確実に失敗する（CI も PR も red になる）。

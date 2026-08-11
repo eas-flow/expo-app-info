@@ -53,35 +53,43 @@ Paths below are relative to `packages/expo-shelfit/`:
 ```
 bin/cli.mjs           Thin executable entry point (shebang + calls src/cli.mjs#run)
 src/cli.mjs           The top-level run() flow: resolve auth, fetch accounts,
-                      dispatch to a display mode in src/commands/
+                      dispatch to a feature in src/features/
 src/args.mjs          Argument parsing, validation limits, help text
-src/commands/
-  list.mjs            Default app list (and --history)
-  stats.mjs           --stats (successful builds per UTC calendar month)
-  plan.mjs            --plan (current subscription per account)
-src/api.mjs           EAS GraphQL client (throws, never exits/prints) +
-                      createSemaphore/mapWithConcurrency/CONCURRENCY
-src/filter.mjs        Client-side --account / --app resolution (exact slug/
-                      Display name match, "Did you mean" suggestions)
-src/format.mjs        entries → display-row conversion (there is no
-                      machine-readable output mode; the table is the only
-                      supported output)
-src/render.mjs        Table rendering and column widths
-src/dates.mjs         UTC date helpers (calendar-month boundaries, display
+src/errors.mjs        CliError / ApiError
+src/shared/
+  api.mjs               EAS GraphQL client (throws, never exits/prints)
+  concurrency.mjs        createSemaphore / mapWithConcurrency / CONCURRENCY
+  filter.mjs             Client-side --account / --app resolution (exact
+                      slug/Display name match, "Did you mean" suggestions)
+  dates.mjs              UTC date helpers (calendar-month boundaries, display
                       formatting) — every date this CLI shows is UTC
-src/progress.mjs      TTY-only progress reporting on stderr
-test/                 Vitest tests, one file per src module (run-*.test.mjs
-                      are the per-display-mode integration tests for run()
-                      with a mocked fetch; shared bits live in helpers.mjs)
+  cells.mjs               cellOrDash, shared by stats/plan's format.mjs
+  terminal/
+    render.mjs              Table rendering and column widths
+    progress.mjs            TTY-only progress reporting on stderr
+src/features/
+  list/  command.mjs + service.mjs + format.mjs — default app list (and --history)
+  stats/ command.mjs + service.mjs + format.mjs — --stats
+  plan/  command.mjs + format.mjs — --plan (no service.mjs; too small to need one)
+test/                 Vitest tests, mirroring src/ 1:1 (there is no
+                      machine-readable output mode; the table is the only
+                      supported output). test/features/*/command.test.mjs are
+                      the per-feature integration tests for run() with a
+                      mocked fetch; test/features/{list,stats}/service.test.mjs
+                      test fetching/aggregation against a fake client instead;
+                      shared bits live in helpers.mjs
 ```
 
-Imports flow one way — `bin → cli → args / commands/* → api / filter /
-format / render / dates / progress`, with `format` also using `dates` and
-`progress` using `render` — and never in reverse (e.g. `api.mjs` must not
-import from `commands/`).
+Imports flow one way — `bin → cli → args / features/* → shared/*`, with
+`errors.mjs` importable by anything and importing nothing itself — and never
+in reverse (e.g. `shared/api.mjs` must not import from `features/`), and
+never sideways between features (`features/stats/` must not import from
+`features/list/`).
 
 `src/*` files never call `process.exit` or read directly from `process.argv`
-so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.
+so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the
+process. Within a feature, `command.mjs` is the only file that calls
+`console.*`; `service.mjs` (list/stats) returns plain data instead.
 
 ## Branch strategy
 

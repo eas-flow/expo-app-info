@@ -1,9 +1,8 @@
 // EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
 // src/cli.mjs is the only place that turns errors into exit codes and messages.
 
-import { progress } from './progress.mjs';
-
-export class ApiError extends Error {}
+import { ApiError } from '../errors.mjs';
+import { progress } from './terminal/progress.mjs';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
@@ -249,8 +248,8 @@ export function createApiClient({
    * scripts/probe-history.mjs. A finished platform's alias is dropped from
    * subsequent queries rather than skipped client-side.
    *
-   * Throws ApiError; src/commands/stats.mjs#runStats decides that degrades
-   * that account's rows rather than failing the run.
+   * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries decides
+   * that degrades that account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
@@ -315,64 +314,11 @@ export function createApiClient({
     return counts;
   }
 
-  /** Throws like everything else here; src/commands/plan.mjs treats a missing plan as non-fatal. */
+  /** Throws like everything else here; src/features/plan/command.mjs treats a missing plan as non-fatal. */
   async function fetchSubscription(accountId) {
     const data = await gql(Q_SUBSCRIPTION, { accountId });
     return data?.account?.byId?.subscription ?? null;
   }
 
   return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
-}
-
-/**
- * Shared in-flight request cap for every parallelized fetch in this CLI.
- *
- * Do not call `mapWithConcurrency` from inside a task already running under
- * `mapWithConcurrency` against the same semaphore — a task holds its slot for
- * its whole duration, so nesting can exhaust the pool and deadlock.
- */
-export const CONCURRENCY = 8;
-
-/** FIFO counting semaphore: `acquire()` waits for a free slot, `release()` frees one. */
-export function createSemaphore(limit) {
-  let active = 0;
-  const queue = [];
-
-  function acquire() {
-    if (active < limit) {
-      active++;
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => queue.push(resolve));
-  }
-
-  function release() {
-    active--;
-    const next = queue.shift();
-    if (next) {
-      active++;
-      next();
-    }
-  }
-
-  return { acquire, release };
-}
-
-const defaultSemaphore = createSemaphore(CONCURRENCY);
-
-/**
- * `defaultSemaphore` is shared process-wide so the cap holds across call sites
- * — which is also why calls must not be nested, see CONCURRENCY.
- */
-export async function mapWithConcurrency(items, task, { semaphore = defaultSemaphore } = {}) {
-  return Promise.all(
-    items.map(async (item, i) => {
-      await semaphore.acquire();
-      try {
-        return await task(item, i);
-      } finally {
-        semaphore.release();
-      }
-    })
-  );
 }

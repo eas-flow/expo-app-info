@@ -3,7 +3,7 @@
 // (src/cli.mjs and the per-mode flows). Throws CliError on user mistakes;
 // bin/cli.mjs is still the only place that turns errors into exit codes.
 
-import { CliError } from './cli.mjs';
+import { CliError } from './errors.mjs';
 
 const PLATFORMS = ['ios', 'android'];
 // --stats grouping axes. "account" is the default and keeps the original
@@ -21,7 +21,7 @@ const MAX_MONTH = 12;
 
 // `--usage` was this mode's original name. It kept being mistaken for
 // EAS's *billing* usage — which this CLI deliberately never queries (see
-// src/api.mjs#countBuildsByMonth) — so it is now `--stats`. The old flag still
+// src/shared/api.mjs#countBuildsByMonth) — so it is now `--stats`. The old flag still
 // works but warns; it goes away in the next major.
 export const DEPRECATED_USAGE_WARNING =
   '--usage is deprecated and will be removed in the next major version. Use --stats instead.';

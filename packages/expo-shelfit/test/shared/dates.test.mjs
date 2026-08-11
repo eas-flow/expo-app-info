@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { formatBuildDate, localOffset } from '../src/dates.mjs';
+import { formatBuildDate, localOffset } from '../../src/shared/dates.mjs';
 
 describe('formatBuildDate', () => {
   it('returns "-" for a missing date', () => {

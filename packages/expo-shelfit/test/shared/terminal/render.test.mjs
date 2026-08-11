@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bold, dim, pad, renderTable, width } from '../src/render.mjs';
+import { bold, dim, pad, renderTable, width } from '../../../src/shared/terminal/render.mjs';
 
 describe('width', () => {
   it('counts ASCII as 1 column each', () => {

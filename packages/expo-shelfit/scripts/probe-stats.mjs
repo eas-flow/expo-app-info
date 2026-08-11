@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dev-only verification script (not shipped — see package.json#files).
 // --stats counts "successful builds" client-side (paging builds(...FINISHED) and
-// bucketing by platform + UTC calendar month, src/api.mjs#countBuildsByMonth) rather
+// bucketing by platform + UTC calendar month, src/shared/api.mjs#countBuildsByMonth) rather
 // than using EAS's billing/usage metrics. This isn't guaranteed to match EAS's own
 // numbers (e.g. retry handling may differ) — run this against a real account and
 // compare with the EAS dashboard before shipping or changing the counting logic.
@@ -14,8 +14,8 @@
 // Reads the token from the environment only (never printed). Output contains real
 // account/app/build data — review before sharing.
 
-import { createApiClient } from '../src/api.mjs';
-import { calendarMonths } from '../src/dates.mjs';
+import { createApiClient } from '../src/shared/api.mjs';
+import { calendarMonths } from '../src/shared/dates.mjs';
 
 const API_URL = process.env.EXPO_API_URL ?? 'https://api.expo.dev/graphql';
 

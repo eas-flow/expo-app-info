@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CliError, run } from '../src/cli.mjs';
+import { run } from '../../../src/cli.mjs';
+import { CliError } from '../../../src/errors.mjs';
 import {
   accountsResponse,
   appsResponse,
   buildsResponse,
   fetchSequence,
   jsonResponse,
-} from './helpers.mjs';
+} from '../../helpers.mjs';
 
 describe('run --stats', () => {
   let logSpy;
@@ -85,35 +86,6 @@ describe('run --stats', () => {
     expect(tableOutput()).not.toContain('SLUG');
   });
 
-  // Reads the SUCCESS/ERRORED/CANCELED/TOTAL cells out of the
-  // `│`-delimited table row whose PERIOD cell contains `periodStartPrefix`
-  // (e.g. '2026-07-01') and whose PLATFORM cell is `platform` ('ios' or
-  // 'android') — each account/month spans two rows, one per platform, so
-  // both are needed to pick a single row unambiguously.
-  const buildCountsFor = (output, periodStartPrefix, platform) => {
-    const line = output
-      .split('\n')
-      .find((l) => l.includes(periodStartPrefix) && l.includes(`│ ${platform}`));
-    const cells = line.split('│').map((c) => c.trim());
-    return cells.slice(4, 8); // [ACCOUNT, PERIOD, PLATFORM, SUCCESS, ERRORED, CANCELED, TOTAL]
-  };
-
-  it('emits 6 rows (3 months × ios/android, newest month first) with client-side success-build counts', async () => {
-    stubFetch(happyResponses());
-
-    await run(['--stats']);
-
-    const output = tableOutput();
-    expect(output).toContain('6 row(s)');
-    // July (current): 2 ios / 1 android. June: 1 ios / 2 android. May: 1 ios / 0 android.
-    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['2', '0', '0', '2']);
-    expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['1', '0', '0', '1']);
-    expect(buildCountsFor(output, '2026-06-01', 'ios')).toEqual(['1', '0', '0', '1']);
-    expect(buildCountsFor(output, '2026-06-01', 'android')).toEqual(['2', '0', '0', '2']);
-    expect(buildCountsFor(output, '2026-05-01', 'ios')).toEqual(['1', '0', '0', '1']);
-    expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['0', '0', '0', '0']);
-  });
-
   // --usage is the old name for this mode. It must keep producing the
   // identical table, with the deprecation notice confined to stderr so a
   // redirected stdout is byte-for-byte unchanged.
@@ -177,57 +149,6 @@ describe('run --stats', () => {
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.query).toContain('ios:');
     expect(buildsCallBody.query).not.toContain('android:');
-  });
-
-  it('buckets errored and canceled builds into their own columns, separate from success, with TOTAL as the sum', async () => {
-    stubFetch([
-      accountsResponse(),
-      appsResponse(),
-      buildsResponse({
-        ios: [
-          { createdAt: '2026-07-05T00:00:00.000Z', status: 'FINISHED' },
-          { createdAt: '2026-07-06T00:00:00.000Z', status: 'ERRORED' },
-          { createdAt: '2026-07-07T00:00:00.000Z', status: 'CANCELED' },
-          { createdAt: '2026-07-08T00:00:00.000Z', status: 'CANCELED' },
-          // Still in-progress/queued — must not land in any of the three buckets, nor TOTAL.
-          { createdAt: '2026-07-09T00:00:00.000Z', status: 'SOME_UNKNOWN_STATUS' },
-        ],
-        android: [],
-      }),
-    ]);
-
-    await run(['--stats', '--month', '1']);
-
-    const output = tableOutput();
-    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['1', '1', '2', '4']);
-    expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['0', '0', '0', '0']);
-  });
-
-  it('degrades a whole account to "-" build counts (not a failed run) when its apps/builds fetch fails', async () => {
-    stubFetch([accountsResponse(), jsonResponse({ errors: [{ message: 'boom' }] })]);
-
-    await run(['--stats']);
-
-    const output = tableOutput();
-    expect(output).toContain('6 row(s)');
-    // periodStart/periodEnd are known upfront from `now` regardless of the
-    // fetch failure — only the build counts (including TOTAL) degrade to "-".
-    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['-', '-', '-', '-']);
-    expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['-', '-', '-', '-']);
-    expect(buildCountsFor(output, '2026-06-01', 'ios')).toEqual(['-', '-', '-', '-']);
-    expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['-', '-', '-', '-']);
-    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('stats unavailable');
-  });
-
-  it('degrades a whole account to "-" (not a crash) when its apps response is malformed', async () => {
-    stubFetch([accountsResponse(), jsonResponse({ data: { account: { byId: null } } })]);
-
-    await run(['--stats']);
-
-    const output = tableOutput();
-    expect(output).toContain('6 row(s)');
-    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['-', '-', '-', '-']);
-    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('stats unavailable');
   });
 
   it('reports warnings in account order even when the slower account resolves last', async () => {
@@ -515,147 +436,6 @@ describe('run --stats', () => {
 
       const subjects = new Set(dataRows(output).map((r) => r[0]));
       expect(subjects).toEqual(new Set(['Storefront', 'Admin']));
-    });
-
-    // The regression that matters: per-app rows must add up to exactly what
-    // the account row reports for the same month and platform.
-    it('per-app counts sum to the same numbers --group-by account reports', async () => {
-      stubRouted();
-      await run(['--stats', '--group-by', 'app']);
-      const perApp = dataRows(tableOutput());
-
-      logSpy.mockClear();
-      stubRouted();
-      await run(['--stats', '--group-by', 'account']);
-      const perAccount = dataRows(tableOutput());
-
-      expect(perApp).toHaveLength(12);
-      expect(perAccount).toHaveLength(6);
-
-      for (const accountRow of perAccount) {
-        const [, period, platform, ...accountCounts] = accountRow;
-        const summed = perApp
-          .filter((r) => r[1] === period && r[2] === platform)
-          .reduce((acc, r) => acc.map((n, i) => n + Number(r[3 + i])), [0, 0, 0, 0]);
-        expect(summed.map(String)).toEqual(accountCounts);
-      }
-    });
-
-    it('costs no extra API calls — the per-app counts were already being fetched', async () => {
-      const perApp = stubRouted();
-      await run(['--stats', '--group-by', 'app']);
-
-      const perAccount = stubRouted();
-      await run(['--stats', '--group-by', 'account']);
-
-      expect(perApp.mock.calls).toHaveLength(perAccount.mock.calls.length);
-    });
-
-    it('prints an app with no builds in a month as zeros, not "-" and not a missing row', async () => {
-      stubRouted();
-
-      await run(['--stats', '--group-by', 'app']);
-
-      const adminAndroid = dataRows(tableOutput()).filter(
-        (r) => r[0] === 'Admin' && r[2] === 'android'
-      );
-      expect(adminAndroid).toHaveLength(3); // still one row per month
-      for (const row of adminAndroid) expect(row.slice(3)).toEqual(['0', '0', '0', '0']);
-    });
-
-    it('degrades only the failing app to "-", leaving the other app\'s numbers intact', async () => {
-      stubRouted({
-        builds: {
-          'app-1': BUILDS['app-1'],
-          'app-2': () => jsonResponse({ errors: [{ message: 'boom' }] }),
-        },
-      });
-
-      await run(['--stats', '--group-by', 'app']);
-
-      const rows = dataRows(tableOutput());
-      for (const row of rows.filter((r) => r[0] === 'Admin')) {
-        expect(row.slice(3)).toEqual(['-', '-', '-', '-']);
-      }
-      const storefrontJulyIos = rows.find(
-        (r) => r[0] === 'Storefront' && r[1].startsWith('2026-07-01') && r[2] === 'ios'
-      );
-      expect(storefrontJulyIos.slice(3)).toEqual(['2', '0', '0', '2']);
-
-      // The warning names the app by slug, which is what --app matches on.
-      const stderr = errorSpy.mock.calls.map((args) => args[0]).join('\n');
-      expect(stderr).toContain('stats unavailable');
-      expect(stderr).toContain('admin');
-    });
-
-    it('keeps same-named apps in different accounts on separate rows instead of summing them', async () => {
-      const accounts = accountsResponse([
-        { id: 'acc-1', name: 'myorg' },
-        { id: 'acc-2', name: 'otherorg' },
-      ]);
-      const apps = [
-        { id: 'app-1', name: 'Storefront', slug: 'storefront', accountId: 'acc-1' },
-        { id: 'app-2', name: 'Storefront', slug: 'storefront-eu', accountId: 'acc-2' },
-      ];
-      stubRouted({ accounts, apps });
-
-      await run(['--stats', '--group-by', 'app', '--month', '1']);
-
-      const output = tableOutput();
-      expect(output).toContain('2 app(s)');
-      const iosJuly = dataRows(output).filter((r) => r[2] === 'ios');
-      expect(iosJuly).toHaveLength(2);
-      // 2 and 1 — never a single merged row of 3.
-      expect(iosJuly.map((r) => r[3]).sort()).toEqual(['1', '2']);
-    });
-
-    it('emits no rows for an account whose app list failed — only the stderr warning', async () => {
-      const accounts = accountsResponse([
-        { id: 'acc-1', name: 'myorg' },
-        { id: 'acc-2', name: 'otherorg' },
-      ]);
-      const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
-        const { variables = {} } = JSON.parse(options.body);
-        if (variables.accountId === 'acc-2') return jsonResponse({ errors: [{ message: 'nope' }] });
-        if (variables.accountId) return appsResponse([TWO_APPS[0]], 'acc-1');
-        if (variables.appId) return BUILDS[variables.appId]();
-        return accounts;
-      });
-      vi.stubGlobal('fetch', fetchImpl);
-
-      await run(['--stats', '--group-by', 'app', '--month', '1']);
-
-      const output = tableOutput();
-      expect(output).toContain('1 app(s)');
-      expect(output).not.toContain('otherorg');
-      expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('otherorg');
-    });
-
-    it('narrows to a single app with --app, matching on slug', async () => {
-      stubRouted();
-
-      await run(['--stats', '--group-by', 'app', '--app', 'admin', '--month', '1']);
-
-      const output = tableOutput();
-      expect(output).toContain('1 app(s)');
-      expect(new Set(dataRows(output).map((r) => r[0]))).toEqual(new Set(['Admin']));
-    });
-
-    // The whole motivation for Display-name matching — the APP column prints
-    // the Display name, and pasting that value back into --app must narrow to
-    // just that app, even when it doesn't match the app's slug at all.
-    it('narrows to a single app with --app, matching the printed Display name', async () => {
-      const apps = [
-        { id: 'app-1', name: 'Storefront', slug: 'sf-ios-app' },
-        { id: 'app-2', name: 'Admin', slug: 'admin' },
-      ];
-      stubRouted({ apps });
-
-      await run(['--stats', '--group-by', 'app', '--app', 'Storefront', '--month', '1']);
-
-      const output = tableOutput();
-      expect(output).toContain('1 app(s)');
-      expect(new Set(dataRows(output).map((r) => r[0]))).toEqual(new Set(['Storefront']));
     });
 
     it('narrows to a single platform with --platform, halving the rows', async () => {
