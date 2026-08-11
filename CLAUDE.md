@@ -58,6 +58,27 @@ The same applies to `README.md`/`README.ja.md` and this file: if an example
 or a table already shows it, don't restate it in prose. Both READMEs must
 stay in sync, so a cut in one is a cut in the other.
 
+## Nothing redundant in the code either
+
+The same standard applies to what the code does, not just what it says about
+itself. Before adding anything, check it isn't already there:
+
+- **No duplicate work.** A value already fetched or computed is passed along,
+  not fetched again — `--group-by app` adds no API call precisely because the
+  per-app counts were already in hand.
+- **No defensive layers that can't fire.** Don't re-validate what `parseArgs`
+  already rejected, don't null-check a value the caller guarantees, don't
+  catch an error only to rethrow it unchanged.
+- **No option, flag, parameter, or helper without a caller.** This CLI is
+  small and zero-dependency on purpose; anything that only *might* be needed
+  is not needed. Delete it — git remembers.
+- **No second way to do one thing.** One date formatter, one table renderer,
+  one filter path. A near-copy of an existing helper is a sign the original
+  needed a parameter, not a sibling.
+
+When a change makes existing code unreachable or pointless, removing it is
+part of that change, not a follow-up.
+
 ## Commands
 
 Run from the repo root (`npm install` here installs deps for every package):
