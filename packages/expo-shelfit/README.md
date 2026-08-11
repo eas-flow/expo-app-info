@@ -163,7 +163,9 @@ npx @my-shelfio/expo-shelfit --stats
 └─────────┴─────────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┘
 ```
 
-One row per account **per UTC calendar month, per platform** — the last 3 months by default, both `ios` and `android` unless `--platform` narrows to one. Pass `--month <n>` (1–12) to widen the window, e.g. `--stats --month 6` for the last half year. `SUCCESS`/`ERRORED`/`CANCELED` counts are computed client-side from every build in an app's history via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. `TOTAL` is `SUCCESS` + `ERRORED` + `CANCELED` for that row. A build that's still in progress or queued isn't counted into any of the three columns, nor into `TOTAL`, since it hasn't reached a terminal outcome yet. Pass `--platform ios` or `--platform android` to show only that platform's rows (half as many rows, same columns). The still-in-progress current month's rows show `(today)` as their end, since it isn't a finished count yet.
+The last 3 months by default; `--month <n>` (1–12) widens the window, `--platform` narrows to one platform's rows.
+
+Counts are computed client-side from build history, not read from EAS's billing/usage metric — that metric is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match the EAS dashboard. A build that's still in progress or queued has no terminal outcome yet, so it lands in none of the three columns nor in `TOTAL`. The current month ends at `(today)`, since it isn't a finished count.
 
 Pass `--group-by app` to count per app instead of per account — the `ACCOUNT` column becomes `APP`:
 
@@ -184,7 +186,9 @@ npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 
 This answers "which app is responsible for that spike?" without re-running the CLI once per app, and it **costs no extra API calls** — the per-app counts were always being fetched, just summed per account before showing them.
 
-`APP` shows the app's EAS Display name, falling back to its slug. An app with no builds in a month still gets a row, filled with zeros, so "this app wasn't built" is visible rather than absent. Two apps in different accounts that happen to share a Display name stay on separate rows and are never summed together — pass `--account` to tell them apart. Failure handling gets finer-grained too: a failed build-count fetch degrades only that app's rows to `-`, instead of the whole account's. An account whose *app list* couldn't be fetched contributes no rows at all (its apps are unknown), and is reported on stderr.
+An app with no builds in a month still gets a row of zeros, so "this app wasn't built" is visible rather than absent. Two apps in different accounts sharing a Display name stay on separate rows and are never summed — pass `--account` to tell them apart.
+
+Failure handling gets finer-grained too: a failed build-count fetch degrades only that app's rows to `-` rather than the whole account's, while an account whose *app list* couldn't be fetched contributes no rows at all and is reported on stderr.
 
 Or just the account's current subscription, with no build counts or billing
 period at all:
@@ -276,9 +280,9 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
-`--stats` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { platform })` (same unfiltered-by-status shape) for each app and buckets every build by platform + UTC calendar month + status (success/errored/canceled) on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Accounts and apps are fetched as two flat passes — first every account's app list, then every (account, app) pair — rather than nesting one concurrency-limited pass inside another, which would deadlock against the shared semaphore. Both passes run under the same overall concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
+`--stats` reuses steps 1–2, then pages through each app's builds and buckets them by platform + UTC calendar month + status on the client. It queries no billing fields (`subscription`, `billingPeriod`, `usageMetrics`) at all: those are tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform — it silently returns the combined total whatever you pass. Accounts and apps are fetched as two flat passes rather than one nested inside the other, which would deadlock against the shared semaphore.
 
-`--plan` skips 2 and 3 entirely, and runs a smaller query per account: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
+`--plan` skips steps 2–3 and queries `account.byId(...) { subscription }` per account, in parallel.
 
 ### Further reading
 

@@ -170,15 +170,13 @@ export function parseArgs(argv) {
     app: null,
     groupBy: null,
     local: false,
-    // Non-fatal notices for the caller to print (currently only the --usage
-    // deprecation). Collected here rather than printed so parseArgs stays a
-    // pure function, the same reason src/* never calls process.exit.
+    // Collected rather than printed, so parseArgs stays I/O-free for the same
+    // reason src/* never calls process.exit.
     warnings: [],
   };
 
-  // --stats and its deprecated alias --usage are tracked separately so error
-  // messages can echo the flag the user actually typed: `--usage --plan`
-  // must not report `--stats`, a flag they never wrote.
+  // Tracked separately so error messages can echo the flag the user actually
+  // typed: `--usage --plan` must not report `--stats`, which they never wrote.
   let sawStats = false;
   let sawDeprecatedUsage = false;
 
@@ -227,8 +225,6 @@ export function parseArgs(argv) {
   }
 
   opts.stats = sawStats || sawDeprecatedUsage;
-  // The flag name to use in this run's error messages: whichever the user
-  // typed, preferring --stats if somehow both were passed.
   const statsFlag = sawStats ? '--stats' : '--usage';
   if (sawDeprecatedUsage) opts.warnings.push(DEPRECATED_USAGE_WARNING);
 
@@ -280,8 +276,7 @@ export function parseArgs(argv) {
     opts.groupBy = normalized;
   }
 
-  // Display modes are mutually exclusive. Order here also decides which
-  // pair gets reported first when 3 are set at once.
+  // Order here decides which pair gets reported first when 3 are set at once.
   const activeModes = EXCLUSIVE_MODES.filter((mode) => isModeActive(opts, mode));
   if (activeModes.length >= 2) {
     const [subject, other] = activeModes;
@@ -290,23 +285,16 @@ export function parseArgs(argv) {
     );
   }
 
-  // Flags that only make sense alongside a specific display mode. The mode
-  // wasn't given here, so there is no typed flag name to echo — always name
-  // the current one (--stats), never the deprecated alias.
+  // The required mode wasn't given, so there is no typed flag name to echo —
+  // always name the current one (--stats), never the deprecated alias.
   for (const [flag, requiredMode] of Object.entries(MODE_ONLY_FLAGS)) {
     if (opts[flag] !== null && !opts[requiredMode]) {
       throw new CliError(`${flagName(flag)} can only be used with --${requiredMode}.`);
     }
   }
 
-  // Flags that are common filters but don't make sense with one or more
-  // particular display modes — the inverse of MODE_ONLY_FLAGS above. Values
-  // are arrays since a flag can be incompatible with more than one mode
-  // (--local with both --stats and --plan). Truthy check on opts[flag] works
-  // for both nullable-string flags (--app) and boolean flags (--local).
-  // --app is incompatible with --plan since --plan is account-only and never
-  // fetches apps (see src/commands/plan.mjs); --local is incompatible with
-  // --stats/--plan since neither has a BUILD DATE column for it to affect.
+  // The inverse of MODE_ONLY_FLAGS. A truthy check covers both the
+  // nullable-string flags (--app) and the boolean ones (--local).
   for (const [flag, incompatibleModes] of Object.entries(MODE_INCOMPATIBLE_FLAGS)) {
     if (!opts[flag]) continue;
     for (const mode of incompatibleModes) {
@@ -321,18 +309,20 @@ export function parseArgs(argv) {
 
 const EXCLUSIVE_MODES = ['plan', 'history', 'stats'];
 const MODE_ONLY_FLAGS = { month: 'stats', groupBy: 'stats' };
+// --app is account-only under --plan, which never fetches apps; --local has no
+// BUILD DATE column to affect under --stats/--plan.
 const MODE_INCOMPATIBLE_FLAGS = { app: ['plan'], local: ['stats', 'plan'] };
 
-// opts key -> CLI spelling, for the flags where the two differ (camelCase
-// opts can't be turned into `--group-by` by prefixing alone).
+// For the flags whose opts key and CLI spelling differ — camelCase can't be
+// turned into `--group-by` by prefixing alone.
 const FLAG_NAMES = { groupBy: '--group-by' };
 
 function flagName(key) {
   return FLAG_NAMES[key] ?? `--${key}`;
 }
 
-// Every mode's flag is just `--<mode>` except stats, which has the deprecated
-// --usage alias — there, echo whichever name this run was invoked with.
+// stats is the only mode with an alias, so it's the only one whose flag name
+// depends on what this run was invoked with.
 function modeFlag(mode, statsFlag) {
   return mode === 'stats' ? statsFlag : `--${mode}`;
 }

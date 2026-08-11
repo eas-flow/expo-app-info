@@ -1,8 +1,3 @@
-// Default display mode (and `--history <N>`): one row per app/platform with
-// the latest build attempt(s), whatever their status. Moved out of
-// src/cli.mjs so every display mode lives in its own file under
-// src/commands/.
-
 import { mapWithConcurrency } from '../api.mjs';
 import { createAppFilter } from '../filter.mjs';
 import { buildDateHeader, toDisplayRows } from '../format.mjs';
@@ -10,20 +5,16 @@ import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
- * The default app list: every account's apps with their latest (or, with
- * `--history <N>`, latest N) build attempt(s) per platform — regardless of
- * status (before that, only FINISHED builds were ever fetched, so an app
- * whose most recent attempt errored or was canceled silently fell back to
- * an older successful one, or showed "-" if it had never finished a build
- * at all).
+ * The latest build *attempt* per platform regardless of status, so an app
+ * whose most recent attempt errored or was canceled shows that rather than
+ * silently falling back to an older successful build.
  */
 export async function runList(client, accounts, opts, accountDisplayNames) {
   const appFilter = createAppFilter(opts.app);
   const entries = [];
   for (const account of accounts) {
     progress(`Fetching apps in ${account.name}…`);
-    // --app narrows here, right after fetchApps() and before fetchBuilds()
-    // below, so a non-matching account never pays for a build fetch.
+    // Narrowed before fetchBuilds(), so a non-matching app never pays for it.
     const apps = appFilter.filter(await client.fetchApps(account.id));
 
     let done = 0;
@@ -66,17 +57,14 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
     });
   }
 
-  // Throws if --app was set but never matched any account's apps above —
-  // before printing anything, matching every other display mode.
+  // Before printing anything, so a --app that matched nothing fails cleanly.
   appFilter.finalize();
 
   clearProgress();
 
-  // `fetchBuilds` above already only requests the platform in `opts.platform`
-  // (if any), so every remaining entry already matches it — this just drops
-  // the "no builds at all" rows (`platform: null`), matching the behavior
-  // from when the platform filter was purely client-side (`=== opts.platform`),
-  // where those rows dropped out of that comparison too.
+  // fetchBuilds already asked for `opts.platform` only, so this drops nothing
+  // but the "no builds at all" rows — which a client-side platform comparison
+  // would have dropped too.
   const filtered = opts.platform !== null ? entries.filter((e) => e.platform !== null) : entries;
 
   if (filtered.length === 0) {
@@ -99,9 +87,8 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
       toDisplayRows(filtered, { accountDisplayNames, local: opts.local })
     )
   );
-  // The effective count is what matters here, not whether --history was
-  // typed: `--history 1` must read identically to not passing the flag at
-  // all, since it produces the exact same query and the exact same rows.
+  // `--history 1` must read identically to passing no flag at all — same
+  // query, same rows — so the footer keys off the effective count.
   const effectiveHistory = opts.history ?? 1;
   const footerNote =
     effectiveHistory > 1

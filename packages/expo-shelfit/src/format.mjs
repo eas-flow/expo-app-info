@@ -1,18 +1,14 @@
 // Converts the raw "entries" produced by the display-mode flows in
 // src/commands/ into human-oriented table rows. There is no machine-readable
-// output mode; the table below is the only supported output and carries no
+// output mode; the table is the only supported output and carries no
 // compatibility guarantee.
 
 import { formatBuildDate, inclusiveEnd, isoDate, localOffset } from './dates.mjs';
 
 /**
- * Table rows: display strings, "-" for null/missing, absolute build dates.
- *
- * `accountDisplayNames` (account slug -> EAS "Display name") is an optional
- * lookup: when given and it has an entry for a row's account, the table
- * shows that instead of the slug. `local` (--local) switches only the
- * BUILD DATE cell to the machine's local timezone — see buildDateHeader
- * below for the matching column header.
+ * `accountDisplayNames` (account slug -> EAS "Display name") is a cosmetic,
+ * table-only lookup: when it has an entry for a row's account, the table
+ * shows that instead of the slug.
  */
 export function toDisplayRows(entries, { accountDisplayNames = new Map(), local = false } = {}) {
   return entries.map((e) => [
@@ -27,13 +23,11 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map(), local 
   ]);
 }
 
-// EAS `status` enum -> Title Case display string for the STATUS column.
 // Only these 3 have been confirmed against the real API
-// (scripts/probe-build-status.mjs); a status not listed here —
-// most likely a still in-progress/queued build whose exact enum name was
-// never observed in that probe — falls back to the raw value lowercased
-// rather than being guessed at, so an unrecognized status still shows
-// *something* meaningful instead of breaking or silently disappearing.
+// (scripts/probe-build-status.mjs). Anything else — most likely a still
+// in-progress/queued build whose enum name was never observed — falls back to
+// the raw value lowercased rather than being guessed at, so an unrecognized
+// status still shows something instead of breaking or disappearing.
 const STATUS_LABELS = { FINISHED: 'Finished', ERRORED: 'Errored', CANCELED: 'Canceled' };
 
 function statusLabel(status) {
@@ -42,19 +36,14 @@ function statusLabel(status) {
 }
 
 /**
- * Header for the BUILD DATE column: plain "BUILD DATE" by default, or
- * "BUILD DATE (+09:00)" with --local — the current local UTC offset, so the
- * column is self-describing without a separate legend. See
- * src/dates.mjs#localOffset for why this is "as of now", not per-row.
+ * "BUILD DATE (+09:00)" with --local, so the column is self-describing
+ * without a separate legend. See src/dates.mjs#localOffset for why the offset
+ * is "as of now", not per row.
  */
 export function buildDateHeader(local = false) {
   return local ? `BUILD DATE (${localOffset()})` : 'BUILD DATE';
 }
 
-// "success"/"errored"/"canceled" match the keys src/api.mjs#countBuildsByMonth
-// counts into; anything else EAS reports (e.g. a still in-progress/queued
-// build) isn't a terminal outcome and isn't counted into any of the three,
-// nor into TOTAL.
 function statsPlatforms(platform) {
   if (platform === 'ios') return ['ios'];
   if (platform === 'android') return ['android'];
@@ -62,29 +51,18 @@ function statsPlatforms(platform) {
 }
 
 /**
- * Stats table rows: one row per subject per UTC calendar month *per
- * platform* — `[subject, period, platform, success, errored, canceled,
- * total]` (PLATFORM is its own column, replacing an earlier design of one
- * row per account/month with a SUCCESS(IOS)/SUCCESS(AND)/etc. column pair
- * per category — that made the header wide and duplicated "which platform"
- * across every category). `--platform` now
- * narrows which platform *rows* appear, not which columns do.
- * `now` (default current time) decides which row, if any, is the
- * still-in-progress current month for the `(today)` marker below.
+ * One row per subject per UTC calendar month *per platform* —
+ * `[subject, period, platform, success, errored, canceled, total]`. PLATFORM
+ * being its own column is why `--platform` narrows *rows* here, not columns.
  *
- * `groupBy` (`--group-by`) picks what the first column holds — the
- * account (default) or the app. Both are display names with a fallback to
- * the corresponding unique identifier: accounts go through
- * `accountDisplayNames` (the same cosmetic, table-only slug -> Display name
- * lookup described on `toDisplayRows`) and fall back to the account slug;
- * apps use `e.app` and fall back to `e.appSlug`. The caller supplies the
- * matching header, so nothing else about the table changes.
+ * `groupBy` (`--group-by`) picks what the subject cell holds: the account
+ * (default) or the app. Both fall back to their unique identifier when the
+ * display name is missing.
  *
- * `e.ios`/`e.android` are each either `null` (that platform's counts
- * couldn't be fetched — degrades every cell on that platform's row,
- * including TOTAL, to "-") or `{ success, errored, canceled }`
- * (src/api.mjs#countBuildsByMonth's shape). TOTAL is simply
- * success + errored + canceled for that row.
+ * `e.ios`/`e.android` are each either `null` — that platform's counts
+ * couldn't be fetched, degrading every cell on its row, TOTAL included, to
+ * "-" — or `{ success, errored, canceled }`. TOTAL sums exactly those three,
+ * so a build EAS reports in some non-terminal status is counted nowhere.
  */
 export function toStatsDisplayRows(
   entries,
@@ -120,10 +98,9 @@ function cellOrDash(value) {
 }
 
 /**
- * `START → END` for a month's row, where END is `(today)` for the current,
- * still-in-progress month (so it doesn't read like a confirmed final count
- * for a month that hasn't finished yet) and the usual inclusive last day
- * (`periodEnd` minus a day, since that boundary is exclusive) otherwise.
+ * `START → END`, where END is `(today)` for the current month so it doesn't
+ * read like a confirmed final count for a month that hasn't finished, and the
+ * inclusive last day otherwise (`periodEnd` is an exclusive boundary).
  */
 function periodCell(entry, now) {
   if (!entry.periodStart || !entry.periodEnd) return '-';
@@ -135,26 +112,11 @@ function periodCell(entry, now) {
   return `${isoDate(entry.periodStart)} → ${end}`;
 }
 
-/**
- * Headers for the build-count columns: always these 4 — SUCCESS, ERRORED,
- * CANCELED, TOTAL — since PLATFORM is now its own column and `--platform`
- * narrows *rows*, not columns (see toStatsDisplayRows above).
- * A plain array (not a function of `platform`) since the column set no
- * longer depends on it.
- */
+/** Always these 4, since PLATFORM is its own column rather than a per-column suffix. */
 export function statsBuildsHeaders() {
   return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL'];
 }
 
-/**
- * `--plan` table rows: display strings, "-" for null/missing. Unlike
- * `--stats`, PLAN ID is shown as its own column (there's no billing period
- * or build count column to compete for space with), and CONCURRENCY reports
- * all three numbers (total/ios/android) at once unless `--platform` narrows
- * it to one.
- * `accountDisplayNames` is the same cosmetic, table-only slug -> Display
- * name lookup described on `toDisplayRows`.
- */
 export function toPlanDisplayRows(
   entries,
   { platform = null, accountDisplayNames = new Map() } = {}
@@ -177,7 +139,6 @@ function planConcurrencyCell(entry, platform) {
   return `${concurrencyTotal} / ${concurrencyIos} / ${concurrencyAndroid}`;
 }
 
-/** Header for the `--plan` concurrency column, which depends on the --platform filter. */
 export function planConcurrencyHeader(platform = null) {
   if (platform === 'ios') return 'CONCURRENCY (IOS)';
   if (platform === 'android') return 'CONCURRENCY (ANDROID)';

@@ -42,6 +42,22 @@ git grep -nE '#[0-9]{2,4}|issues?/[0-9]+|pull/[0-9]+' -- . ':!package-lock.json'
 
 This must return nothing.
 
+## Comments explain why, never what
+
+Code that can be read is not commented. Do not restate a signature, narrate
+control flow, or describe what a well-named function obviously does — that
+comment is noise on the first read and a lie after the next refactor.
+
+Comment only what the code cannot say for itself: an EAS API behavior
+confirmed by probing an undocumented endpoint, a constraint that silently
+breaks something if changed (every date boundary staying UTC), a rejected
+alternative, a deliberate omission. Keep those short — a sentence or two, not
+a JSDoc essay.
+
+The same applies to `README.md`/`README.ja.md` and this file: if an example
+or a table already shows it, don't restate it in prose. Both READMEs must
+stay in sync, so a cut in one is a cut in the other.
+
 ## Commands
 
 Run from the repo root (`npm install` here installs deps for every package):
@@ -111,28 +127,23 @@ throws `CliError` in `resolveAuthHeaders` (`src/cli.mjs`).
 
 **`--usage` is a deprecated alias for `--stats`** (removed in the next
 major). `parseArgs` sets the same `opts.stats` for both and appends
-`DEPRECATED_USAGE_WARNING` to `opts.warnings`, which `run()` prints to
-stderr — `parseArgs` stays I/O-free for the same reason `src/*` never calls
-`process.exit`. Error messages echo whichever name was typed
+`DEPRECATED_USAGE_WARNING` to `opts.warnings` rather than printing it, so
+`parseArgs` stays I/O-free. Error messages echo whichever name was typed
 (`args.mjs#modeFlag`), so `--usage --plan` must not report `--stats`.
 
-**`--account`/`--app` narrow every display mode client-side** (`src/filter.mjs`),
-applied before the expensive per-app build fetch, not after: `--account`
-once against the full account list in `src/cli.mjs` right after step 1 below
-(matches slug or EAS Display name); `--app` per-account in `src/commands/
-list.mjs`/`stats.mjs` right after step 2, before step 3 (matches slug or EAS
-Display name, same rule as `--account`, but ambiguity is scoped to a single
-account — a Display name shared across different accounts matches in both;
-incompatible with `--plan`, which skips step 2 entirely). No match
-throws `CliError` with "Did you mean" suggestions (Levenshtein edit distance,
-`src/filter.mjs#suggestNear`).
+**`--account`/`--app` narrow client-side** (`src/filter.mjs`), applied
+*before* the expensive per-app build fetch: `--account` right after step 1
+below, `--app` right after step 2. Both match slug or EAS Display name
+(case-insensitive, exact); `--app`'s ambiguity is scoped to one account, so a
+Display name shared across accounts matches in both. `--app` is incompatible
+with `--plan`, which skips step 2 entirely. No match throws `CliError` with
+Levenshtein "Did you mean" suggestions.
 
-**`--local` switches only the BUILD DATE display timestamp to the local
-timezone** (`src/dates.mjs#formatBuildDate`) — every UTC *boundary*
-(`calendarMonths`, `inclusiveEnd`, `isoDate`) stays UTC unconditionally, since
-`--stats`'s month bucketing compares those boundaries directly against build
-`createdAt`. Incompatible with `--stats`/`--plan`, neither of which has a
-BUILD DATE column.
+**`--local` switches only the BUILD DATE display timestamp** to local time
+(`src/dates.mjs#formatBuildDate`). Every UTC boundary (`calendarMonths`,
+`inclusiveEnd`, `isoDate`) stays UTC unconditionally, since `--stats`'s month
+bucketing compares them directly against build `createdAt`. Incompatible with
+`--stats`/`--plan`, neither of which has a BUILD DATE column.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
 concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
@@ -150,15 +161,14 @@ EAS's billing cycle and can't be sliced into arbitrary calendar ranges.
 per account, in parallel.
 
 **`--group-by <account|app>` picks what a `--stats` row counts**
-(`--stats`-only). `account` is the default and unchanged. `app` swaps the
-ACCOUNT column for APP (the app's Display name, falling back to its slug) and
-makes each (account, app) pair its own group — `src/commands/stats.mjs`
-already fetched per-app counts and was merely summing them in
-`accountGroups`, so `appGroups` adds **no API calls**. Two consequences worth
-keeping: grouping is by pair, so same-named apps in different accounts never
-merge; and failure gets finer-grained — one app's failed build fetch degrades
-only its own rows, while an account whose *app list* failed contributes no
-rows at all (its apps are unknown) and is reported on stderr only.
+(`--stats`-only, default `account`). `app` swaps the ACCOUNT column for APP
+and makes each (account, app) pair its own group; it adds **no API calls**,
+since `src/commands/stats.mjs` already fetched per-app counts and was merely
+summing them. Two consequences worth keeping: grouping is by pair, so
+same-named apps in different accounts never merge; and failure gets
+finer-grained — one app's failed build fetch degrades only its own rows,
+while an account whose *app list* failed contributes no rows at all and is
+reported on stderr only.
 
 Per-account/per-app failures don't fail the run: a row still prints with `-`
 and the reason goes to stderr.

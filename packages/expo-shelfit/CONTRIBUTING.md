@@ -103,9 +103,15 @@ or is unreachable to anyone reading the published package. Write the reason
 in place instead — what was observed, what was tried, what constraint the
 code is honoring.
 
+**Comments explain why, never what.** Code that can be read is not
+commented — don't restate a signature or narrate control flow. Comment only
+what the code cannot say for itself: an API behavior confirmed by probing, a
+constraint that silently breaks something if changed, a rejected alternative.
+Keep those to a sentence or two.
+
 Commit messages, branch names, PR titles/bodies, and Release notes are
-outside this rule; issue linkage there is fine and expected. Before opening
-a PR, run from the repo root:
+outside the issue-number rule; issue linkage there is fine and expected.
+Before opening a PR, run from the repo root:
 
 ```bash
 git grep -nE '#[0-9]{2,4}|issues?/[0-9]+|pull/[0-9]+' -- . ':!package-lock.json'

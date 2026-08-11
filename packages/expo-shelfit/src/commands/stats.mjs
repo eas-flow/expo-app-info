@@ -1,6 +1,3 @@
-// `--stats` display mode. Moved out of src/cli.mjs so every display mode
-// lives in its own file under src/commands/.
-
 import { ApiError, mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_STATS_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
@@ -10,35 +7,19 @@ import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
- * `--stats`: one row per account *per UTC calendar month* *per platform*
- * (last 3 months by default, or the last `opts.month` with `--month`; both
- * platforms unless `--platform` narrows to one — see toStatsDisplayRows).
- * Each row's SUCCESS/ERRORED/CANCELED counts are counted client-side from
- * every build in an app's history via the API (client.countBuildsByMonth),
- * not from EAS's own billing/usage metric, which is tied to the billing
- * cycle and can't be sliced into arbitrary calendar ranges (its
- * `filterParams` was also found not to actually filter by platform). TOTAL
- * is SUCCESS + ERRORED + CANCELED. A still in-progress or queued build isn't
- * counted into any of the three categories (nor TOTAL), since it hasn't
- * reached a terminal outcome yet.
+ * Counts are computed client-side from build history rather than read from
+ * EAS's billing/usage metric, which is tied to the billing cycle and can't be
+ * sliced into calendar ranges (its `filterParams` was also found not to
+ * actually filter by platform).
  *
- * Unlike the old billing-period version, months have no inter-period
- * dependency, so accounts and account/app pairs are fetched with
- * `mapWithConcurrency` rather than a sequential loop — as two flat passes
- * (accounts' apps, then each (account, app) pair's build counts) instead of
- * nesting one `mapWithConcurrency` inside another, which would deadlock
- * once `accounts.length >= CONCURRENCY` (see src/api.mjs CONCURRENCY).
+ * The two passes below are flat, not nested: nesting one `mapWithConcurrency`
+ * inside another deadlocks once `accounts.length >= CONCURRENCY` (see
+ * src/api.mjs). Calendar months have no inter-period dependency, so nothing
+ * forces a sequential walk.
  *
- * If a fetch fails for an account (apps or any of its apps' build counts),
- * that whole account's rows degrade to "-" rather than failing the run,
- * and the reason is reported on stderr.
- *
- * `--group-by app` keeps both passes exactly as they are and only changes
- * what happens to `pairResults` afterwards: instead of summing every app of
- * an account into one set of totals, each (account, app) pair becomes
- * its own group of rows. No extra API call — the per-app counts were always
- * being fetched, just added together. Same-named apps in different accounts
- * stay separate, since grouping is by pair, not by display name.
+ * `--group-by app` changes only what happens to `pairResults` afterwards, and
+ * costs no extra API call — per-app counts were always being fetched and
+ * merely summed.
  */
 export async function runStats(client, accounts, opts, accountDisplayNames, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_STATS_MONTHS, now);
@@ -57,10 +38,8 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
     }
   });
 
-  // Pass 2: build counts per (account, app) pair, flattened — not nested.
-  // --app narrows here, right after pass 1's fetchApps() and before this
-  // pass's countBuildsByMonth() below, so a non-matching account never pays
-  // for a build fetch.
+  // Pass 2: build counts per (account, app) pair. --app narrows here, before
+  // countBuildsByMonth(), so a non-matching app never pays for a build fetch.
   const appFilter = createAppFilter(opts.app);
   const pairs = [];
   appsByAccount.forEach(({ apps }, accountIndex) => {
@@ -132,12 +111,9 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
 }
 
 /**
- * One group per account, its apps' counts summed (the default behavior,
- * and the only one before --group-by existed).
- * `totals: null` renders every cell on that account's rows as "-": either
- * its app list couldn't be fetched, or any one of its apps' build counts
- * failed — with everything summed into a single number, one missing app
- * makes the whole sum wrong, so it is not shown at all.
+ * `totals: null` (every cell "-") if the app list or *any one* app's counts
+ * failed: summed into a single number, one missing app makes the whole sum
+ * wrong, so it isn't shown at all.
  */
 function accountGroups(accounts, appsByAccount, pairResults, months, warnings) {
   return accounts.map((account, accountIndex) => {
@@ -160,14 +136,10 @@ function accountGroups(accounts, appsByAccount, pairResults, months, warnings) {
 }
 
 /**
- * One group per (account, app) pair — same order as `pairs`, so accounts stay
- * in order and apps keep the order the API returned them in.
- *
- * Failure is finer-grained than in accountGroups: only the app whose fetch
- * failed degrades to "-", because per-app counts stand on their own and one
- * broken app says nothing about its neighbors. An account whose *app list*
- * failed contributes no rows at all — its apps are unknown, so there is
- * nothing to name in an APP column — and only the stderr warning reports it.
+ * Failure is finer-grained than in accountGroups: per-app counts stand on
+ * their own, so only the failed app degrades to "-". An account whose *app
+ * list* failed contributes no rows at all — its apps are unknown, so there is
+ * nothing to put in an APP column — and only the stderr warning reports it.
  */
 function appGroups(accounts, appsByAccount, pairResults, months, warnings) {
   appsByAccount.forEach(({ error }, accountIndex) => {

@@ -1,4 +1,3 @@
-// Table rendering and column-width helpers.
 // Kept dependency-free and pure so they are easy to unit test.
 
 // East Asian Wide characters and the main emoji blocks -> 2 columns.
@@ -27,9 +26,8 @@ const ZWJ = 0x200d;
 const inRanges = (c, ranges) => ranges.some(([lo, hi]) => c >= lo && c <= hi);
 
 /**
- * Display width, counting East Asian wide characters and emoji as 2
- * columns. ZWJ-joined sequences (e.g. family emoji) are approximated by
- * treating the codepoint right after a ZWJ as already counted — not full
+ * ZWJ-joined sequences (family emoji and the like) are approximated by
+ * treating the codepoint after a ZWJ as already counted — not real
  * grapheme-cluster segmentation, but enough to keep a joined emoji at 2
  * columns instead of ballooning per component.
  */
