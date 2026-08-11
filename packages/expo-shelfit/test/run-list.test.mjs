@@ -5,6 +5,7 @@ import { accountsResponse, appsResponse, buildsResponse, fetchSequence } from '.
 
 const iosBuild = (overrides = {}) => ({
   platform: 'IOS',
+  status: 'FINISHED',
   appVersion: '3.2.1',
   appBuildVersion: '41',
   createdAt: '2026-07-20T00:00:00.000Z',
@@ -77,8 +78,38 @@ describe('run', () => {
 
     expect(tableOutput()).toContain('storefront');
     expect(tableOutput()).toContain('3.2.1');
+    expect(tableOutput()).toContain('STATUS');
+    expect(tableOutput()).toContain('Finished');
     expect(tableOutput()).toContain('BUILD DATE');
-    expect(tableOutput()).toContain('VERSION/BUILD = latest successful EAS build.');
+    expect(tableOutput()).toContain(
+      'VERSION/BUILD/STATUS = latest EAS build attempt, regardless of status.'
+    );
+  });
+
+  it('shows the STATUS column for an errored build instead of hiding it', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse(),
+      buildsResponse({ ios: [iosBuild({ status: 'ERRORED', appBuildVersion: '42' })] }),
+    ]);
+
+    await run([]);
+
+    const output = tableOutput();
+    expect(output).toContain('42');
+    expect(output).toContain('Errored');
+  });
+
+  it('falls back to the raw status lowercased for an unrecognized status', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse(),
+      buildsResponse({ ios: [iosBuild({ status: 'IN_PROGRESS' })] }),
+    ]);
+
+    await run([]);
+
+    expect(tableOutput()).toContain('in_progress');
   });
 
   it('--history N fetches up to N builds per platform, newest first, and lists them as separate rows', async () => {
@@ -126,7 +157,9 @@ describe('run', () => {
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
 
-    expect(tableOutput()).toContain('VERSION/BUILD = latest successful EAS build.');
+    expect(tableOutput()).toContain(
+      'VERSION/BUILD/STATUS = latest EAS build attempt, regardless of status.'
+    );
     expect(tableOutput()).not.toContain('newest first');
   });
 
@@ -136,7 +169,7 @@ describe('run', () => {
     await run(['--history', '3']);
 
     expect(tableOutput()).toContain(
-      'VERSION/BUILD = latest 3 successful EAS builds per platform, newest first.'
+      'VERSION/BUILD/STATUS = latest 3 EAS build(s) per platform, newest first, regardless of status.'
     );
   });
 

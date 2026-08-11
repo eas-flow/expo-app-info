@@ -1,6 +1,7 @@
 // Default display mode (and `--history <N>`): one row per app/platform with
-// the latest successful build(s). Moved out of src/cli.mjs so every display
-// mode lives in its own file under src/commands/.
+// the latest build attempt(s), whatever their status. Moved out of
+// src/cli.mjs so every display mode lives in its own file under
+// src/commands/.
 
 import { mapWithConcurrency } from '../api.mjs';
 import { createAppFilter } from '../filter.mjs';
@@ -10,7 +11,11 @@ import { dim, renderTable } from '../render.mjs';
 
 /**
  * The default app list: every account's apps with their latest (or, with
- * `--history <N>`, latest N) successful builds per platform.
+ * `--history <N>`, latest N) build attempt(s) per platform — regardless of
+ * status (#83; before that, only FINISHED builds were ever fetched, so an
+ * app whose most recent attempt errored or was canceled silently fell back
+ * to an older successful one, or showed "-" if it had never finished a
+ * build at all).
  */
 export async function runList(client, accounts, opts, accountDisplayNames) {
   const appFilter = createAppFilter(opts.app);
@@ -41,6 +46,7 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
           platform: null,
           version: null,
           build: null,
+          status: null,
           lastBuildAt: null,
         });
         return;
@@ -53,6 +59,7 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
           platform: b.platform.toLowerCase(),
           version: b.appVersion ?? null,
           build: b.appBuildVersion ?? null,
+          status: b.status ?? null,
           lastBuildAt: b.createdAt ?? null,
         });
       }
@@ -79,7 +86,16 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
 
   console.log(
     renderTable(
-      ['ACCOUNT', 'APP', 'SLUG', 'PLATFORM', 'VERSION', 'BUILD', buildDateHeader(opts.local)],
+      [
+        'ACCOUNT',
+        'APP',
+        'SLUG',
+        'PLATFORM',
+        'VERSION',
+        'BUILD',
+        'STATUS',
+        buildDateHeader(opts.local),
+      ],
       toDisplayRows(filtered, { accountDisplayNames, local: opts.local })
     )
   );
@@ -89,7 +105,7 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
   const effectiveHistory = opts.history ?? 1;
   const footerNote =
     effectiveHistory > 1
-      ? `VERSION/BUILD = latest ${effectiveHistory} successful EAS builds per platform, newest first.`
-      : 'VERSION/BUILD = latest successful EAS build.';
+      ? `VERSION/BUILD/STATUS = latest ${effectiveHistory} EAS build(s) per platform, newest first, regardless of status.`
+      : 'VERSION/BUILD/STATUS = latest EAS build attempt, regardless of status.';
   console.log(dim(`\n  ${filtered.length} row(s). ${footerNote}`));
 }
