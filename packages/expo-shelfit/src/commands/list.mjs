@@ -3,6 +3,7 @@
 // mode lives in its own file under src/commands/.
 
 import { mapWithConcurrency } from '../api.mjs';
+import { createAppFilter } from '../filter.mjs';
 import { toDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
@@ -12,10 +13,13 @@ import { dim, renderTable } from '../render.mjs';
  * `--history <N>`, latest N) successful builds per platform.
  */
 export async function runList(client, accounts, opts, accountDisplayNames) {
+  const appFilter = createAppFilter(opts.app);
   const entries = [];
   for (const account of accounts) {
     progress(`Fetching apps in ${account.name}…`);
-    const apps = await client.fetchApps(account.id);
+    // --app narrows here, right after fetchApps() and before fetchBuilds()
+    // below, so a non-matching account never pays for a build fetch (#84).
+    const apps = appFilter.filter(await client.fetchApps(account.id));
 
     let done = 0;
     const buildsPerApp = await mapWithConcurrency(apps, async (app) => {
@@ -54,6 +58,10 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
       }
     });
   }
+
+  // Throws if --app was set but never matched any account's apps above —
+  // before printing anything, matching every other display mode.
+  appFilter.finalize();
 
   clearProgress();
 

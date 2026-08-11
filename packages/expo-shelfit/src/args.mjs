@@ -36,6 +36,10 @@ export const HELP = `
                              of the app list. Cannot be combined with --usage or --history.
     --history <N>           Show the N most recent builds per platform instead of just
                              the latest (1-100). Cannot be combined with --usage or --plan.
+    --account <slug|name>   Only this account (matches slug or EAS Display name). Applies
+                             to every display mode.
+    --app <slug>            Only this app. Applies to every display mode except --plan
+                             (--plan doesn't fetch apps).
 
   Authentication
     EXPO_TOKEN environment variable only. Create a personal access token at
@@ -72,6 +76,17 @@ export const HELP = `
     end — no build counts or billing period. Same degrade-to-"-" behavior as
     --usage on a per-account failure. Cannot be combined with --usage or
     --history, since each is its own display mode.
+
+    --account <slug|name> narrows every display mode to a single account.
+    Matches the unique slug or the EAS Display name (case-insensitive exact
+    match); if a Display name matches more than one account, pass the slug
+    instead. No match exits 1 with "Did you mean" suggestions.
+
+    --app <slug> narrows every display mode except --plan to a single app
+    (--plan is account-only and never fetches apps, so combining it with
+    --app is a CliError). Matches the app's unique slug, case-insensitively.
+    The filter is applied before fetching builds, not after, so it also
+    speeds up the run. No match exits 1 with "Did you mean" suggestions.
 `;
 
 export function parseArgs(argv) {
@@ -83,6 +98,8 @@ export function parseArgs(argv) {
     plan: false,
     history: null,
     month: null,
+    account: null,
+    app: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -108,6 +125,14 @@ export function parseArgs(argv) {
       opts.month = requireValue(argv, ++i, '--month');
     } else if (arg.startsWith('--month=')) {
       opts.month = arg.slice('--month='.length);
+    } else if (arg === '--account') {
+      opts.account = requireValue(argv, ++i, '--account');
+    } else if (arg.startsWith('--account=')) {
+      opts.account = arg.slice('--account='.length);
+    } else if (arg === '--app') {
+      opts.app = requireValue(argv, ++i, '--app');
+    } else if (arg.startsWith('--app=')) {
+      opts.app = arg.slice('--app='.length);
     } else {
       throw new CliError(`Unknown option: ${arg}\n  Run \`expo-shelfit --help\` to see usage.`);
     }
@@ -143,6 +168,14 @@ export function parseArgs(argv) {
     opts.month = parsed;
   }
 
+  if (opts.account !== null && opts.account.trim() === '') {
+    throw new CliError('--account requires a non-empty value.');
+  }
+
+  if (opts.app !== null && opts.app.trim() === '') {
+    throw new CliError('--app requires a non-empty value.');
+  }
+
   // Display modes are mutually exclusive. Order here also decides which
   // pair gets reported first when 3 are set at once (#57).
   const activeModes = EXCLUSIVE_MODES.filter((mode) => isModeActive(opts, mode));
@@ -158,11 +191,22 @@ export function parseArgs(argv) {
     }
   }
 
+  // Flags that are common filters but don't make sense with one particular
+  // display mode — the inverse of MODE_ONLY_FLAGS above. --app is one:
+  // --plan is account-only and never fetches apps (see src/commands/plan.mjs),
+  // so there is nothing for --app to narrow (#84).
+  for (const [flag, incompatibleMode] of Object.entries(MODE_INCOMPATIBLE_FLAGS)) {
+    if (opts[flag] !== null && opts[incompatibleMode]) {
+      throw new CliError(`--${flag} cannot be used with --${incompatibleMode}.`);
+    }
+  }
+
   return opts;
 }
 
 const EXCLUSIVE_MODES = ['plan', 'history', 'usage'];
 const MODE_ONLY_FLAGS = { month: 'usage' };
+const MODE_INCOMPATIBLE_FLAGS = { app: 'plan' };
 
 function isModeActive(opts, mode) {
   return mode === 'history' ? opts.history !== null : opts[mode] === true;

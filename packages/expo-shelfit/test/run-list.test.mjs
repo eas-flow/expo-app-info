@@ -189,4 +189,72 @@ describe('run', () => {
     await run([]);
     expect(logSpy).toHaveBeenCalledWith('No apps found.');
   });
+
+  it('--app narrows to the matching app only, fetching builds for just that app', async () => {
+    const fetchImpl = stubFetch([
+      accountsResponse(),
+      appsResponse([
+        { id: 'app-1', name: 'Storefront', slug: 'storefront' },
+        { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
+      ]),
+      buildsResponse({ ios: [iosBuild()] }),
+    ]);
+
+    await run(['--app', 'storefront']);
+
+    // accounts + apps + exactly one builds call — the non-matching app's
+    // builds are never fetched (#84's whole point: filter before the
+    // expensive step, not after).
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.variables.appId).toBe('app-1');
+
+    const output = tableOutput();
+    expect(output).toContain('storefront');
+    expect(output).not.toContain('field-ops');
+  });
+
+  it('--app matches the slug case-insensitively', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }]),
+      buildsResponse({ ios: [iosBuild()] }),
+    ]);
+
+    await run(['--app', 'STOREFRONT']);
+
+    expect(tableOutput()).toContain('storefront');
+  });
+
+  it('rejects with CliError and a suggestion when --app matches no app', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }]),
+    ]);
+
+    let error;
+    try {
+      // 'store' is a prefix of 'storefront' but not an exact match —
+      // exercises the "Did you mean" path (prefix/substring, not Levenshtein).
+      await run(['--app', 'store']);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.message).toContain('No app matched "store"');
+    expect(error.message).toContain('Did you mean: storefront');
+  });
+
+  it('rejects with CliError when --account matches no account', async () => {
+    stubFetch([accountsResponse([{ id: 'acc-1', name: 'myorg' }])]);
+
+    let error;
+    try {
+      await run(['--account', 'nope']);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.message).toContain('No account matched "nope"');
+  });
 });

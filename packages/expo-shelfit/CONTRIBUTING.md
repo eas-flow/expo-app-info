@@ -61,6 +61,8 @@ src/commands/
   plan.mjs            --plan (current subscription per account)
 src/api.mjs           EAS GraphQL client (throws, never exits/prints) +
                       createSemaphore/mapWithConcurrency/CONCURRENCY
+src/filter.mjs        Client-side --account / --app resolution (exact slug/
+                      Display name match, "Did you mean" suggestions)
 src/format.mjs        entries → display-row conversion (there is no
                       machine-readable output mode; the table is the only
                       supported output)
@@ -73,10 +75,10 @@ test/                 Vitest tests, one file per src module (run-*.test.mjs
                       with a mocked fetch; shared bits live in helpers.mjs)
 ```
 
-Imports flow one way — `bin → cli → args / commands/* → api / format /
-render / dates / progress`, with `format` also using `dates` and `progress`
-using `render` — and never in reverse (e.g. `api.mjs` must not import from
-`commands/`).
+Imports flow one way — `bin → cli → args / commands/* → api / filter /
+format / render / dates / progress`, with `format` also using `dates` and
+`progress` using `render` — and never in reverse (e.g. `api.mjs` must not
+import from `commands/`).
 
 `src/*` files never call `process.exit` or read directly from `process.argv`
 so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.

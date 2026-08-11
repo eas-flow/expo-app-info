@@ -4,6 +4,7 @@
 import { ApiError, mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_USAGE_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
+import { createAppFilter } from '../filter.mjs';
 import { toUsageDisplayRows, usageBuildsHeaders } from '../format.mjs';
 import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
@@ -46,10 +47,15 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
   });
 
   // Pass 2: build counts per (account, app) pair, flattened — not nested.
+  // --app narrows here, right after pass 1's fetchApps() and before this
+  // pass's countBuildsByMonth() below, so a non-matching account never pays
+  // for a build fetch (#84).
+  const appFilter = createAppFilter(opts.app);
   const pairs = [];
   appsByAccount.forEach(({ apps }, accountIndex) => {
-    for (const app of apps) pairs.push({ accountIndex, app });
+    for (const app of appFilter.filter(apps)) pairs.push({ accountIndex, app });
   });
+  appFilter.finalize();
 
   let pairsDone = 0;
   const pairResults = await mapWithConcurrency(pairs, async ({ accountIndex, app }) => {
