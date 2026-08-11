@@ -50,32 +50,55 @@ export function resolveAccount(accounts, value) {
 }
 
 /**
- * Creates an `--app <slug>` filter for use inside a per-account apps loop
- * (src/commands/list.mjs, stats.mjs). `slug` is `opts.app` (nullable — a
- * no-op filter when unset). `filter(apps)` narrows one account's apps down
- * to the match (slug is unique within an account, so at most one); call
+ * Creates an `--app <slug|name>` filter for use inside a per-account apps
+ * loop (src/commands/list.mjs, stats.mjs). `value` is `opts.app` (nullable —
+ * a no-op filter when unset). `filter(apps)` narrows one account's apps down
+ * to the match: unique slug first (wins outright, same as resolveAccount),
+ * falling back to EAS Display name (`app.name`) — both case-insensitive
+ * exact match. A Display name matching more than one app *within that one
+ * account* is ambiguous and throws; the same Display name in a different
+ * account is a separate `filter()` call and matches independently (#92 —
+ * ambiguity is scoped per account, not across every account seen). Call
  * `finalize()` once after every account has been through `filter()` — it
- * throws CliError (with "Did you mean" suggestions gathered from every app
- * seen across every account) if `slug` was set but never matched anywhere.
+ * throws CliError (with "Did you mean" suggestions gathered from every slug
+ * and Display name seen across every account) if `value` was set but never
+ * matched anywhere.
  */
-export function createAppFilter(slug) {
-  if (slug === null) {
+export function createAppFilter(value) {
+  if (value === null) {
     return { filter: (apps) => apps, finalize() {} };
   }
 
-  const needle = slug.toLowerCase();
-  const seenSlugs = new Set();
+  const needle = value.toLowerCase();
+  const seenKeys = [];
   let found = false;
 
   return {
     filter(apps) {
-      for (const app of apps) seenSlugs.add(app.slug);
-      const matched = apps.filter((app) => app.slug.toLowerCase() === needle);
-      if (matched.length > 0) found = true;
-      return matched;
+      for (const app of apps) {
+        seenKeys.push(app.slug);
+        if (app.name) seenKeys.push(app.name);
+      }
+
+      const bySlug = apps.filter((app) => app.slug.toLowerCase() === needle);
+      if (bySlug.length > 0) {
+        found = true;
+        return bySlug;
+      }
+
+      const byDisplayName = apps.filter((app) => app.name?.toLowerCase() === needle);
+      if (byDisplayName.length > 1) {
+        const slugs = byDisplayName.map((a) => a.slug).join(', ');
+        throw new CliError(
+          `--app "${value}" matches multiple apps by Display name: ${slugs}.\n` +
+            '  Pass the unique slug instead.'
+        );
+      }
+      if (byDisplayName.length === 1) found = true;
+      return byDisplayName;
     },
     finalize() {
-      if (!found) throw notFoundError('app', slug, [...seenSlugs]);
+      if (!found) throw notFoundError('app', value, seenKeys);
     },
   };
 }

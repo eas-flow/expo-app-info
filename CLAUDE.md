@@ -89,9 +89,11 @@ stderr — `parseArgs` stays I/O-free for the same reason `src/*` never calls
 applied before the expensive per-app build fetch, not after: `--account`
 once against the full account list in `src/cli.mjs` right after step 1 below
 (matches slug or EAS Display name); `--app` per-account in `src/commands/
-list.mjs`/`stats.mjs` right after step 2, before step 3 (matches slug only;
-incompatible with `--plan`, which skips step 2 entirely). No match throws
-`CliError` with "Did you mean" suggestions (Levenshtein edit distance,
+list.mjs`/`stats.mjs` right after step 2, before step 3 (matches slug or EAS
+Display name, same rule as `--account`, but ambiguity is scoped to a single
+account — a Display name shared across different accounts matches in both,
+#92; incompatible with `--plan`, which skips step 2 entirely). No match
+throws `CliError` with "Did you mean" suggestions (Levenshtein edit distance,
 `src/filter.mjs#suggestNear`).
 
 **`--local` switches only the BUILD DATE display timestamp to the local

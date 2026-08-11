@@ -641,6 +641,23 @@ describe('run --stats', () => {
       expect(new Set(dataRows(output).map((r) => r[0]))).toEqual(new Set(['Admin']));
     });
 
+    // #92: the whole motivation for this issue — the APP column prints the
+    // Display name, and pasting that value back into --app must narrow to
+    // just that app, even when it doesn't match the app's slug at all.
+    it('narrows to a single app with --app, matching the printed Display name', async () => {
+      const apps = [
+        { id: 'app-1', name: 'Storefront', slug: 'sf-ios-app' },
+        { id: 'app-2', name: 'Admin', slug: 'admin' },
+      ];
+      stubRouted({ apps });
+
+      await run(['--stats', '--group-by', 'app', '--app', 'Storefront', '--month', '1']);
+
+      const output = tableOutput();
+      expect(output).toContain('1 app(s)');
+      expect(new Set(dataRows(output).map((r) => r[0]))).toEqual(new Set(['Storefront']));
+    });
+
     it('narrows to a single platform with --platform, halving the rows', async () => {
       stubRouted();
 

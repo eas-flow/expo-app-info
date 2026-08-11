@@ -127,4 +127,62 @@ describe('createAppFilter', () => {
     filter.filter(appsB);
     expect(() => filter.finalize()).not.toThrow();
   });
+
+  // #92: --app matches Display name too, same rule as --account.
+  it('matches by EAS Display name when slug does not match', () => {
+    const filter = createAppFilter('Field Ops');
+    expect(filter.filter(appsA)).toEqual([appsA[1]]);
+    expect(() => filter.finalize()).not.toThrow();
+  });
+
+  it('matches by Display name case-insensitively', () => {
+    const filter = createAppFilter('field ops');
+    expect(filter.filter(appsA)).toEqual([appsA[1]]);
+  });
+
+  it('slug wins over Display name when both could match', () => {
+    // app-x's slug equals app-y's Display name (lowercased) — slug match
+    // must win outright without even considering Display name, same as
+    // resolveAccount.
+    const apps = [
+      { id: 'app-x', name: 'Alpha', slug: 'beta' },
+      { id: 'app-y', name: 'Beta', slug: 'gamma' },
+    ];
+    const filter = createAppFilter('beta');
+    expect(filter.filter(apps)).toEqual([apps[0]]);
+  });
+
+  it('throws with candidates when Display name matches more than one app in the same account', () => {
+    const apps = [
+      { id: 'app-1', name: 'Shared Name', slug: 'dup-a' },
+      { id: 'app-2', name: 'Shared Name', slug: 'dup-b' },
+    ];
+    const filter = createAppFilter('Shared Name');
+    expect(() => filter.filter(apps)).toThrow(CliError);
+    expect(() => filter.filter(apps)).toThrow(/dup-a, dup-b/);
+    expect(() => filter.filter(apps)).toThrow(/Pass the unique slug instead/);
+  });
+
+  it('does not treat the same Display name in different accounts as ambiguous', () => {
+    const filter = createAppFilter('Storefront');
+    const accountAApps = [{ id: 'app-1', name: 'Storefront', slug: 'storefront-a' }];
+    const accountBApps = [{ id: 'app-2', name: 'Storefront', slug: 'storefront-b' }];
+    expect(filter.filter(accountAApps)).toEqual(accountAApps);
+    expect(filter.filter(accountBApps)).toEqual(accountBApps);
+    expect(() => filter.finalize()).not.toThrow();
+  });
+
+  it('matches by slug even when the app has no Display name set', () => {
+    const apps = [{ id: 'app-1', name: null, slug: 'headless' }];
+    const filter = createAppFilter('headless');
+    expect(filter.filter(apps)).toEqual(apps);
+    expect(() => filter.finalize()).not.toThrow();
+  });
+
+  it('"Did you mean" suggestions can include a Display name distinct from its slug', () => {
+    const apps = [{ id: 'app-1', name: 'Storefront', slug: 'sf-prod' }];
+    const filter = createAppFilter('Storefrnt'); // typo of the Display name, not the slug
+    filter.filter(apps);
+    expect(() => filter.finalize()).toThrow(/Did you mean: Storefront/);
+  });
 });

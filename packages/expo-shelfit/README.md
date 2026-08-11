@@ -30,7 +30,7 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 - Lists every Expo (EAS) app in your account, with its latest build **attempt** per platform — including errored and canceled ones, not just successful ones — from **any** directory
 - `STATUS` column shows `Finished` / `Errored` / `Canceled` for that latest attempt, so a failing build is visible without opening the EAS dashboard
 - `--platform` filter to narrow to `ios` or `android`
-- `--account <slug|name>` / `--app <slug>` — narrow to a single account or app, across every display mode
+- `--account <slug|name>` / `--app <slug|name>` — narrow to a single account or app, across every display mode
 - `--local` — show `BUILD DATE` in your local timezone instead of UTC
 - `--history <N>` — show the `N` most recent build attempts per platform, not just the latest
 - `--stats` — success/errored/canceled build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history. `--group-by app` counts per app instead of per account
@@ -91,11 +91,14 @@ npx @my-shelfio/expo-shelfit --account myorg --app storefront --history 5
 
 `--account <slug|name>` matches the account's unique slug or its EAS Display
 name (case-insensitive exact match — no partial matching). If a Display name
-matches more than one account, pass the slug instead. `--app <slug>` matches
-an app's unique slug the same way, and is applied *before* fetching builds,
-so it also speeds up the run — it cannot be combined with `--plan`, which
-doesn't fetch apps at all. Neither flag matching anything exits 1 with a
-"Did you mean" suggestion.
+matches more than one account, pass the slug instead. `--app <slug|name>`
+matches the same way — unique slug or EAS Display name — except the
+ambiguity check is scoped to a single account: a Display name shared by two
+apps in the *same* account is ambiguous (pass the slug instead), but the
+same Display name in two *different* accounts is not, and both match.
+`--app` is applied *before* fetching builds, so it also speeds up the run —
+it cannot be combined with `--plan`, which doesn't fetch apps at all.
+Neither flag matching anything exits 1 with a "Did you mean" suggestion.
 
 By default `BUILD DATE` is always UTC. Add `--local` to read it in your
 machine's timezone instead:
@@ -247,7 +250,7 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 - `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--stats`, it narrows to just that platform's rows (half as many rows, same columns); with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
 - `--account <slug|name>` — only this account, matching the unique slug or EAS Display name (case-insensitive exact match). Applies to every display mode. No match exits 1 with a suggestion.
-- `--app <slug>` — only this app, matching the unique slug (case-insensitive exact match), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
+- `--app <slug|name>` — only this app, matching the unique slug or EAS Display name (case-insensitive exact match, same rule as `--account` but with ambiguity scoped to one account — see above), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
 - `--local` — show `BUILD DATE` in the local timezone instead of UTC. Only affects `BUILD DATE`; `--stats`'s `PERIOD` and `--plan`'s `TRIAL END` stay UTC. Cannot be combined with `--stats` or `--plan` (neither has a `BUILD DATE` column).
 - `--month <n>` — only with `--stats`: widen the window to the last `n` calendar months (1–12, default 3).
 - `--group-by <account|app>` — only with `--stats`: count per account (default) or per app. `app` replaces the `ACCOUNT` column with `APP`. No extra API calls.
