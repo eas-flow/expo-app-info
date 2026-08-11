@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  buildDateHeader,
-  planConcurrencyHeader,
-  statsBuildsHeaders,
-  toDisplayRows,
-  toPlanDisplayRows,
-  toStatsDisplayRows,
-} from '../src/format.mjs';
+import { buildDateHeader, toDisplayRows } from '../src/features/list/format.mjs';
+import { planConcurrencyHeader, toPlanDisplayRows } from '../src/features/plan/format.mjs';
+import { statsBuildsHeaders, toStatsDisplayRows } from '../src/features/stats/format.mjs';
 
 function withTz(tz, fn) {
   const original = process.env.TZ;

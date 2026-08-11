@@ -1,11 +1,9 @@
-import { DEFAULT_STATS_MONTHS } from '../args.mjs';
-import { ApiError } from '../errors.mjs';
-import { statsBuildsHeaders, toStatsDisplayRows } from '../format.mjs';
-import { mapWithConcurrency } from '../shared/concurrency.mjs';
-import { calendarMonths } from '../shared/dates.mjs';
-import { createAppFilter } from '../shared/filter.mjs';
-import { clearProgress, progressCount } from '../shared/terminal/progress.mjs';
-import { dim, renderTable } from '../shared/terminal/render.mjs';
+import { DEFAULT_STATS_MONTHS } from '../../args.mjs';
+import { ApiError } from '../../errors.mjs';
+import { mapWithConcurrency } from '../../shared/concurrency.mjs';
+import { calendarMonths } from '../../shared/dates.mjs';
+import { createAppFilter } from '../../shared/filter.mjs';
+import { clearProgress, progressCount } from '../../shared/terminal/progress.mjs';
 
 /**
  * Counts are computed client-side from build history rather than read from
@@ -15,14 +13,18 @@ import { dim, renderTable } from '../shared/terminal/render.mjs';
  *
  * The two passes below are flat, not nested: nesting one `mapWithConcurrency`
  * inside another deadlocks once `accounts.length >= CONCURRENCY` (see
- * src/api.mjs). Calendar months have no inter-period dependency, so nothing
- * forces a sequential walk.
+ * shared/concurrency.mjs). Calendar months have no inter-period dependency,
+ * so nothing forces a sequential walk.
  *
  * `--group-by app` changes only what happens to `pairResults` afterwards, and
  * costs no extra API call — per-app counts were always being fetched and
  * merely summed.
+ *
+ * Returns `{ entries, groupCount, months, byApp, warnings }` — `entries` is
+ * ready for features/stats/format.mjs#toStatsDisplayRows, `warnings` is a
+ * plain string array (no console output here).
  */
-export async function runStats(client, accounts, opts, accountDisplayNames, now = new Date()) {
+export async function fetchStatsEntries(client, accounts, opts, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_STATS_MONTHS, now);
   const warnings = [];
 
@@ -68,10 +70,6 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
     ? appGroups(accounts, appsByAccount, pairResults, months, warnings)
     : accountGroups(accounts, appsByAccount, pairResults, months, warnings);
 
-  for (const warning of warnings) {
-    console.error(dim(`  ! stats unavailable — ${warning}`));
-  }
-
   const entries = [];
   for (const group of groups) {
     months.forEach((period, mi) => {
@@ -87,28 +85,7 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
     });
   }
 
-  const displayRows = toStatsDisplayRows(entries, {
-    platform: opts.platform,
-    accountDisplayNames,
-    groupBy: byApp ? 'app' : 'account',
-    now,
-  });
-  const platformCount = opts.platform ? 1 : 2;
-  const subjectHeader = byApp ? 'APP' : 'ACCOUNT';
-  const subjectCount = `${groups.length} ${byApp ? 'app(s)' : 'account(s)'}`;
-
-  console.log(
-    renderTable([subjectHeader, 'PERIOD', 'PLATFORM', ...statsBuildsHeaders()], displayRows)
-  );
-  console.log(
-    dim(
-      `\n  ${displayRows.length} row(s) across ${subjectCount}, ${months.length} month(s), ${platformCount} platform(s) each. ` +
-        'SUCCESS/ERRORED/CANCELED = counted client-side from build history via the API; ' +
-        'may differ from EAS billing usage. TOTAL = SUCCESS + ERRORED + CANCELED for that row. ' +
-        'A still in-progress/queued build is counted in none of the three (nor in TOTAL). ' +
-        'PERIOD = UTC calendar month.'
-    )
-  );
+  return { entries, groupCount: groups.length, months, byApp, warnings };
 }
 
 /**
