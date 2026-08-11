@@ -84,7 +84,15 @@ once against the full account list in `src/cli.mjs` right after step 1 below
 (matches slug or EAS Display name); `--app` per-account in `src/commands/
 list.mjs`/`usage.mjs` right after step 2, before step 3 (matches slug only;
 incompatible with `--plan`, which skips step 2 entirely). No match throws
-`CliError` with "Did you mean" suggestions.
+`CliError` with "Did you mean" suggestions (Levenshtein edit distance,
+`src/filter.mjs#suggestNear`).
+
+**`--local` switches only the BUILD DATE display timestamp to the local
+timezone** (`src/dates.mjs#formatBuildDate`) — every UTC *boundary*
+(`calendarMonths`, `inclusiveEnd`, `isoDate`) stays UTC unconditionally, since
+`--usage`'s month bucketing compares those boundaries directly against build
+`createdAt`. Incompatible with `--usage`/`--plan`, neither of which has a
+BUILD DATE column.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
 concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in

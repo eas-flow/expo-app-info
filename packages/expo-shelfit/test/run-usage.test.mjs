@@ -349,4 +349,22 @@ describe('run --usage', () => {
     expect(error.message).toContain('No app matched "storfront"');
     expect(error.message).toContain('Did you mean: storefront');
   });
+
+  it('rejects with CliError when combined with --local, since --usage has no BUILD DATE column', async () => {
+    await expect(run(['--usage', '--local'])).rejects.toThrow(CliError);
+    await expect(run(['--usage', '--local'])).rejects.toThrow(
+      /--local cannot be used with --usage/
+    );
+  });
+
+  it("--usage's PERIOD stays UTC — not reachable via --local anyway, but pinned as a regression guard", async () => {
+    stubFetch(happyResponses());
+
+    await run(['--usage']);
+
+    // If --local's incompatibility check above ever regresses and silently
+    // lets --usage through, this still pins PERIOD to UTC calendar-month
+    // boundaries independent of the machine's timezone (#85).
+    expect(tableOutput()).toContain('2026-07-01 → (today)');
+  });
 });

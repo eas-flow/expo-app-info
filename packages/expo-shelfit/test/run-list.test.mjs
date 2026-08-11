@@ -257,4 +257,36 @@ describe('run', () => {
     expect(error).toBeInstanceOf(CliError);
     expect(error.message).toContain('No account matched "nope"');
   });
+
+  it('--local shows BUILD DATE in the local timezone with an offset header', async () => {
+    const originalTz = process.env.TZ;
+    process.env.TZ = 'Asia/Tokyo';
+    try {
+      stubFetch([
+        accountsResponse(),
+        appsResponse(),
+        buildsResponse({ ios: [iosBuild({ createdAt: '2026-07-26T09:12:34.000Z' })] }),
+      ]);
+
+      await run(['--local']);
+
+      const output = tableOutput();
+      expect(output).toContain('BUILD DATE (+09:00)');
+      expect(output).toContain('2026/07/26-18:12:34');
+      expect(output).not.toContain('09:12:34');
+    } finally {
+      if (originalTz === undefined) delete process.env.TZ;
+      else process.env.TZ = originalTz;
+    }
+  });
+
+  it('shows the plain "BUILD DATE" header (UTC) when --local is not passed', async () => {
+    stubFetch([accountsResponse(), appsResponse(), buildsResponse({ ios: [iosBuild()] })]);
+
+    await run([]);
+
+    const output = tableOutput();
+    expect(output).toContain('BUILD DATE');
+    expect(output).not.toContain('BUILD DATE (');
+  });
 });

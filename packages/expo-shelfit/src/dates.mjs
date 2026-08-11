@@ -1,7 +1,14 @@
-// UTC date helpers shared across the CLI's layers. Every boundary and
-// formatted timestamp this CLI shows is UTC — never the machine's local
-// timezone — so output is reproducible and comparable with EAS's own
-// dashboard (design rule: 期間境界は UTC 固定).
+// UTC date helpers shared across the CLI's layers. Every *boundary* this CLI
+// computes (calendarMonths, inclusiveEnd) and every date-only display
+// (isoDate — --usage's PERIOD, --plan's TRIAL END) is UTC, full stop, no
+// opt-out — so calendar-month bucketing stays reproducible and comparable
+// with EAS's own dashboard (design rule: 期間境界は UTC 固定). The one
+// exception is formatBuildDate's *display* timestamp (BUILD DATE), which
+// `--local` can switch to the machine's local timezone (design rule: 表示
+// タイムスタンプのみ切り替え可) — see #85. Never make calendarMonths,
+// inclusiveEnd, or isoDate timezone-aware: countBuildsByMonth compares their
+// UTC output directly against build createdAt timestamps, and shifting that
+// boundary would silently move builds into the wrong month.
 
 /**
  * UTC calendar-month boundaries for `--usage`, `count` months ending with
@@ -56,16 +63,45 @@ const pad2 = (n) => String(n).padStart(2, '0');
  * ISO 8601 timestamp -> "YYYY/MM/DD-HH:mm:ss", for the human table's BUILD
  * DATE column (an absolute timestamp was requested over the relative "3d
  * ago" style so the exact build time is visible without doing the math).
- * Always UTC, matching every other date shown by this CLI
- * (`isoDate`, `inclusiveEnd` above) so output does not depend on the
- * machine's local timezone.
+ * UTC by default, matching every other date shown by this CLI (`isoDate`,
+ * `inclusiveEnd` above); pass `{ local: true }` (--local) to read it in the
+ * machine's local timezone instead (`TZ` env var, or the system default) —
+ * this is the *only* date this CLI will ever display non-UTC, see the
+ * module comment above.
  */
-export function formatBuildDate(iso) {
+export function formatBuildDate(iso, { local = false } = {}) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '-';
-  return (
-    `${d.getUTCFullYear()}/${pad2(d.getUTCMonth() + 1)}/${pad2(d.getUTCDate())}-` +
-    `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`
-  );
+  const [year, month, day, hours, minutes, seconds] = local
+    ? [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()]
+    : [
+        d.getUTCFullYear(),
+        d.getUTCMonth() + 1,
+        d.getUTCDate(),
+        d.getUTCHours(),
+        d.getUTCMinutes(),
+        d.getUTCSeconds(),
+      ];
+  return `${year}/${pad2(month)}/${pad2(day)}-${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
+}
+
+/**
+ * Current local UTC offset as "+HH:MM" / "-HH:MM" (e.g. "+09:00" for Tokyo,
+ * "-05:00" for New York in winter, "+05:30" for Kolkata's 30-minute offset)
+ * — for the `BUILD DATE (+09:00)` header `--local` adds (src/format.mjs).
+ * Computed once "as of now", not per row: `Date#getTimezoneOffset()` is only
+ * accurate for the instant it's called on, so a table whose rows span a DST
+ * transition could show a header offset that's off by an hour for some
+ * rows — an accepted tradeoff for a header that has to show one number
+ * (see issue #85's "未確定事項").
+ */
+export function localOffset(now = new Date()) {
+  // getTimezoneOffset() returns *minutes to add to local time to reach
+  // UTC*, the inverse sign of the "+09:00 = ahead of UTC" convention below
+  // (Tokyo is UTC+9, but getTimezoneOffset() there returns -540).
+  const totalMinutes = -now.getTimezoneOffset();
+  const sign = totalMinutes < 0 ? '-' : '+';
+  const absMinutes = Math.abs(totalMinutes);
+  return `${sign}${pad2(Math.floor(absMinutes / 60))}:${pad2(absMinutes % 60)}`;
 }

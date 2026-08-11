@@ -1,11 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  buildDateHeader,
   planConcurrencyHeader,
   toDisplayRows,
   toPlanDisplayRows,
   toUsageDisplayRows,
   usageBuildsHeaders,
 } from '../src/format.mjs';
+
+function withTz(tz, fn) {
+  const original = process.env.TZ;
+  process.env.TZ = tz;
+  try {
+    return fn();
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
+}
 
 const withBuild = {
   account: 'myorg',
@@ -52,6 +64,33 @@ describe('toDisplayRows', () => {
   it('falls back to the slug when the map has no entry for this account', () => {
     const accountDisplayNames = new Map([['other', 'Other Org']]);
     expect(toDisplayRows([withBuild], { accountDisplayNames })[0][0]).toBe('myorg');
+  });
+
+  it('shows the UTC build date by default even with { local: false } omitted', () => {
+    expect(toDisplayRows([withBuild])[0][6]).toBe('2026/07/26-00:00:00');
+  });
+
+  it('shows the local build date when { local: true } is passed', () => {
+    withTz('Asia/Tokyo', () => {
+      expect(toDisplayRows([withBuild], { local: true })[0][6]).toBe('2026/07/26-09:00:00');
+    });
+  });
+});
+
+describe('buildDateHeader', () => {
+  afterEach(() => {
+    delete process.env.TZ;
+  });
+
+  it('is plain "BUILD DATE" by default', () => {
+    expect(buildDateHeader()).toBe('BUILD DATE');
+    expect(buildDateHeader(false)).toBe('BUILD DATE');
+  });
+
+  it('appends the current local UTC offset when local is true', () => {
+    withTz('Asia/Tokyo', () => {
+      expect(buildDateHeader(true)).toBe('BUILD DATE (+09:00)');
+    });
   });
 });
 
