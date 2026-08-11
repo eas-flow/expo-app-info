@@ -259,6 +259,47 @@ describe('run', () => {
     expect(tableOutput()).toContain('storefront');
   });
 
+  // #92: --app matches EAS Display name too, same rule as --account.
+  it('--app matches the EAS Display name when it differs from the slug', async () => {
+    const fetchImpl = stubFetch([
+      accountsResponse(),
+      appsResponse([
+        { id: 'app-1', name: 'Storefront', slug: 'sf-ios-app' },
+        { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
+      ]),
+      buildsResponse({ ios: [iosBuild()] }),
+    ]);
+
+    await run(['--app', 'Storefront']);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.variables.appId).toBe('app-1');
+
+    const output = tableOutput();
+    expect(output).toContain('sf-ios-app');
+    expect(output).not.toContain('field-ops');
+  });
+
+  it('rejects with CliError when --app Display name matches more than one app in the same account', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse([
+        { id: 'app-1', name: 'Shared Name', slug: 'dup-a' },
+        { id: 'app-2', name: 'Shared Name', slug: 'dup-b' },
+      ]),
+    ]);
+
+    let error;
+    try {
+      await run(['--app', 'Shared Name']);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.message).toContain('matches multiple apps by Display name: dup-a, dup-b');
+  });
+
   it('rejects with CliError and a suggestion when --app matches no app', async () => {
     stubFetch([
       accountsResponse(),

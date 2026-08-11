@@ -52,8 +52,8 @@ export const HELP = `
                              the latest (1-100). Cannot be combined with --stats or --plan.
     --account <slug|name>   Only this account (matches slug or EAS Display name). Applies
                              to every display mode.
-    --app <slug>            Only this app. Applies to every display mode except --plan
-                             (--plan doesn't fetch apps).
+    --app <slug|name>       Only this app (matches slug or EAS Display name). Applies to
+                             every display mode except --plan (--plan doesn't fetch apps).
     --local                 Show BUILD DATE in the local timezone (TZ env var or system
                              default) instead of UTC. Only affects BUILD DATE — --stats'
                              PERIOD and --plan's TRIAL END stay UTC. Cannot be combined
@@ -132,11 +132,15 @@ export const HELP = `
     match); if a Display name matches more than one account, pass the slug
     instead. No match exits 1 with "Did you mean" suggestions.
 
-    --app <slug> narrows every display mode except --plan to a single app
-    (--plan is account-only and never fetches apps, so combining it with
-    --app is a CliError). Matches the app's unique slug, case-insensitively.
-    The filter is applied before fetching builds, not after, so it also
-    speeds up the run. No match exits 1 with "Did you mean" suggestions.
+    --app <slug|name> narrows every display mode except --plan to a single
+    app (--plan is account-only and never fetches apps, so combining it with
+    --app is a CliError). Matches the unique slug or the EAS Display name
+    (case-insensitive exact match), the same rule as --account; if a Display
+    name matches more than one app within the same account, pass the slug
+    instead (a Display name shared across different accounts is not
+    ambiguous — both match). The filter is applied before fetching builds,
+    not after, so it also speeds up the run. No match exits 1 with "Did you
+    mean" suggestions.
 
     --local switches only the BUILD DATE column to the local timezone (the
     header shows the current UTC offset, e.g. "BUILD DATE (+09:00)"); every
