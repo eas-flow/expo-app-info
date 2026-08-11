@@ -1,9 +1,8 @@
 // EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
 // src/cli.mjs is the only place that turns errors into exit codes and messages.
 
+import { ApiError } from './errors.mjs';
 import { progress } from './progress.mjs';
-
-export class ApiError extends Error {}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;

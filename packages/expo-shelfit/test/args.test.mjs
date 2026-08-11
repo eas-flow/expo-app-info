@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEPRECATED_USAGE_WARNING, parseArgs } from '../src/args.mjs';
-import { CliError } from '../src/cli.mjs';
+import { CliError } from '../src/errors.mjs';
 
 const DEFAULTS = {
   help: false,

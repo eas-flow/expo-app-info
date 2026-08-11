@@ -3,7 +3,7 @@
 // (src/cli.mjs and the per-mode flows). Throws CliError on user mistakes;
 // bin/cli.mjs is still the only place that turns errors into exit codes.
 
-import { CliError } from './cli.mjs';
+import { CliError } from './errors.mjs';
 
 const PLATFORMS = ['ios', 'android'];
 // --stats grouping axes. "account" is the default and keeps the original

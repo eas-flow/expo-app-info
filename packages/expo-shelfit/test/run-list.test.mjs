@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HELP } from '../src/args.mjs';
-import { CliError, run } from '../src/cli.mjs';
+import { run } from '../src/cli.mjs';
+import { CliError } from '../src/errors.mjs';
 import { accountsResponse, appsResponse, buildsResponse, fetchSequence } from './helpers.mjs';
 
 const iosBuild = (overrides = {}) => ({

@@ -1,6 +1,7 @@
-import { ApiError, mapWithConcurrency } from '../api.mjs';
+import { mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_STATS_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
+import { ApiError } from '../errors.mjs';
 import { createAppFilter } from '../filter.mjs';
 import { statsBuildsHeaders, toStatsDisplayRows } from '../format.mjs';
 import { clearProgress, progressCount } from '../progress.mjs';

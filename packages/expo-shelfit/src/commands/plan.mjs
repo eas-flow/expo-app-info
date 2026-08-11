@@ -1,4 +1,5 @@
-import { ApiError, mapWithConcurrency } from '../api.mjs';
+import { mapWithConcurrency } from '../api.mjs';
+import { ApiError } from '../errors.mjs';
 import { planConcurrencyHeader, toPlanDisplayRows } from '../format.mjs';
 import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';

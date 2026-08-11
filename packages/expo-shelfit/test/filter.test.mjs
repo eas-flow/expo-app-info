@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CliError } from '../src/cli.mjs';
+import { CliError } from '../src/errors.mjs';
 import { createAppFilter, resolveAccount } from '../src/filter.mjs';
 
 describe('resolveAccount', () => {

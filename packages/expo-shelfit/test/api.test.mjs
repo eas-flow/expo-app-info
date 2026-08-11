@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, createApiClient, createSemaphore, mapWithConcurrency } from '../src/api.mjs';
+import { createApiClient, createSemaphore, mapWithConcurrency } from '../src/api.mjs';
+import { ApiError } from '../src/errors.mjs';
 
 function jsonResponse(body, { status = 200, ok = true } = {}) {
   return { status, ok, json: async () => body };
