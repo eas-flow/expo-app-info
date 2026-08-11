@@ -1,7 +1,7 @@
 import { ApiError } from '../../errors.mjs';
 import { mapWithConcurrency } from '../../shared/concurrency.mjs';
 import { clearProgress, progressCount } from '../../shared/terminal/progress.mjs';
-import { dim, renderTable } from '../../shared/terminal/render.mjs';
+import { dim, red, renderTable } from '../../shared/terminal/render.mjs';
 import { planConcurrencyHeader, toPlanDisplayRows } from './format.mjs';
 
 /**
@@ -28,7 +28,7 @@ export async function runPlan(client, accounts, opts, accountDisplayNames) {
   clearProgress();
 
   results.forEach(({ error }, i) => {
-    if (error) console.error(dim(`  ! plan unavailable — ${accounts[i].name}: ${error.message}`));
+    if (error) console.error(red(`  ! plan unavailable — ${accounts[i].name}: ${error.message}`));
   });
 
   const entries = accounts.map((account, i) => {

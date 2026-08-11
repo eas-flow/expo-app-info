@@ -39,13 +39,15 @@ describe('run', () => {
   const tableOutput = () => logSpy.mock.calls.map((args) => args[0]).join('\n');
 
   it('prints HELP and returns for --help', async () => {
+    // Not a TTY in this test run, so the Deprecated-heading substitution is
+    // a no-op — this stays byte-identical to HELP.
     await run(['--help']);
     expect(logSpy).toHaveBeenCalledWith(HELP);
   });
 
   it('prints the package version for --version', async () => {
     await run(['--version']);
-    expect(logSpy).toHaveBeenCalledWith('1.1.0');
+    expect(logSpy).toHaveBeenCalledWith('1.1.1');
   });
 
   // One representative test that parseArgs failures propagate out of run()
@@ -191,13 +193,13 @@ describe('run', () => {
       accountsResponse(),
       appsResponse(),
       buildsResponse({
-        ios: [iosBuild({ createdAt: new Date().toISOString() })],
+        ios: [iosBuild()],
         android: [
           {
             platform: 'ANDROID',
             appVersion: '3.2.0',
             appBuildVersion: '38',
-            createdAt: new Date().toISOString(),
+            createdAt: '2026-07-20T00:00:00.000Z',
           },
         ],
       }),
@@ -208,7 +210,11 @@ describe('run', () => {
     const output = tableOutput();
     expect(output).toContain('1 row(s)');
     expect(output).toContain('38'); // the android build number
+    // iosBuild() must be fully absent, not just its build number — a real
+    // clock (e.g. new Date() for createdAt) can make '41' appear by
+    // coincidence inside the surviving row's BUILD DATE timestamp.
     expect(output).not.toContain('41'); // the ios build number, filtered out
+    expect(output).not.toContain('3.2.1'); // the ios app version, filtered out
 
     // --platform narrows the query itself, not just the client-side
     // display — the request must never even ask for the other platform's alias.

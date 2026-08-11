@@ -6,11 +6,11 @@
 // import without triggering process.exit side effects.
 
 import { run } from '../src/cli.mjs';
+import { red } from '../src/shared/terminal/render.mjs';
 
 function fail(msg) {
   if (process.stderr.isTTY) process.stderr.write('\r\x1b[2K');
-  const isTTY = process.stdout.isTTY;
-  console.error(`${isTTY ? '\x1b[31m' : ''}✖ ${msg}${isTTY ? '\x1b[0m' : ''}`);
+  console.error(red(`✖ ${msg}`));
   process.exit(1);
 }
 

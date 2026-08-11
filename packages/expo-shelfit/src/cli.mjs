@@ -10,7 +10,7 @@ import { runStats } from './features/stats/command.mjs';
 import { createApiClient } from './shared/api.mjs';
 import { resolveAccount } from './shared/filter.mjs';
 import { progress } from './shared/terminal/progress.mjs';
-import { dim } from './shared/terminal/render.mjs';
+import { yellow } from './shared/terminal/render.mjs';
 
 function resolveAuthHeaders(env = process.env) {
   const token = env.EXPO_TOKEN?.trim();
@@ -33,12 +33,15 @@ export async function run(argv = process.argv.slice(2)) {
   // parseArgs does no I/O, so its notices are printed here — before
   // --help/--version, so a deprecated flag is still called out when combined
   // with them, and on stderr so it never lands in a redirected table.
+  // opts.warnings currently only ever holds deprecation notices, hence yellow.
   for (const warning of opts.warnings) {
-    console.error(dim(`  ! ${warning}`));
+    console.error(yellow(`  ! ${warning}`));
   }
 
   if (opts.help) {
-    console.log(HELP);
+    // Only the section heading is colored, not the whole block below it —
+    // enough to flag "this is going away" without drowning the rest of --help.
+    console.log(HELP.replace('\n  Deprecated\n', `\n  ${yellow('Deprecated')}\n`));
     return;
   }
   if (opts.version) {

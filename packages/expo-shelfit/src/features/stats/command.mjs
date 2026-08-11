@@ -1,4 +1,4 @@
-import { dim, renderTable } from '../../shared/terminal/render.mjs';
+import { dim, red, renderTable } from '../../shared/terminal/render.mjs';
 import { statsBuildsHeaders, toStatsDisplayRows } from './format.mjs';
 import { fetchStatsEntries } from './service.mjs';
 
@@ -11,7 +11,7 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
   );
 
   for (const warning of warnings) {
-    console.error(dim(`  ! stats unavailable — ${warning}`));
+    console.error(red(`  ! stats unavailable — ${warning}`));
   }
 
   const displayRows = toStatsDisplayRows(entries, {
