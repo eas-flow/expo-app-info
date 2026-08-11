@@ -435,4 +435,232 @@ describe('run --stats', () => {
     // boundaries independent of the machine's timezone (#85).
     expect(tableOutput()).toContain('2026-07-01 → (today)');
   });
+
+  // --group-by app (#90). Two apps in one account, with deliberately
+  // different build counts so a summed-vs-per-app mix-up cannot pass.
+  describe('--group-by app', () => {
+    const TWO_APPS = [
+      { id: 'app-1', name: 'Storefront', slug: 'storefront' },
+      { id: 'app-2', name: 'Admin', slug: 'admin' },
+    ];
+
+    // Storefront: ios 2/1/1 across July/June/May, android 1/2/0.
+    // Admin: ios 1 in July only; android none at all — its rows must still
+    // print, as zeros.
+    const BUILDS = {
+      'app-1': () =>
+        buildsResponse({
+          appId: 'app-1',
+          ios: [
+            { createdAt: '2026-07-05T00:00:00.000Z', status: 'FINISHED' },
+            { createdAt: '2026-07-10T00:00:00.000Z', status: 'FINISHED' },
+            { createdAt: '2026-06-15T00:00:00.000Z', status: 'FINISHED' },
+            { createdAt: '2026-05-20T00:00:00.000Z', status: 'FINISHED' },
+          ],
+          android: [
+            { createdAt: '2026-07-08T00:00:00.000Z', status: 'FINISHED' },
+            { createdAt: '2026-06-01T00:00:00.000Z', status: 'FINISHED' },
+            { createdAt: '2026-06-25T00:00:00.000Z', status: 'FINISHED' },
+          ],
+        }),
+      'app-2': () =>
+        buildsResponse({
+          appId: 'app-2',
+          ios: [{ createdAt: '2026-07-12T00:00:00.000Z', status: 'FINISHED' }],
+          android: [],
+        }),
+    };
+
+    // Routes by GraphQL variables instead of call order: pass 2 runs under
+    // mapWithConcurrency, so which app's builds request lands first is not
+    // something these tests should depend on.
+    const stubRouted = ({ apps = TWO_APPS, accounts, builds = BUILDS } = {}) => {
+      const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+        const { variables = {} } = JSON.parse(options.body);
+        if (variables.accountId) {
+          const own = apps.filter((a) => (a.accountId ?? 'acc-1') === variables.accountId);
+          return appsResponse(own, variables.accountId);
+        }
+        if (variables.appId) return builds[variables.appId]();
+        return accounts ?? accountsResponse();
+      });
+      vi.stubGlobal('fetch', fetchImpl);
+      return fetchImpl;
+    };
+
+    // All data rows as trimmed cell arrays: [SUBJECT, PERIOD, PLATFORM, ...].
+    const dataRows = (output) =>
+      output
+        .split('\n')
+        .filter((l) => l.includes('│') && (l.includes('│ ios') || l.includes('│ android')))
+        .map((l) =>
+          l
+            .split('│')
+            .slice(1, -1)
+            .map((c) => c.trim())
+        );
+
+    it('replaces the ACCOUNT column with APP and emits one group of rows per app', async () => {
+      stubRouted();
+
+      await run(['--stats', '--group-by', 'app']);
+
+      const output = tableOutput();
+      expect(output).toContain('APP');
+      expect(output).not.toContain('ACCOUNT');
+      // 2 apps × 3 months × 2 platforms
+      expect(output).toContain('12 row(s)');
+      expect(output).toContain('2 app(s)');
+      expect(output).not.toContain('account(s)');
+
+      const subjects = new Set(dataRows(output).map((r) => r[0]));
+      expect(subjects).toEqual(new Set(['Storefront', 'Admin']));
+    });
+
+    // The regression that matters: per-app rows must add up to exactly what
+    // the account row reports for the same month and platform.
+    it('per-app counts sum to the same numbers --group-by account reports', async () => {
+      stubRouted();
+      await run(['--stats', '--group-by', 'app']);
+      const perApp = dataRows(tableOutput());
+
+      logSpy.mockClear();
+      stubRouted();
+      await run(['--stats', '--group-by', 'account']);
+      const perAccount = dataRows(tableOutput());
+
+      expect(perApp).toHaveLength(12);
+      expect(perAccount).toHaveLength(6);
+
+      for (const accountRow of perAccount) {
+        const [, period, platform, ...accountCounts] = accountRow;
+        const summed = perApp
+          .filter((r) => r[1] === period && r[2] === platform)
+          .reduce((acc, r) => acc.map((n, i) => n + Number(r[3 + i])), [0, 0, 0, 0]);
+        expect(summed.map(String)).toEqual(accountCounts);
+      }
+    });
+
+    it('costs no extra API calls — the per-app counts were already being fetched', async () => {
+      const perApp = stubRouted();
+      await run(['--stats', '--group-by', 'app']);
+
+      const perAccount = stubRouted();
+      await run(['--stats', '--group-by', 'account']);
+
+      expect(perApp.mock.calls).toHaveLength(perAccount.mock.calls.length);
+    });
+
+    it('prints an app with no builds in a month as zeros, not "-" and not a missing row', async () => {
+      stubRouted();
+
+      await run(['--stats', '--group-by', 'app']);
+
+      const adminAndroid = dataRows(tableOutput()).filter(
+        (r) => r[0] === 'Admin' && r[2] === 'android'
+      );
+      expect(adminAndroid).toHaveLength(3); // still one row per month
+      for (const row of adminAndroid) expect(row.slice(3)).toEqual(['0', '0', '0', '0']);
+    });
+
+    it('degrades only the failing app to "-", leaving the other app\'s numbers intact', async () => {
+      stubRouted({
+        builds: {
+          'app-1': BUILDS['app-1'],
+          'app-2': () => jsonResponse({ errors: [{ message: 'boom' }] }),
+        },
+      });
+
+      await run(['--stats', '--group-by', 'app']);
+
+      const rows = dataRows(tableOutput());
+      for (const row of rows.filter((r) => r[0] === 'Admin')) {
+        expect(row.slice(3)).toEqual(['-', '-', '-', '-']);
+      }
+      const storefrontJulyIos = rows.find(
+        (r) => r[0] === 'Storefront' && r[1].startsWith('2026-07-01') && r[2] === 'ios'
+      );
+      expect(storefrontJulyIos.slice(3)).toEqual(['2', '0', '0', '2']);
+
+      // The warning names the app by slug, which is what --app matches on.
+      const stderr = errorSpy.mock.calls.map((args) => args[0]).join('\n');
+      expect(stderr).toContain('stats unavailable');
+      expect(stderr).toContain('admin');
+    });
+
+    it('keeps same-named apps in different accounts on separate rows instead of summing them', async () => {
+      const accounts = accountsResponse([
+        { id: 'acc-1', name: 'myorg' },
+        { id: 'acc-2', name: 'otherorg' },
+      ]);
+      const apps = [
+        { id: 'app-1', name: 'Storefront', slug: 'storefront', accountId: 'acc-1' },
+        { id: 'app-2', name: 'Storefront', slug: 'storefront-eu', accountId: 'acc-2' },
+      ];
+      stubRouted({ accounts, apps });
+
+      await run(['--stats', '--group-by', 'app', '--month', '1']);
+
+      const output = tableOutput();
+      expect(output).toContain('2 app(s)');
+      const iosJuly = dataRows(output).filter((r) => r[2] === 'ios');
+      expect(iosJuly).toHaveLength(2);
+      // 2 and 1 — never a single merged row of 3.
+      expect(iosJuly.map((r) => r[3]).sort()).toEqual(['1', '2']);
+    });
+
+    it('emits no rows for an account whose app list failed — only the stderr warning', async () => {
+      const accounts = accountsResponse([
+        { id: 'acc-1', name: 'myorg' },
+        { id: 'acc-2', name: 'otherorg' },
+      ]);
+      const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+        const { variables = {} } = JSON.parse(options.body);
+        if (variables.accountId === 'acc-2') return jsonResponse({ errors: [{ message: 'nope' }] });
+        if (variables.accountId) return appsResponse([TWO_APPS[0]], 'acc-1');
+        if (variables.appId) return BUILDS[variables.appId]();
+        return accounts;
+      });
+      vi.stubGlobal('fetch', fetchImpl);
+
+      await run(['--stats', '--group-by', 'app', '--month', '1']);
+
+      const output = tableOutput();
+      expect(output).toContain('1 app(s)');
+      expect(output).not.toContain('otherorg');
+      expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('otherorg');
+    });
+
+    it('narrows to a single app with --app, matching on slug', async () => {
+      stubRouted();
+
+      await run(['--stats', '--group-by', 'app', '--app', 'admin', '--month', '1']);
+
+      const output = tableOutput();
+      expect(output).toContain('1 app(s)');
+      expect(new Set(dataRows(output).map((r) => r[0]))).toEqual(new Set(['Admin']));
+    });
+
+    it('narrows to a single platform with --platform, halving the rows', async () => {
+      stubRouted();
+
+      await run(['--stats', '--group-by', 'app', '--platform', 'ios']);
+
+      const output = tableOutput();
+      expect(output).toContain('6 row(s)'); // 2 apps × 3 months × 1 platform
+      expect(output).not.toContain('│ android');
+    });
+
+    it('--group-by account produces byte-identical output to omitting the flag', async () => {
+      stubRouted();
+      await run(['--stats']);
+      const implicit = tableOutput();
+
+      logSpy.mockClear();
+      stubRouted();
+      await run(['--stats', '--group-by', 'account']);
+
+      expect(tableOutput()).toEqual(implicit);
+    });
+  });
 });

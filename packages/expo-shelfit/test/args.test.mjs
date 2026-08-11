@@ -12,6 +12,7 @@ const DEFAULTS = {
   month: null,
   account: null,
   app: null,
+  groupBy: null,
   local: false,
   warnings: [],
 };
@@ -44,6 +45,18 @@ describe('parseArgs', () => {
     [
       ['--account', 'myorg', '--app', 'storefront', '--history', '5'],
       { account: 'myorg', app: 'storefront', history: 5 },
+    ],
+    [['--stats', '--group-by', 'app'], { stats: true, groupBy: 'app' }],
+    [['--stats', '--group-by=app'], { stats: true, groupBy: 'app' }],
+    [['--stats', '--group-by', 'account'], { stats: true, groupBy: 'account' }], // explicit default
+    [['--stats', '--group-by', 'APP'], { stats: true, groupBy: 'app' }], // lowercased
+    [
+      ['--stats', '--group-by', 'app', '--month', '6', '--platform', 'ios'],
+      { stats: true, groupBy: 'app', month: 6, platform: 'ios' },
+    ],
+    [
+      ['--stats', '--group-by', 'app', '--app', 'storefront'],
+      { stats: true, groupBy: 'app', app: 'storefront' },
     ],
     [['--account', 'myorg', '--stats'], { account: 'myorg', stats: true }],
     [['--account', 'myorg', '--plan'], { account: 'myorg', plan: true }],
@@ -87,6 +100,13 @@ describe('parseArgs', () => {
     [['--stats', '--month', '2.5'], /Invalid --month value/],
     [['--stats', '--month', '13'], /Invalid --month value/],
     [['--month', '6'], /--month can only be used with --stats/],
+    [['--stats', '--group-by'], /--group-by requires a value/],
+    [['--stats', '--group-by', 'platform'], /Invalid --group-by value: "platform"/],
+    [['--stats', '--group-by', ''], /Invalid --group-by value/],
+    // The message must not say "--groupBy": opts keys are camelCase, flags are not.
+    [['--group-by', 'app'], /--group-by can only be used with --stats/],
+    [['--plan', '--group-by', 'app'], /--group-by can only be used with --stats/],
+    [['--history', '5', '--group-by', 'app'], /--group-by can only be used with --stats/],
     [['--account'], /--account requires a value/],
     [['--account', ''], /--account requires a non-empty value/],
     [['--account', '   '], /--account requires a non-empty value/],

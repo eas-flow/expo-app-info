@@ -217,6 +217,72 @@ describe('toStatsDisplayRows', () => {
   it('defaults `now` to the current time when not given', () => {
     expect(() => toStatsDisplayRows([pastMonthEntry])).not.toThrow();
   });
+
+  // --group-by app (#90): only the first column changes; every other cell,
+  // and the row/platform structure, stays exactly as it is above.
+  describe('with groupBy: "app"', () => {
+    const appEntry = { ...pastMonthEntry, app: 'Storefront', appSlug: 'storefront' };
+
+    it('puts the app name in the first column instead of the account', () => {
+      expect(toStatsDisplayRows([appEntry], { groupBy: 'app', now: NOW })).toEqual([
+        ['Storefront', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15'],
+        ['Storefront', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17'],
+      ]);
+    });
+
+    it('falls back to the app slug when the app has no display name', () => {
+      const row = toStatsDisplayRows([{ ...appEntry, app: '' }], { groupBy: 'app', now: NOW })[0];
+      expect(row[0]).toBe('storefront');
+    });
+
+    it('ignores accountDisplayNames — that map is for the ACCOUNT column only', () => {
+      const accountDisplayNames = new Map([['myorg', 'My Organization']]);
+      const row = toStatsDisplayRows([appEntry], {
+        groupBy: 'app',
+        accountDisplayNames,
+        now: NOW,
+      })[0];
+      expect(row[0]).toBe('Storefront');
+    });
+
+    it('prints an app with no builds as a row of zeros, not as "-" or a missing row', () => {
+      const zeroEntry = {
+        ...appEntry,
+        ios: { success: 0, errored: 0, canceled: 0 },
+        android: { success: 0, errored: 0, canceled: 0 },
+      };
+      expect(toStatsDisplayRows([zeroEntry], { groupBy: 'app', now: NOW })).toEqual([
+        ['Storefront', '2026-06-01 → 2026-06-30', 'ios', '0', '0', '0', '0'],
+        ['Storefront', '2026-06-01 → 2026-06-30', 'android', '0', '0', '0', '0'],
+      ]);
+    });
+
+    it('still degrades a failed app to "-" on every cell including TOTAL', () => {
+      const rows = toStatsDisplayRows([{ ...appEntry, ios: null, android: null }], {
+        groupBy: 'app',
+        now: NOW,
+      });
+      expect(rows[0].slice(3)).toEqual(['-', '-', '-', '-']);
+      expect(rows[1].slice(3)).toEqual(['-', '-', '-', '-']);
+    });
+
+    it('keeps two same-named apps on their own rows rather than merging them', () => {
+      const other = { ...appEntry, appSlug: 'storefront-eu' };
+      const rows = toStatsDisplayRows([appEntry, other], { groupBy: 'app', now: NOW });
+      expect(rows).toHaveLength(4);
+      expect(rows.map((r) => r[0])).toEqual([
+        'Storefront',
+        'Storefront',
+        'Storefront',
+        'Storefront',
+      ]);
+    });
+
+    it('defaults to the account column when groupBy is omitted', () => {
+      const row = toStatsDisplayRows([appEntry], { now: NOW })[0];
+      expect(row[0]).toBe('myorg');
+    });
+  });
 });
 
 describe('statsBuildsHeaders', () => {

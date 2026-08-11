@@ -6,6 +6,9 @@
 import { CliError } from './cli.mjs';
 
 const PLATFORMS = ['ios', 'android'];
+// --stats grouping axes (#90). "account" is the default and keeps the
+// pre-#90 output; "app" swaps the ACCOUNT column for an APP column.
+const GROUP_BY_AXES = ['account', 'app'];
 // Sanity cap on --history (no documented API max) — keeps a typo like
 // --history 99999 from hammering the API. Confirmed accepted at 100 via
 // scripts/probe-history.mjs.
@@ -40,6 +43,9 @@ export const HELP = `
                              --history.
     --month <n>             Widen --stats to the last <n> calendar months (1-12, default
                              3). Only valid together with --stats.
+    --group-by <axis>       Count --stats rows per "account" (default) or per "app".
+                             "app" replaces the ACCOUNT column with an APP column. Only
+                             valid together with --stats.
     --plan                  Show current account subscription (plan/concurrency) instead
                              of the app list. Cannot be combined with --stats or --history.
     --history <N>           Show the N most recent builds per platform instead of just
@@ -103,6 +109,18 @@ export const HELP = `
     an account degrades that account's rows to "-" (including TOTAL)
     rather than failing the run.
 
+    --group-by app makes --stats count per app instead of per account: the
+    ACCOUNT column becomes APP (the app's EAS Display name, falling back to
+    its slug) and each app gets its own rows. It costs no extra API calls —
+    the per-app counts are already fetched and were simply being summed per
+    account. Apps with no builds in a month still print, as a row of zeros,
+    so "this app was not built" is visible rather than absent. Two apps in
+    different accounts that share a Display name stay on separate rows and
+    are never summed together; pass --account to tell them apart. Row order
+    and the failure behavior are otherwise unchanged, except that a failed
+    build-count fetch now degrades only that app's rows to "-" instead of
+    the whole account's.
+
     --plan prints one row per account with its current subscription only —
     plan name, plan ID, status, concurrency (total/ios/android), and trial
     end — no build counts or billing period. Same degrade-to-"-" behavior as
@@ -146,6 +164,7 @@ export function parseArgs(argv) {
     month: null,
     account: null,
     app: null,
+    groupBy: null,
     local: false,
     // Non-fatal notices for the caller to print (currently only the --usage
     // deprecation). Collected here rather than printed so parseArgs stays a
@@ -192,6 +211,10 @@ export function parseArgs(argv) {
       opts.app = requireValue(argv, ++i, '--app');
     } else if (arg.startsWith('--app=')) {
       opts.app = arg.slice('--app='.length);
+    } else if (arg === '--group-by') {
+      opts.groupBy = requireValue(argv, ++i, '--group-by');
+    } else if (arg.startsWith('--group-by=')) {
+      opts.groupBy = arg.slice('--group-by='.length);
     } else if (arg === '--local') {
       opts.local = true;
     } else {
@@ -243,6 +266,16 @@ export function parseArgs(argv) {
     throw new CliError('--app requires a non-empty value.');
   }
 
+  if (opts.groupBy !== null) {
+    const normalized = opts.groupBy.toLowerCase();
+    if (!GROUP_BY_AXES.includes(normalized)) {
+      throw new CliError(
+        `Invalid --group-by value: "${opts.groupBy}". Expected "account" or "app".`
+      );
+    }
+    opts.groupBy = normalized;
+  }
+
   // Display modes are mutually exclusive. Order here also decides which
   // pair gets reported first when 3 are set at once (#57).
   const activeModes = EXCLUSIVE_MODES.filter((mode) => isModeActive(opts, mode));
@@ -258,7 +291,7 @@ export function parseArgs(argv) {
   // the current one (--stats), never the deprecated alias.
   for (const [flag, requiredMode] of Object.entries(MODE_ONLY_FLAGS)) {
     if (opts[flag] !== null && !opts[requiredMode]) {
-      throw new CliError(`--${flag} can only be used with --${requiredMode}.`);
+      throw new CliError(`${flagName(flag)} can only be used with --${requiredMode}.`);
     }
   }
 
@@ -284,8 +317,16 @@ export function parseArgs(argv) {
 }
 
 const EXCLUSIVE_MODES = ['plan', 'history', 'stats'];
-const MODE_ONLY_FLAGS = { month: 'stats' };
+const MODE_ONLY_FLAGS = { month: 'stats', groupBy: 'stats' };
 const MODE_INCOMPATIBLE_FLAGS = { app: ['plan'], local: ['stats', 'plan'] };
+
+// opts key -> CLI spelling, for the flags where the two differ (camelCase
+// opts can't be turned into `--group-by` by prefixing alone).
+const FLAG_NAMES = { groupBy: '--group-by' };
+
+function flagName(key) {
+  return FLAG_NAMES[key] ?? `--${key}`;
+}
 
 // Every mode's flag is just `--<mode>` except stats, which has the deprecated
 // --usage alias — there, echo whichever name this run was invoked with (#89).
