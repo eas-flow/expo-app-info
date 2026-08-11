@@ -3,9 +3,11 @@ import {
   bold,
   dim,
   pad,
+  red,
   renderTable,
   shouldUseColor,
   width,
+  yellow,
 } from '../../../src/shared/terminal/render.mjs';
 
 describe('width', () => {
@@ -61,6 +63,18 @@ describe('dim / bold', () => {
   it('returns plain text when isTTY is false', () => {
     expect(dim('x', false)).toBe('x');
     expect(bold('x', false)).toBe('x');
+  });
+});
+
+describe('yellow / red', () => {
+  it('wraps text in ANSI codes when isTTY is true', () => {
+    expect(yellow('x', true)).toBe('\x1b[33mx\x1b[0m');
+    expect(red('x', true)).toBe('\x1b[31mx\x1b[0m');
+  });
+
+  it('returns plain text when isTTY is false', () => {
+    expect(yellow('x', false)).toBe('x');
+    expect(red('x', false)).toBe('x');
   });
 });
 
