@@ -64,7 +64,11 @@ npx @my-shelfio/expo-shelfit
 
 [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens) で作成できます。
 
-これは意図的に唯一の選択肢としています。トークンは `argv` から読み取られることも、ディスクに書き込まれることもないため、シェル履歴・プロセス一覧・置き忘れた設定ファイルを経由して漏洩することがありません。`EXPO_TOKEN` が未設定の場合、CLI は非ゼロのステータスで終了します — プロンプトで待機することはなく、CI 上での実行も安全です。
+これは意図的に唯一の選択肢としています。トークンは `argv` から読み取られることも、ディスクに書き込まれることも、出力されることもないため、シェル履歴・プロセス一覧・置き忘れた設定ファイル・CLI自身の出力を経由して漏洩することがありません。送信先はただ1つ、EAS GraphQLエンドポイント（`https://api.expo.dev/graphql`）に、HTTPS経由で `Authorization` ヘッダーとして送信されます。`EXPO_TOKEN` が未設定の場合、CLI は非ゼロのステータスで終了します — プロンプトで待機することはなく、CI 上での実行も安全です。
+
+> `EXPO_API_URL` でエンドポイントを上書きできます。これはローカルテスト用に存在するもので、この注記以外に文書化されておらず、互換性の保証対象外です。信頼できないホストを指定しないでください — そうするとトークンがそのホストに送信されてしまいます。
+
+脆弱性を非公開で報告する方法は [SECURITY.md](../../.github/SECURITY.md)（英語のみ）を参照してください。
 
 ## 🛠️ 使い方
 
@@ -266,9 +270,8 @@ npx @my-shelfio/expo-shelfit --plan
 
 ### さらに詳しく
 
-- [CONTRIBUTING.md](./CONTRIBUTING.md)（[日本語版](./CONTRIBUTING.ja.md)） — 開発環境のセットアップ、テスト/lint コマンド、プロジェクト構成、リリースプロセス
-- [SECURITY.md](./SECURITY.md)（[日本語版](./SECURITY.ja.md)） — 脆弱性報告のポリシーと、非公開で問題を報告する方法
-- [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md)（[日本語版](../../CODE_OF_CONDUCT.ja.md)） — このプロジェクトが従う Contributor Covenant
+- [CONTRIBUTING.md](./CONTRIBUTING.md)（英語のみ） — 開発環境のセットアップ、テスト/lint コマンド、プロジェクト構成、リリースプロセス
+- [SECURITY.md](../../.github/SECURITY.md)（英語のみ） — 脆弱性報告のポリシーと、非公開で問題を報告する方法
 
 ## ❓ FAQ
 
@@ -298,7 +301,7 @@ npx @my-shelfio/expo-shelfit --plan
 
 **`EXPO_TOKEN` がディスクに書き込まれたりログに出力されたりすることはありますか？**
 
-ありません。`argv` から読み取られることも、ディスクに書き込まれることも、出力されることもありません。ポリシーの詳細と脆弱性を非公開で報告する方法については [SECURITY.md](./SECURITY.md) を参照してください。
+ありません。`argv` から読み取られることも、ディスクに書き込まれることも、出力されることもありません。ポリシーの詳細と脆弱性を非公開で報告する方法については [SECURITY.md](../../.github/SECURITY.md)（英語のみ）を参照してください。
 
 ## 📄 ライセンス
 
