@@ -1,6 +1,6 @@
-// Client-side --app/--account resolution (issue #84). Both flags narrow
-// *before* the expensive per-app build fetch — see src/cli.mjs (--account,
-// applied once against the full account list right after fetchAccounts())
+// Client-side --app/--account resolution. Both flags narrow *before* the
+// expensive per-app build fetch — see src/cli.mjs (--account, applied
+// once against the full account list right after fetchAccounts())
 // and src/commands/list.mjs / stats.mjs (--app, applied per-account right
 // after fetchApps(), before fetchBuilds()/countBuildsByMonth()). Sits
 // alongside api/format/render/dates/progress in the import graph: used by
@@ -57,8 +57,8 @@ export function resolveAccount(accounts, value) {
  * falling back to EAS Display name (`app.name`) — both case-insensitive
  * exact match. A Display name matching more than one app *within that one
  * account* is ambiguous and throws; the same Display name in a different
- * account is a separate `filter()` call and matches independently (#92 —
- * ambiguity is scoped per account, not across every account seen). Call
+ * account is a separate `filter()` call and matches independently —
+ * ambiguity is scoped per account, not across every account seen. Call
  * `finalize()` once after every account has been through `filter()` — it
  * throws CliError (with "Did you mean" suggestions gathered from every slug
  * and Display name seen across every account) if `value` was set but never

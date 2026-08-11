@@ -99,7 +99,7 @@ describe('createAppFilter', () => {
 
   it('finalize() throws with a suggestion when nothing matched across every account seen', () => {
     // 'storfront' (missing 'e') is one edit away from 'storefront' — the
-    // issue #84's own example of a typo the suggestions should catch.
+    // canonical example of a typo the suggestions should catch.
     const filter = createAppFilter('storfront');
     filter.filter(appsA);
     filter.filter(appsB);
@@ -128,7 +128,7 @@ describe('createAppFilter', () => {
     expect(() => filter.finalize()).not.toThrow();
   });
 
-  // #92: --app matches Display name too, same rule as --account.
+  // --app matches Display name too, same rule as --account.
   it('matches by EAS Display name when slug does not match', () => {
     const filter = createAppFilter('Field Ops');
     expect(filter.filter(appsA)).toEqual([appsA[1]]);

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Dev-only verification script (not shipped — see package.json#files).
-// issue #83 (build status visibility) cannot be designed without knowing,
+// Making build status visible in the CLI (the STATUS column, and --stats'
+// success/errored/canceled buckets) cannot be designed without knowing,
 // against the real API:
 //   1. What `status` enum values actually come back (FINISHED/ERRORED plus
 //      however queued/in-progress/canceled builds are represented)
@@ -9,11 +10,10 @@
 //   3. Whether `status` accepts a list of values (e.g.
 //      `status: [FINISHED, ERRORED]`) or only a single enum value
 //   4. Whether `appVersion`/`appBuildVersion` are null on non-FINISHED builds
-// Run this against a real account with builds in more than one status, then
-// paste the full output into issue #83 — none of #83's design decisions
-// (status -> display-string mapping, whether "-" covers missing version
-// fields, the `--stats` ERRORED BUILDS column) should be written until this
-// comes back.
+// Run this against a real account with builds in more than one status. None
+// of the design decisions above (status -> display-string mapping, whether
+// "-" covers missing version fields, the `--stats` status columns) should be
+// written until this comes back.
 //
 //   export EXPO_TOKEN=xxxxx
 //   node scripts/probe-build-status.mjs                    # first app in every account
@@ -80,7 +80,7 @@ for (const account of accounts) {
 
   // [1] & partial [4]: filter with no `status` key at all — does it error
   // (status required), or return every status? The distinct `status` values
-  // seen here also answer unknown #1 as a side effect.
+  // seen here also answer unknown [1] as a side effect.
   console.log('\n  [1] filter: { platform } with no status key —');
   try {
     const noStatus = await client.gql(
@@ -159,6 +159,6 @@ for (const account of accounts) {
   }
 }
 
-console.log('\nDone. Paste the output above into issue #83 — this is what the STATUS');
-console.log('column mapping, the --status-array question, and the appVersion "-"');
-console.log('fallback all depend on.');
+console.log('\nDone. The output above is what the STATUS column mapping, the');
+console.log('--status-array question, and the appVersion "-" fallback all');
+console.log('depend on.');

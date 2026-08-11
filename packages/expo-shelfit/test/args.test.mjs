@@ -92,7 +92,7 @@ describe('parseArgs', () => {
     [['--stats', '--history', '5'], /--history cannot be combined with --stats/],
     [['--plan', '--stats'], /--plan cannot be combined with --stats/],
     [['--plan', '--history', '3'], /--plan cannot be combined with --history/],
-    // 3 exclusive modes at once (#57): reports only the first colliding pair.
+    // 3 exclusive modes at once: reports only the first colliding pair.
     [['--stats', '--plan', '--history', '3'], /--plan cannot be combined with --history/],
     [['--stats', '--month'], /--month requires a value/],
     [['--stats', '--month', 'abc'], /Invalid --month value/],
@@ -124,7 +124,7 @@ describe('parseArgs', () => {
   });
 });
 
-// --usage is the pre-#89 name for --stats. It still parses to exactly the
+// --usage is the original name for --stats. It still parses to exactly the
 // same opts, plus a deprecation warning; it goes away in the next major.
 describe('parseArgs — the deprecated --usage alias', () => {
   it('parses to the same opts as --stats, apart from the warning', () => {

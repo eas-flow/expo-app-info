@@ -419,7 +419,7 @@ describe('fetchBuilds', () => {
     expect(query).not.toContain('android:');
   });
 
-  it('requests status and passes it through on each returned build, without filtering on it (#83)', async () => {
+  it('requests status and passes it through on each returned build, without filtering on it', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         data: {
@@ -634,7 +634,7 @@ describe('countBuildsByMonth', () => {
     expect(body.variables).toEqual({ appId: 'app-1', offset: 0, limit: 50 });
   });
 
-  it('does not count a build whose status is not FINISHED/ERRORED/CANCELED into any bucket (#83)', async () => {
+  it('does not count a build whose status is not FINISHED/ERRORED/CANCELED into any bucket', async () => {
     // Most likely a still in-progress/queued build — its exact enum name was
     // never confirmed against the real API, so an arbitrary placeholder
     // stands in here to prove the "unknown status" path, not a guessed name.

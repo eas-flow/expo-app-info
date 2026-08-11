@@ -95,6 +95,24 @@ so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the process.
 No enforced commit message format. Keep commits focused and PRs small. Use
 the PR template's Verification checklist.
 
+**Never write an issue or PR number into a file in this repo** — not in a
+comment, a JSDoc block, a test name, a README, a workflow, or a template. A
+number is not an explanation: it sends the reader somewhere else to find out
+why the code is the way it is, and that somewhere else drifts, gets closed,
+or is unreachable to anyone reading the published package. Write the reason
+in place instead — what was observed, what was tried, what constraint the
+code is honoring.
+
+Commit messages, branch names, PR titles/bodies, and Release notes are
+outside this rule; issue linkage there is fine and expected. Before opening
+a PR, run from the repo root:
+
+```bash
+git grep -nE '#[0-9]{2,4}|issues?/[0-9]+|pull/[0-9]+' -- . ':!package-lock.json'
+```
+
+It must return nothing.
+
 ## Releasing (maintainers)
 
 This is a monorepo, so each package under `packages/*` is versioned and

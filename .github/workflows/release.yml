@@ -5,7 +5,7 @@ name: Release
 # monorepo, and more than one package under packages/* can move in the same
 # release. Instead, every package's local package.json version is compared
 # against what's currently on npm; only the ones that differ get published.
-# See CONTRIBUTING.md's "Releasing" section and issue #51.
+# See CONTRIBUTING.md's "Releasing" section.
 
 on:
   release:

@@ -66,7 +66,7 @@ export function bold(s, isTTY = process.stdout.isTTY) {
 
 // Single pass over rows rather than Math.max(...rows.map(...)) per column,
 // which turns row count into Math.max's argument count and blows the call
-// stack on large tables (#61).
+// stack on large tables.
 function computeWidths(headers, rows) {
   const widths = headers.map((h) => width(h));
   for (const row of rows) {

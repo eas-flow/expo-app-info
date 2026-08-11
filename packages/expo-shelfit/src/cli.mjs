@@ -35,8 +35,8 @@ export async function run(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
 
   // parseArgs itself does no I/O, so its non-fatal notices (currently just
-  // the --usage deprecation, #89) are printed here. Before --help/--version
-  // so a deprecated flag is still called out when combined with them, and on
+  // the --usage deprecation) are printed here. Before --help/--version so a
+  // deprecated flag is still called out when combined with them, and on
   // stderr so it never lands in a redirected table.
   for (const warning of opts.warnings) {
     console.error(dim(`  ! ${warning}`));
@@ -61,7 +61,7 @@ export async function run(argv = process.argv.slice(2)) {
   if (accounts.length === 0) throw new CliError('No accounts found for this token.');
 
   // --account narrows to a single account before any app/build fetch, for
-  // every display mode alike (#84). Resolved against the full list above,
+  // every display mode alike. Resolved against the full list above,
   // matching slug or Display name; throws CliError (with suggestions) on no
   // match or an ambiguous Display name.
   if (opts.account !== null) {

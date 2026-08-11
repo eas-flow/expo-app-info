@@ -31,7 +31,7 @@ jobs:
       # --stats no longer queries subscription/billingPeriod at all — it
       # pages app.byId(...).builds(offset, limit, filter) per app and
       # buckets client-side by UTC calendar month + status (success/errored/
-      # canceled, #83). Separate step so a break in that pagination shape is
+      # canceled). Separate step so a break in that pagination shape is
       # distinguishable from a break in the plain app/build queries above.
       - name: Run --stats against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs --stats
@@ -63,7 +63,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       # --platform narrows the RecentBuilds/BuildsPage query to a single
-      # `ios:`/`android:` alias instead of always requesting both (#59) — a
+      # `ios:`/`android:` alias instead of always requesting both — a
       # separate step so a break in that single-alias query shape is
       # distinguishable from a break in the always-both queries above.
       - name: Run --platform ios against the live EAS API

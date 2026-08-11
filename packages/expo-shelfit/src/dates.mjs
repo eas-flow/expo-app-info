@@ -5,7 +5,7 @@
 // with EAS's own dashboard (design rule: 期間境界は UTC 固定). The one
 // exception is formatBuildDate's *display* timestamp (BUILD DATE), which
 // `--local` can switch to the machine's local timezone (design rule: 表示
-// タイムスタンプのみ切り替え可) — see #85. Never make calendarMonths,
+// タイムスタンプのみ切り替え可). Never make calendarMonths,
 // inclusiveEnd, or isoDate timezone-aware: countBuildsByMonth compares their
 // UTC output directly against build createdAt timestamps, and shifting that
 // boundary would silently move builds into the wrong month.
@@ -94,7 +94,7 @@ export function formatBuildDate(iso, { local = false } = {}) {
  * accurate for the instant it's called on, so a table whose rows span a DST
  * transition could show a header offset that's off by an hour for some
  * rows — an accepted tradeoff for a header that has to show one number
- * (see issue #85's "未確定事項").
+ * (a known, accepted limitation of --local, not an oversight).
  */
 export function localOffset(now = new Date()) {
   // getTimezoneOffset() returns *minutes to add to local time to reach

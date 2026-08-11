@@ -33,9 +33,9 @@ import { dim, renderTable } from '../render.mjs';
  * that whole account's rows degrade to "-" rather than failing the run,
  * and the reason is reported on stderr.
  *
- * `--group-by app` (#90) keeps both passes exactly as they are and only
- * changes what happens to `pairResults` afterwards: instead of summing every
- * app of an account into one set of totals, each (account, app) pair becomes
+ * `--group-by app` keeps both passes exactly as they are and only changes
+ * what happens to `pairResults` afterwards: instead of summing every app of
+ * an account into one set of totals, each (account, app) pair becomes
  * its own group of rows. No extra API call — the per-app counts were always
  * being fetched, just added together. Same-named apps in different accounts
  * stay separate, since grouping is by pair, not by display name.
@@ -60,7 +60,7 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
   // Pass 2: build counts per (account, app) pair, flattened — not nested.
   // --app narrows here, right after pass 1's fetchApps() and before this
   // pass's countBuildsByMonth() below, so a non-matching account never pays
-  // for a build fetch (#84).
+  // for a build fetch.
   const appFilter = createAppFilter(opts.app);
   const pairs = [];
   appsByAccount.forEach(({ apps }, accountIndex) => {
@@ -132,7 +132,8 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
 }
 
 /**
- * One group per account, its apps' counts summed (the pre-#90 behavior).
+ * One group per account, its apps' counts summed (the default behavior,
+ * and the only one before --group-by existed).
  * `totals: null` renders every cell on that account's rows as "-": either
  * its app list couldn't be fetched, or any one of its apps' build counts
  * failed — with everything summed into a single number, one missing app
@@ -160,7 +161,7 @@ function accountGroups(accounts, appsByAccount, pairResults, months, warnings) {
 
 /**
  * One group per (account, app) pair — same order as `pairs`, so accounts stay
- * in order and apps keep the order the API returned them in (#90).
+ * in order and apps keep the order the API returned them in.
  *
  * Failure is finer-grained than in accountGroups: only the app whose fetch
  * failed degrades to "-", because per-app counts stand on their own and one

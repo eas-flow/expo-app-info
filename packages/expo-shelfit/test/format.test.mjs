@@ -218,7 +218,7 @@ describe('toStatsDisplayRows', () => {
     expect(() => toStatsDisplayRows([pastMonthEntry])).not.toThrow();
   });
 
-  // --group-by app (#90): only the first column changes; every other cell,
+  // --group-by app: only the first column changes; every other cell,
   // and the row/platform structure, stays exactly as it is above.
   describe('with groupBy: "app"', () => {
     const appEntry = { ...pastMonthEntry, app: 'Storefront', appSlug: 'storefront' };

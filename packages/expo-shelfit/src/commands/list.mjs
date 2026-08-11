@@ -12,10 +12,10 @@ import { dim, renderTable } from '../render.mjs';
 /**
  * The default app list: every account's apps with their latest (or, with
  * `--history <N>`, latest N) build attempt(s) per platform — regardless of
- * status (#83; before that, only FINISHED builds were ever fetched, so an
- * app whose most recent attempt errored or was canceled silently fell back
- * to an older successful one, or showed "-" if it had never finished a
- * build at all).
+ * status (before that, only FINISHED builds were ever fetched, so an app
+ * whose most recent attempt errored or was canceled silently fell back to
+ * an older successful one, or showed "-" if it had never finished a build
+ * at all).
  */
 export async function runList(client, accounts, opts, accountDisplayNames) {
   const appFilter = createAppFilter(opts.app);
@@ -23,7 +23,7 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
   for (const account of accounts) {
     progress(`Fetching apps in ${account.name}…`);
     // --app narrows here, right after fetchApps() and before fetchBuilds()
-    // below, so a non-matching account never pays for a build fetch (#84).
+    // below, so a non-matching account never pays for a build fetch.
     const apps = appFilter.filter(await client.fetchApps(account.id));
 
     let done = 0;
@@ -74,9 +74,9 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
 
   // `fetchBuilds` above already only requests the platform in `opts.platform`
   // (if any), so every remaining entry already matches it — this just drops
-  // the "no builds at all" rows (`platform: null`), matching the pre-#59
-  // behavior where those rows dropped out of the client-side `=== opts.platform`
-  // filter too.
+  // the "no builds at all" rows (`platform: null`), matching the behavior
+  // from when the platform filter was purely client-side (`=== opts.platform`),
+  // where those rows dropped out of that comparison too.
   const filtered = opts.platform !== null ? entries.filter((e) => e.platform !== null) : entries;
 
   if (filtered.length === 0) {

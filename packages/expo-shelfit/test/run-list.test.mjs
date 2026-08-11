@@ -209,7 +209,7 @@ describe('run', () => {
     expect(output).toContain('38'); // the android build number
     expect(output).not.toContain('41'); // the ios build number, filtered out
 
-    // #59: --platform narrows the query itself, not just the client-side
+    // --platform narrows the query itself, not just the client-side
     // display — the request must never even ask for the other platform's alias.
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.query).toContain('android:');
@@ -236,8 +236,8 @@ describe('run', () => {
     await run(['--app', 'storefront']);
 
     // accounts + apps + exactly one builds call — the non-matching app's
-    // builds are never fetched (#84's whole point: filter before the
-    // expensive step, not after).
+    // builds are never fetched — the whole point of --app is to filter
+    // before the expensive step, not after.
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.variables.appId).toBe('app-1');
@@ -259,7 +259,7 @@ describe('run', () => {
     expect(tableOutput()).toContain('storefront');
   });
 
-  // #92: --app matches EAS Display name too, same rule as --account.
+  // --app matches EAS Display name too, same rule as --account.
   it('--app matches the EAS Display name when it differs from the slug', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),

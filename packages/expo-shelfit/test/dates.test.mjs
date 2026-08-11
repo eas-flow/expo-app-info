@@ -35,7 +35,7 @@ describe('formatBuildDate', () => {
 // Sets process.env.TZ for the duration of `fn`, restoring the previous value
 // afterward — Node/V8 reads TZ per-call for Date's local getters, so this is
 // enough to make --local's output deterministic in tests regardless of the
-// machine actually running them (#85's test plan requirement).
+// machine actually running them.
 function withTz(tz, fn) {
   const original = process.env.TZ;
   process.env.TZ = tz;

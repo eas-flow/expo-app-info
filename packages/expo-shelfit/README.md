@@ -205,27 +205,27 @@ npx @my-shelfio/expo-shelfit --plan
 
 ### What the numbers mean
 
-| Column         | Source                                                        |
-| -------------- | ------------------------------------------------------------- |
-| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug |
-| `APP` / `SLUG` | EAS project name and slug                                     |
-| `PLATFORM`     | `ios` / `android`                                             |
-| `VERSION`      | `appVersion` of the latest build **attempt** (any status)     |
-| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)    |
+| Column         | Source                                                                                |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug                         |
+| `APP` / `SLUG` | EAS project name and slug                                                             |
+| `PLATFORM`     | `ios` / `android`                                                                     |
+| `VERSION`      | `appVersion` of the latest build **attempt** (any status)                             |
+| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)                            |
 | `STATUS`       | `Finished` / `Errored` / `Canceled` — any other status shows the raw value lowercased |
-| `BUILD DATE`   | When that build attempt finished (`YYYY/MM/DD-HH:mm:ss`, UTC unless `--local`) |
+| `BUILD DATE`   | When that build attempt finished (`YYYY/MM/DD-HH:mm:ss`, UTC unless `--local`)        |
 
 With `--stats`, one row per account **per UTC calendar month, per platform** instead (last 3 months by default, or `--month <n>` for 1–12; both `ios` and `android` rows unless `--platform` narrows to one):
 
-| Column      | Source                                                                                                                                                                      |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`   | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
-| `PERIOD`    | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
-| `PLATFORM`  | `ios` / `android` — one row per platform per account per month                                                                                                              |
-| `SUCCESS`   | Finished builds on that platform in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                               |
-| `ERRORED`   | Same, for errored builds                                                                                                                                                     |
-| `CANCELED`  | Same, for canceled builds                                                                                                                                                    |
-| `TOTAL`     | `SUCCESS` + `ERRORED` + `CANCELED` for that row                                                                                                                              |
+| Column     | Source                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`  | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
+| `PERIOD`   | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
+| `PLATFORM` | `ios` / `android` — one row per platform per account per month                                                                                                              |
+| `SUCCESS`  | Finished builds on that platform in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                 |
+| `ERRORED`  | Same, for errored builds                                                                                                                                                    |
+| `CANCELED` | Same, for canceled builds                                                                                                                                                   |
+| `TOTAL`    | `SUCCESS` + `ERRORED` + `CANCELED` for that row                                                                                                                             |
 
 A build that's still in progress or queued isn't counted into any of the three categories, nor into `TOTAL`, since it hasn't reached a terminal outcome. Pass `--platform ios` or `--platform android` to show only that platform's rows (the column set stays the same).
 
@@ -272,7 +272,7 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
 3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
 
-`filter` deliberately has no `status` key — confirmed against the real API (`scripts/probe-build-status.mjs`, issue #83) that omitting it returns builds in every status and that the field isn't required. Before #83 it was hardcoded to `status: FINISHED`, so a build that errored or was canceled was invisible; the `STATUS` column now surfaces it instead.
+`filter` deliberately has no `status` key — confirmed against the real API (`scripts/probe-build-status.mjs`) that omitting it returns builds in every status and that the field isn't required. It used to be hardcoded to `status: FINISHED`, so a build that errored or was canceled was invisible; the `STATUS` column now surfaces it instead.
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 

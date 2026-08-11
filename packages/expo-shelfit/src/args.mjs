@@ -6,8 +6,8 @@
 import { CliError } from './cli.mjs';
 
 const PLATFORMS = ['ios', 'android'];
-// --stats grouping axes (#90). "account" is the default and keeps the
-// pre-#90 output; "app" swaps the ACCOUNT column for an APP column.
+// --stats grouping axes. "account" is the default and keeps the original
+// output; "app" swaps the ACCOUNT column for an APP column.
 const GROUP_BY_AXES = ['account', 'app'];
 // Sanity cap on --history (no documented API max) — keeps a typo like
 // --history 99999 from hammering the API. Confirmed accepted at 100 via
@@ -19,7 +19,7 @@ const MAX_HISTORY = 100;
 export const DEFAULT_STATS_MONTHS = 3;
 const MAX_MONTH = 12;
 
-// `--usage` was this mode's original name (#89). It kept being mistaken for
+// `--usage` was this mode's original name. It kept being mistaken for
 // EAS's *billing* usage — which this CLI deliberately never queries (see
 // src/api.mjs#countBuildsByMonth) — so it is now `--stats`. The old flag still
 // works but warns; it goes away in the next major.
@@ -177,7 +177,7 @@ export function parseArgs(argv) {
   };
 
   // --stats and its deprecated alias --usage are tracked separately so error
-  // messages can echo the flag the user actually typed (#89): `--usage --plan`
+  // messages can echo the flag the user actually typed: `--usage --plan`
   // must not report `--stats`, a flag they never wrote.
   let sawStats = false;
   let sawDeprecatedUsage = false;
@@ -281,7 +281,7 @@ export function parseArgs(argv) {
   }
 
   // Display modes are mutually exclusive. Order here also decides which
-  // pair gets reported first when 3 are set at once (#57).
+  // pair gets reported first when 3 are set at once.
   const activeModes = EXCLUSIVE_MODES.filter((mode) => isModeActive(opts, mode));
   if (activeModes.length >= 2) {
     const [subject, other] = activeModes;
@@ -305,9 +305,8 @@ export function parseArgs(argv) {
   // (--local with both --stats and --plan). Truthy check on opts[flag] works
   // for both nullable-string flags (--app) and boolean flags (--local).
   // --app is incompatible with --plan since --plan is account-only and never
-  // fetches apps (#84, see src/commands/plan.mjs); --local is incompatible
-  // with --stats/--plan since neither has a BUILD DATE column for it to
-  // affect (#85).
+  // fetches apps (see src/commands/plan.mjs); --local is incompatible with
+  // --stats/--plan since neither has a BUILD DATE column for it to affect.
   for (const [flag, incompatibleModes] of Object.entries(MODE_INCOMPATIBLE_FLAGS)) {
     if (!opts[flag]) continue;
     for (const mode of incompatibleModes) {
@@ -333,7 +332,7 @@ function flagName(key) {
 }
 
 // Every mode's flag is just `--<mode>` except stats, which has the deprecated
-// --usage alias — there, echo whichever name this run was invoked with (#89).
+// --usage alias — there, echo whichever name this run was invoked with.
 function modeFlag(mode, statsFlag) {
   return mode === 'stats' ? statsFlag : `--${mode}`;
 }

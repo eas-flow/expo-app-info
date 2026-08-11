@@ -53,11 +53,11 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
 const ALL_PLATFORMS = ['ios', 'android'];
 
 // `status` is deliberately omitted from `filter` — confirmed against the
-// real API (scripts/probe-build-status.mjs, issue #83) that leaving it out
-// returns builds in every status (FINISHED/ERRORED/CANCELED and whatever
-// else), not just FINISHED, and that the field does not require a value.
+// real API (scripts/probe-build-status.mjs) that leaving it out returns
+// builds in every status (FINISHED/ERRORED/CANCELED and whatever else), not
+// just FINISHED, and that the field does not require a value.
 // Filtering to one status client-side after the fact would still work but
-// would throw away exactly the information #83 exists to surface.
+// would throw away exactly the information the STATUS column exists to show.
 function buildAliases(platforms, { offset, fields }) {
   return platforms
     .map(
@@ -145,8 +145,8 @@ function monthIndexForBuild(createdAtMs, bounds) {
 
 // Raw EAS `status` enum value -> the count bucket it lands in for
 // countBuildsByMonth (--stats). Only these 3 have been confirmed against the
-// real API (scripts/probe-build-status.mjs, issue #83); anything not listed
-// here — a still in-progress/queued build, or any other status this
+// real API (scripts/probe-build-status.mjs); anything not listed here —
+// a still in-progress/queued build, or any other status this
 // unofficial API introduces later — is deliberately not counted in any
 // bucket rather than guessed at, since it hasn't reached a terminal outcome.
 const STATUS_COUNT_KEY = { FINISHED: 'success', ERRORED: 'errored', CANCELED: 'canceled' };
@@ -246,9 +246,9 @@ export function createApiClient({
    * (FINISHED/ERRORED/CANCELED/anything else — see the module comment on
    * `buildAliases`), newest first, merged into one array (ios entries first,
    * then android). `limit` defaults to 1 to preserve the "latest build
-   * attempt per platform" behavior most callers want — as of #83 that is the
-   * latest *attempt*, not the latest successful one; a platform whose most
-   * recent build errored or was canceled now surfaces that build instead of
+   * attempt per platform" behavior most callers want — that is the latest
+   * *attempt*, not the latest successful one; a platform whose most recent
+   * build errored or was canceled now surfaces that build instead of
    * silently falling back to an older successful one.
    *
    * `platform` (`'ios'` | `'android'` | omitted for both) narrows which
@@ -273,8 +273,8 @@ export function createApiClient({
 
   /**
    * Success/errored/canceled build counts for one app, bucketed by platform
-   * and UTC calendar month, for `--stats` (#83 — before this, only FINISHED
-   * builds were counted at all). `months` is a list of `{ start, end }`
+   * and UTC calendar month, for `--stats` (before this, only FINISHED builds
+   * were counted at all). `months` is a list of `{ start, end }`
    * boundaries ordered newest first (src/dates.mjs's calendarMonths()); the
    * return value is a parallel array of `{ ios, android }` counts, one entry
    * per month in `months`, where each of `ios`/`android` is
