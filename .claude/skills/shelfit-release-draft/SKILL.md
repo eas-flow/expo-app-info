@@ -135,12 +135,8 @@ git diff --name-only
 
 `package.json` の `version` 以外にも、旧バージョン文字列をそのまま書いている箇所がないか確認する。**特に以下は既知の見落としポイント**:
 
-- `packages/<package>/test/features/list/command.test.mjs` の `--version` 出力を検証するテスト
-  （例: `expect(logSpy).toHaveBeenCalledWith('1.0.1')`）。実装（`src/cli.mjs`）は
-  `package.json` の `version` をそのまま出力するだけなので、このテストの期待値を
-  更新し忘れると `npm test` が新バージョンで確実に失敗する（CI も PR も red になる）。
-- `.github/ISSUE_TEMPLATE/bug_report.yml` の `cli-version` フィールドの `placeholder`
-  （例: `"1.0.1"`）。テスト失敗には繋がらないが、Issue テンプレートの例示が古いままになる。
+- `packages/<package>/test/features/list/command.test.mjs` の `--version` 出力を検証するテスト（例: `expect(logSpy).toHaveBeenCalledWith('1.0.1')`）。実装（`src/cli.mjs`）は`package.json` の `version` をそのまま出力するだけなので、このテストの期待値を更新し忘れると `npm test` が新バージョンで確実に失敗する（CI も PR も red になる）。
+- `.github/ISSUE_TEMPLATE/bug_report.yml` の `cli-version` フィールドの `placeholder`（例: `"1.0.1"`）。テスト失敗には繋がらないが、Issue テンプレートの例示が古いままになる。
 
 ```bash
 grep -rn "<現行バージョン>" packages/<package>/test .github/ISSUE_TEMPLATE
@@ -165,12 +161,35 @@ git push origin develop
 
 ```bash
 git log origin/main..develop --oneline
+git log origin/main..develop --oneline --merges
 git log origin/main..develop --name-only --pretty=format:"---%h %s"
 ```
 
-取得したコミットを**2軸**で分類する。
+#### 4-0. PR 番号は「マージコミット」からのみ取得する（必須）
 
-**軸1: コミットプレフィックス**
+**コミット件名中の `(#NN)` を PR 番号として使ってはいけない。** このリポジトリでは feature ブランチを
+`feat/<issue番号>` のように issue 番号で命名する慣習があり、`feat(#85): ...` のようなコミット件名の
+`#NN` は**そのコミットが属する issue の番号**であって、そのコミット群を実際に `develop` へマージした
+PR の番号ではないことが多い（例: `feat(#85): --local で...` を含む一連のコミットは issue #85 に対応す
+るが、実際にマージした PR は別番号）。取り違えるとリリースノートのリンクが無関係な issue/PR を指す。
+
+実際の PR 番号は `git log origin/main..develop --oneline --merges` に出てくる
+`Merge pull request #NN from my-shelfio/<branch>` の行からのみ取得する。手順:
+
+1. `--merges` の出力で PR 境界（マージコミットとその PR 番号）を一覧化する。
+2. `--oneline`（全体）の出力で、各マージコミットの直下から次のマージコミットの直前までに並ぶ非マージコミットを、そのマージコミットの PR 番号に属するグループとして束ねる。
+3. マージコミットを介さず `develop` に直接 push されたコミット（該当すれば）は対応する PR が無いため、番号を付けない。
+
+**同一 PR に属する複数コミットは、リリースノート上は1本の項目に統合する。** コミットメッセージをそのまま
+並べず、その PR 全体で何が変わったかを簡潔な日本語でまとめる（例: 同じ PR に feat コミットと、その実装
+を仕上げる fix コミットが両方含まれる場合、分けずに Features 側の1項目にまとめてよい）。
+
+#### 4-1. 分類
+
+グループ化したコミット群を**2軸**で分類する。
+
+**軸1: コミットプレフィックス**（グループ内に複数の種類が混在する場合は、グループ全体を代表する変更内
+容で分類する）
 
 | プレフィックス                            | リリースノートの分類 |
 | ----------------------------------------- | -------------------- |
@@ -185,8 +204,7 @@ git log origin/main..develop --name-only --pretty=format:"---%h %s"
 各コミットの変更ファイルパスが `packages/<package>/` 配下なら、そのパッケージの変更として扱う。ルート直下や `.github/` のみの変更はリポジトリ全体の変更として扱い、原則リリースノートには載せない（載せる場合はパッケージ名を付けられないため Notes に回す）。
 
 手順3で作った `chore(release):` コミットはリリースノートから除外する。
-
-コミットメッセージのプレフィックスは除去し、PR 番号（`#NNN`）は末尾に残す。
+コミットメッセージのプレフィックスは除去する。末尾に付ける PR 番号は、必ず 4-0 で特定した**実際にマージした PR の番号**を使う。
 
 ---
 
@@ -221,7 +239,7 @@ gh pr create \
 
 ## Changes
 
-<手順4で分類したコミット一覧。各行頭にパッケージ名を付ける>
+<手順4で分類・統合したコミット一覧。各行頭にパッケージ名を付ける。PR 番号を付ける場合は 4-0 で特定した実際のマージ PR 番号を使う（コミット件名中の `(#NN)` は issue 番号であり流用しない）>
 
 -
 
@@ -277,6 +295,8 @@ Verification チェックリストは、手順4で判定した変更内容に照
 ```
 
 - **各行頭に必ずパッケージ名（`` `@my-shelfio/<package>`: ``）を付ける。** タグはパッケージ名を含まないため、本文だけがパッケージとの対応を示す唯一の情報源になる。
+- **`(#NNN)` は 4-0 で特定した実際のマージ PR 番号のみを使う。** コミット件名中の `(#NN)`（issue 番号であることが多い）をそのまま転記しない。PR 番号が特定できないコミット（マージコミットを介さないもの）には番号を付けない。
+- 同一 PR に属する複数コミットは1行に統合し、コミットメッセージの羅列にしない
 - 該当するコミットがないセクションは、セクションごと省略する
 - 初回リリースの場合は `Full Changelog` を `https://github.com/my-shelfio/shelfit/commits/v<version>` に置き換える
 
