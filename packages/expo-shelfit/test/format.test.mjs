@@ -116,7 +116,6 @@ describe('buildDateHeader', () => {
 
 const NOW = new Date('2026-07-15T00:00:00.000Z');
 
-// Current (still in progress) month: 2026-07-01 -> 2026-08-01 (exclusive).
 const currentMonthEntry = {
   account: 'myorg',
   ios: { success: 18, errored: 3, canceled: 2 },
@@ -125,7 +124,6 @@ const currentMonthEntry = {
   periodEnd: '2026-08-01T00:00:00.000Z',
 };
 
-// A finished past month: 2026-06-01 -> 2026-07-01 (exclusive).
 const pastMonthEntry = {
   account: 'myorg',
   ios: { success: 14, errored: 0, canceled: 1 },
@@ -134,9 +132,8 @@ const pastMonthEntry = {
   periodEnd: '2026-07-01T00:00:00.000Z',
 };
 
-// A degraded account (app/build fetch failed) — periodStart/periodEnd are
-// still known upfront (calendar months don't depend on the account), only
-// the build counts are null.
+// A degraded account: periodStart/periodEnd are still known upfront, since
+// calendar months don't depend on the account — only the counts are null.
 const degradedMonthEntry = {
   account: 'other',
   ios: null,
@@ -218,7 +215,7 @@ describe('toStatsDisplayRows', () => {
     expect(() => toStatsDisplayRows([pastMonthEntry])).not.toThrow();
   });
 
-  // --group-by app (#90): only the first column changes; every other cell,
+  // --group-by app: only the first column changes; every other cell,
   // and the row/platform structure, stays exactly as it is above.
   describe('with groupBy: "app"', () => {
     const appEntry = { ...pastMonthEntry, app: 'Storefront', appSlug: 'storefront' };

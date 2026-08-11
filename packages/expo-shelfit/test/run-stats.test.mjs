@@ -88,7 +88,7 @@ describe('run --stats', () => {
   // Reads the SUCCESS/ERRORED/CANCELED/TOTAL cells out of the
   // `│`-delimited table row whose PERIOD cell contains `periodStartPrefix`
   // (e.g. '2026-07-01') and whose PLATFORM cell is `platform` ('ios' or
-  // 'android') — each account/month now spans two rows (#83 follow-up), so
+  // 'android') — each account/month spans two rows, one per platform, so
   // both are needed to pick a single row unambiguously.
   const buildCountsFor = (output, periodStartPrefix, platform) => {
     const line = output
@@ -114,7 +114,7 @@ describe('run --stats', () => {
     expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['0', '0', '0', '0']);
   });
 
-  // #89: --usage is the old name for this mode. It must keep producing the
+  // --usage is the old name for this mode. It must keep producing the
   // identical table, with the deprecation notice confined to stderr so a
   // redirected stdout is byte-for-byte unchanged.
   it('accepts the deprecated --usage alias and prints the same table', async () => {
@@ -172,14 +172,14 @@ describe('run --stats', () => {
     expect(output).toContain('│ ios');
     expect(output).not.toContain('│ android');
 
-    // #59: --platform narrows the query itself, not just the client-side
+    // --platform narrows the query itself, not just the client-side
     // display — the request must never even ask for the other platform's alias.
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.query).toContain('ios:');
     expect(buildsCallBody.query).not.toContain('android:');
   });
 
-  it('buckets errored and canceled builds into their own columns, separate from success, with TOTAL as the sum (#83)', async () => {
+  it('buckets errored and canceled builds into their own columns, separate from success, with TOTAL as the sum', async () => {
     stubFetch([
       accountsResponse(),
       appsResponse(),
@@ -293,7 +293,7 @@ describe('run --stats', () => {
     expect(output).toContain('otherorg');
   });
 
-  it('does not deadlock once the account count reaches CONCURRENCY (regression for #63)', async () => {
+  it('does not deadlock once the account count reaches CONCURRENCY', async () => {
     // 10 accounts, one app each — over api.mjs's CONCURRENCY (8).
     const manyAccounts = Array.from({ length: 10 }, (_, i) => ({
       id: `acc-${i}`,
@@ -334,7 +334,7 @@ describe('run --stats', () => {
       const body = JSON.parse(options.body);
       if (body.query.includes('CurrentAccounts')) return twoAccountsResponse;
       if (body.query.includes('AccountApps')) {
-        // otherorg must never be queried at all — #84's --account narrows
+        // otherorg must never be queried at all — --account narrows
         // client.fetchAccounts()'s result before any command runs.
         expect(body.variables.accountId).toBe('acc-1');
         return appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }], 'acc-1');
@@ -432,11 +432,11 @@ describe('run --stats', () => {
 
     // If --local's incompatibility check above ever regresses and silently
     // lets --stats through, this still pins PERIOD to UTC calendar-month
-    // boundaries independent of the machine's timezone (#85).
+    // boundaries independent of the machine's timezone.
     expect(tableOutput()).toContain('2026-07-01 → (today)');
   });
 
-  // --group-by app (#90). Two apps in one account, with deliberately
+  // --group-by app. Two apps in one account, with deliberately
   // different build counts so a summed-vs-per-app mix-up cannot pass.
   describe('--group-by app', () => {
     const TWO_APPS = [
@@ -641,8 +641,8 @@ describe('run --stats', () => {
       expect(new Set(dataRows(output).map((r) => r[0]))).toEqual(new Set(['Admin']));
     });
 
-    // #92: the whole motivation for this issue — the APP column prints the
-    // Display name, and pasting that value back into --app must narrow to
+    // The whole motivation for Display-name matching — the APP column prints
+    // the Display name, and pasting that value back into --app must narrow to
     // just that app, even when it doesn't match the app's slug at all.
     it('narrows to a single app with --app, matching the printed Display name', async () => {
       const apps = [

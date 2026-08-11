@@ -46,18 +46,16 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
-// Both buildsQuery/buildsPageQuery below build one `ios:`/`android:` aliased
-// `builds(...)` field per requested platform, so a caller that only wants
-// one platform doesn't pay for fetching (and discarding) the other. `--platform`
-// is the caller-facing switch for this; see fetchBuilds/countBuildsByMonth.
+// One `ios:`/`android:` aliased `builds(...)` field per requested platform, so
+// a caller that only wants one doesn't pay for fetching and discarding the
+// other. `--platform` is the caller-facing switch.
 const ALL_PLATFORMS = ['ios', 'android'];
 
-// `status` is deliberately omitted from `filter` — confirmed against the
-// real API (scripts/probe-build-status.mjs, issue #83) that leaving it out
-// returns builds in every status (FINISHED/ERRORED/CANCELED and whatever
-// else), not just FINISHED, and that the field does not require a value.
-// Filtering to one status client-side after the fact would still work but
-// would throw away exactly the information #83 exists to surface.
+// `status` is deliberately omitted from `filter` — confirmed against the real
+// API (scripts/probe-build-status.mjs) that leaving it out returns builds in
+// every status, not just FINISHED, and that the field isn't required.
+// Filtering client-side afterwards would throw away exactly what the STATUS
+// column exists to show.
 function buildAliases(platforms, { offset, fields }) {
   return platforms
     .map(
@@ -75,14 +73,10 @@ function buildsQuery(platforms) {
 }`;
 }
 
-// `--stats` moved off this billing-scoped shape to client-side UTC calendar-month
-// counting below (buildsPageQuery/countBuildsByMonth): billing-period metrics can't
-// be sliced into arbitrary calendar ranges. Only the subscription fields survive
-// here, for `--plan`.
-//
-// Billing-scoped: a token without billing permission errors per account; the
-// CLI degrades that to "-" rather than failing the run. No price field —
-// not yet confirmed to exist against a real token.
+// Billing-scoped, so a token without billing permission errors per account —
+// the CLI degrades that to "-" rather than failing the run. No price field: not
+// confirmed to exist against a real token. `--stats` deliberately queries none
+// of this, since billing-period metrics can't be sliced into calendar ranges.
 const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   account { byId(accountId: $accountId) { id
     subscription {
@@ -92,12 +86,8 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   } }
 }`;
 
-// `--stats`. Same shape as buildsQuery above but paginated with
-// `offset`/`limit` instead of a fixed small `limit`, so callers can walk
-// arbitrarily far back into an app's build history. `createdAt` places a
-// build in a calendar month; `status` buckets it into success/errored/
-// canceled once there — see countBuildsByMonth. No appVersion/appBuildVersion,
-// since --stats never displays them.
+// buildsQuery's shape, paginated by `offset` so --stats can walk arbitrarily
+// far back, and without the version fields --stats never displays.
 function buildsPageQuery(platforms) {
   return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
@@ -106,34 +96,21 @@ function buildsPageQuery(platforms) {
 }`;
 }
 
-// Page size for buildsPageQuery; `limit: 100` confirmed accepted by the API
-// (scripts/probe-history.mjs). Non-zero offset not separately probed, but
-// same offset/limit shape.
+// Well under the `limit: 100` confirmed accepted by the API
+// (scripts/probe-history.mjs).
 const BUILD_PAGE_SIZE = 50;
 
-// Hard stop for countBuildsByMonth's pagination in case the API's
-// undocumented ordering/offset behavior stops holding (e.g. always returns
-// the same full page) — 200 x BUILD_PAGE_SIZE(50) = 10k builds/app, well
-// past any realistic --month window.
+// Hard stop in case the API's undocumented offset behavior stops holding (e.g.
+// it keeps returning the same full page) — 10k builds/app, past any realistic
+// --month window.
 const MAX_BUILD_PAGES = 200;
 
-/**
- * Normalizes `{ start, end }` UTC calendar-month boundaries (ISO 8601
- * strings, as produced by src/dates.mjs#calendarMonths()) to
- * `{ startMs, endMs }` once, so `monthIndexForBuild` below can compare
- * plain numbers instead of re-parsing the same boundaries on every call.
- */
+/** Parsed once so monthIndexForBuild compares numbers instead of re-parsing. */
 function toMonthBounds(months) {
   return months.map((m) => ({ startMs: Date.parse(m.start), endMs: Date.parse(m.end) }));
 }
 
-/**
- * Which month bucket (index into `bounds`) a build's `createdAtMs` falls
- * into, or -1 if it is outside every requested month (older than the oldest
- * one, or an unparseable `createdAt` that produced `NaN`). `bounds` is
- * `{ startMs, endMs }[]` (end exclusive — the instant the next month
- * starts), ordered newest first, as produced by `toMonthBounds` above.
- */
+/** -1 when the build falls outside every requested month, or `createdAt` was NaN. */
 function monthIndexForBuild(createdAtMs, bounds) {
   for (let i = 0; i < bounds.length; i++) {
     if (createdAtMs >= bounds[i].startMs && createdAtMs < bounds[i].endMs) {
@@ -143,12 +120,10 @@ function monthIndexForBuild(createdAtMs, bounds) {
   return -1;
 }
 
-// Raw EAS `status` enum value -> the count bucket it lands in for
-// countBuildsByMonth (--stats). Only these 3 have been confirmed against the
-// real API (scripts/probe-build-status.mjs, issue #83); anything not listed
-// here — a still in-progress/queued build, or any other status this
-// unofficial API introduces later — is deliberately not counted in any
-// bucket rather than guessed at, since it hasn't reached a terminal outcome.
+// Only these 3 have been confirmed against the real API
+// (scripts/probe-build-status.mjs). Anything else — a queued build, or a status
+// this unofficial API adds later — is counted in no bucket rather than guessed
+// at, since it hasn't reached a terminal outcome.
 const STATUS_COUNT_KEY = { FINISHED: 'success', ERRORED: 'errored', CANCELED: 'canceled' };
 
 function emptyStatusCounts() {
@@ -156,9 +131,8 @@ function emptyStatusCounts() {
 }
 
 /**
- * Creates a client bound to one API URL / auth header set. Keeping this a
- * factory (rather than module-scoped state) means tests can spin up an
- * isolated client per test with a mocked `fetchImpl`.
+ * A factory rather than module-scoped state, so tests can spin up an isolated
+ * client per test with a mocked `fetchImpl`.
  */
 export function createApiClient({
   apiUrl,
@@ -242,23 +216,16 @@ export function createApiClient({
   }
 
   /**
-   * Up to `limit` most recent builds per platform *regardless of status*
-   * (FINISHED/ERRORED/CANCELED/anything else — see the module comment on
-   * `buildAliases`), newest first, merged into one array (ios entries first,
-   * then android). `limit` defaults to 1 to preserve the "latest build
-   * attempt per platform" behavior most callers want — as of #83 that is the
-   * latest *attempt*, not the latest successful one; a platform whose most
-   * recent build errored or was canceled now surfaces that build instead of
-   * silently falling back to an older successful one.
+   * The `limit` most recent builds per platform *regardless of status*, so a
+   * platform whose latest attempt errored or was canceled surfaces that build
+   * instead of falling back to an older successful one.
    *
-   * `platform` (`'ios'` | `'android'` | omitted for both) narrows which
-   * `builds(...)` alias is even requested — the query is built to only ask
-   * for what's needed, not fetched-then-filtered.
+   * `platform` narrows which alias is even requested, rather than fetching
+   * both and discarding one.
    *
-   * The API's own ordering for `builds(offset, limit)` is not documented, so
-   * each platform's slice is sorted by `createdAt` descending here rather
-   * than trusted as-is — with `limit: 1` a wrong order never showed up, but
-   * it would with `limit > 1`.
+   * The API's ordering for `builds(offset, limit)` is undocumented, so each
+   * slice is sorted here rather than trusted — with `limit: 1` a wrong order
+   * never showed up, but it would with `limit > 1`.
    */
   async function fetchBuilds(appId, { limit = 1, platform } = {}) {
     const platforms = platform ? [platform] : ALL_PLATFORMS;
@@ -272,31 +239,18 @@ export function createApiClient({
   }
 
   /**
-   * Success/errored/canceled build counts for one app, bucketed by platform
-   * and UTC calendar month, for `--stats` (#83 — before this, only FINISHED
-   * builds were counted at all). `months` is a list of `{ start, end }`
-   * boundaries ordered newest first (src/dates.mjs's calendarMonths()); the
-   * return value is a parallel array of `{ ios, android }` counts, one entry
-   * per month in `months`, where each of `ios`/`android` is
-   * `{ success, errored, canceled }` (see STATUS_COUNT_KEY/emptyStatusCounts
-   * above). A build whose status isn't one of those three — most commonly
-   * still in-progress/queued — falls into none of them: it hasn't reached a
-   * terminal outcome yet, so it would misrepresent whichever bucket it got
-   * dropped into.
+   * Build counts for one app, bucketed by platform and UTC calendar month:
+   * `months` in, a parallel array of `{ ios, android }` counts out. A build in
+   * a status STATUS_COUNT_KEY doesn't list falls into no bucket at all.
    *
-   * Pages through buildsPageQuery() newest-first, a fixed BUILD_PAGE_SIZE at
-   * a time. By default both platforms are requested in the same page; with
-   * `platform` set, only that platform's alias is ever requested. Each
-   * platform stops independently once either a page comes back short
-   * (fewer than BUILD_PAGE_SIZE — no more builds exist) or every build in a
-   * page is older than the oldest requested month's start (further pages
-   * would only be older still, assuming the API's undocumented order holds
-   * newest-first, as observed for tested accounts in
-   * scripts/probe-history.mjs) — once a platform is done, its alias is
-   * dropped from every subsequent page's query, not just skipped client-side.
-   * Throws ApiError like every other method here; the caller
-   * (src/commands/stats.mjs#runStats) decides a failure degrades that whole
-   * account's rows rather than failing the run.
+   * Each platform stops paging independently, once a page comes back short or
+   * every build in it predates the oldest requested month — the latter relies
+   * on the API's undocumented order holding newest-first, as observed in
+   * scripts/probe-history.mjs. A finished platform's alias is dropped from
+   * subsequent queries rather than skipped client-side.
+   *
+   * Throws ApiError; src/commands/stats.mjs#runStats decides that degrades
+   * that account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
@@ -361,12 +315,7 @@ export function createApiClient({
     return counts;
   }
 
-  /**
-   * Current subscription (plan, status, trial end, concurrency) for one
-   * account — no billing period or build counts. Used by `--plan`.
-   * Throws like every other method here; the caller
-   * (src/commands/plan.mjs#runPlan) decides a missing plan isn't fatal.
-   */
+  /** Throws like everything else here; src/commands/plan.mjs treats a missing plan as non-fatal. */
   async function fetchSubscription(accountId) {
     const data = await gql(Q_SUBSCRIPTION, { accountId });
     return data?.account?.byId?.subscription ?? null;
@@ -376,13 +325,11 @@ export function createApiClient({
 }
 
 /**
- * Shared in-flight request cap for every parallelized fetch in this CLI,
- * enforced by `defaultSemaphore` below.
+ * Shared in-flight request cap for every parallelized fetch in this CLI.
  *
- * Do not call `mapWithConcurrency` from inside a task that is itself
- * running under `mapWithConcurrency` against the same semaphore — a task
- * holds its slot for its whole duration, so nesting can exhaust the pool
- * and deadlock. See `mapWithConcurrency` below.
+ * Do not call `mapWithConcurrency` from inside a task already running under
+ * `mapWithConcurrency` against the same semaphore — a task holds its slot for
+ * its whole duration, so nesting can exhaust the pool and deadlock.
  */
 export const CONCURRENCY = 8;
 
@@ -414,9 +361,8 @@ export function createSemaphore(limit) {
 const defaultSemaphore = createSemaphore(CONCURRENCY);
 
 /**
- * Run `task` over `items` concurrently, gated by `semaphore` (default:
- * `defaultSemaphore`, shared process-wide so the cap holds across call
- * sites — do not nest calls against the same semaphore, see CONCURRENCY).
+ * `defaultSemaphore` is shared process-wide so the cap holds across call sites
+ * — which is also why calls must not be nested, see CONCURRENCY.
  */
 export async function mapWithConcurrency(items, task, { semaphore = defaultSemaphore } = {}) {
   return Promise.all(

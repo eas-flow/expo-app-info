@@ -17,4 +17,5 @@
 
 ## Related issues
 
-<!-- e.g. Closes #123 -->
+<!-- Link the issues this PR closes. Issue links belong here, in the PR
+     body — never in the repo's own files. -->

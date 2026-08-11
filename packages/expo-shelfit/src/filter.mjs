@@ -1,10 +1,6 @@
-// Client-side --app/--account resolution (issue #84). Both flags narrow
-// *before* the expensive per-app build fetch — see src/cli.mjs (--account,
-// applied once against the full account list right after fetchAccounts())
-// and src/commands/list.mjs / stats.mjs (--app, applied per-account right
-// after fetchApps(), before fetchBuilds()/countBuildsByMonth()). Sits
-// alongside api/format/render/dates/progress in the import graph: used by
-// cli.mjs and commands/*.mjs, imports nothing from either.
+// Client-side --app/--account resolution. Both flags narrow *before* the
+// expensive per-app build fetch: --account in src/cli.mjs right after
+// fetchAccounts(), --app per-account in src/commands/ right after fetchApps().
 
 import { CliError } from './cli.mjs';
 
@@ -12,22 +8,14 @@ import { CliError } from './cli.mjs';
 // otherwise dump dozens of near-matches into one error message.
 const MAX_SUGGESTIONS = 5;
 
-// A candidate only surfaces as a suggestion if its edit distance from the
-// input is at most this fraction of the *candidate's* length (so a 1-char
-// typo on a short slug still counts as "close" while an unrelated slug of
-// similar length doesn't) — floored at 1 so even a 1-2 char input can still
-// get a suggestion for a single-edit typo.
+// Edit distance allowed as a fraction of the *candidate's* length, floored at
+// 1 so even a 1-2 char input can still get a single-edit suggestion.
 const MAX_DISTANCE_RATIO = 0.4;
 
 /**
- * Resolves `--account <value>` against fetched accounts, matching the
- * unique slug (`account.name`) first, falling back to the EAS Display name
- * (`account.displayName`) — both case-insensitive exact match, no
- * partial/prefix matching (see suggestNear below for near-miss suggestions,
- * used only in the not-found error). Slug is checked first and wins
- * outright since it's guaranteed unique; Display names are not, so a
- * Display name that matches more than one account throws rather than
- * silently picking one.
+ * Exact match only, case-insensitive. The slug is checked first and wins
+ * outright since it's guaranteed unique; Display names are not, so one that
+ * matches several accounts throws rather than silently picking one.
  */
 export function resolveAccount(accounts, value) {
   const needle = value.toLowerCase();
@@ -50,19 +38,13 @@ export function resolveAccount(accounts, value) {
 }
 
 /**
- * Creates an `--app <slug|name>` filter for use inside a per-account apps
- * loop (src/commands/list.mjs, stats.mjs). `value` is `opts.app` (nullable —
- * a no-op filter when unset). `filter(apps)` narrows one account's apps down
- * to the match: unique slug first (wins outright, same as resolveAccount),
- * falling back to EAS Display name (`app.name`) — both case-insensitive
- * exact match. A Display name matching more than one app *within that one
- * account* is ambiguous and throws; the same Display name in a different
- * account is a separate `filter()` call and matches independently (#92 —
- * ambiguity is scoped per account, not across every account seen). Call
- * `finalize()` once after every account has been through `filter()` — it
- * throws CliError (with "Did you mean" suggestions gathered from every slug
- * and Display name seen across every account) if `value` was set but never
- * matched anywhere.
+ * Same matching rule as resolveAccount, applied one account's apps at a time.
+ * Ambiguity is therefore scoped per account: the same Display name in another
+ * account is a separate `filter()` call and matches independently.
+ *
+ * Call `finalize()` after every account has been through `filter()` — only
+ * then is "matched nowhere" knowable, and only then are all the candidate
+ * names for a "Did you mean" suggestion in hand.
  */
 export function createAppFilter(value) {
   if (value === null) {
@@ -104,11 +86,8 @@ export function createAppFilter(value) {
 }
 
 /**
- * `No <label> matched "<value>".` with up to MAX_SUGGESTIONS near matches —
- * ranked by Levenshtein edit distance (closest first), case-insensitive,
- * against `keys` (every candidate slug/Display name known at the point of
- * failure). Catches transposed/missing/extra-character typos that a
- * prefix/substring check would miss (e.g. "storfront" -> "storefront").
+ * Suggestions are ranked by edit distance rather than prefix/substring, so a
+ * transposed or missing character still matches ("storfront" -> "storefront").
  */
 function notFoundError(label, value, keys) {
   const suggestions = suggestNear(value.toLowerCase(), keys);
@@ -128,18 +107,15 @@ function suggestNear(needle, keys) {
 
   scored.sort((a, b) => a.distance - b.distance);
 
-  // A key can appear twice for one account (slug + Display name computed
-  // independently in resolveAccount's `keys`) — dedup while keeping the
-  // closer-ranked occurrence, since scored is already distance-sorted.
+  // A key can appear twice (slug + Display name); Set keeps the first, which
+  // is the closer-ranked one because `scored` is already distance-sorted.
   return [...new Set(scored.map((s) => s.key))].slice(0, MAX_SUGGESTIONS);
 }
 
 /**
- * Levenshtein edit distance (insert/delete/substitute, each cost 1) between
- * two strings — used only to rank "Did you mean" suggestions above, so the
- * plain O(len(a) * len(b)) two-row DP below is plenty: inputs here are short
- * slugs/Display names and there are at most a handful of candidates.
- * Zero-dependency by design, like the rest of this CLI.
+ * Only ranks "Did you mean" suggestions, so the plain two-row DP is plenty —
+ * inputs are short slugs and there are a handful of candidates. Hand-rolled
+ * because this CLI is zero-dependency by design.
  */
 function levenshtein(a, b) {
   if (a.length === 0) return b.length;

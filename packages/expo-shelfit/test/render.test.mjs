@@ -14,7 +14,7 @@ describe('width', () => {
     expect(width('ios日本')).toBe(3 + 4);
   });
 
-  it('counts emoji as 2 columns (#61)', () => {
+  it('counts emoji as 2 columns', () => {
     expect(width('🚀')).toBe(2);
   });
 
@@ -80,7 +80,7 @@ describe('renderTable', () => {
     expect(out).toContain('x');
   });
 
-  it('does not throw RangeError on a large number of rows (#61)', () => {
+  it('does not throw RangeError on a large number of rows', () => {
     const rows = Array.from({ length: 200_000 }, (_, i) => [String(i)]);
     expect(() => renderTable(['A'], rows, { isTTY: false })).not.toThrow();
   });
