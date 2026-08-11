@@ -81,19 +81,16 @@ npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 npx @my-shelfio/expo-shelfit --plan
 ```
 
-### Deprecated
+#### Deprecated
 
 `--usage` is a deprecated alias for `--stats`. It still works and prints the identical table, but writes a deprecation warning to stderr and will be removed in the next major version.
 
 ## 🚀 Features
 
-- (default) — List every Expo (EAS) app in your account, with its latest build attempt per platform, from **any** directory
-- `--platform <ios|android>` — Filter to one platform
-- `--account <slug|name>` / `--app <slug|name>` — Narrow to a single account or app, across every display mode
-- `--local` — Show `BUILD DATE` in your local timezone instead of UTC
-- `--history <N>` — Show the `N` most recent build attempts per platform, not just the latest
-- `--stats` — Success/errored/canceled build counts per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
-- `--plan` — Current account subscription: plan, plan ID, status, concurrency, trial end
+- **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account
+- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest
+- **Track build results by month** — `--stats` aggregates success/errored/canceled build counts per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
+- **Check your Expo subscription** — `--plan` shows the current account subscription: plan, plan ID, status, concurrency, trial end
 
 ## 📚 Documentation
 
