@@ -11,10 +11,17 @@ const PLATFORMS = ['ios', 'android'];
 // scripts/probe-history.mjs.
 const MAX_HISTORY = 100;
 
-// --usage defaults to the last 3 UTC calendar months; --month widens it, capped
+// --stats defaults to the last 3 UTC calendar months; --month widens it, capped
 // at 12 since a wider window means more paging per app (request count/latency).
-export const DEFAULT_USAGE_MONTHS = 3;
+export const DEFAULT_STATS_MONTHS = 3;
 const MAX_MONTH = 12;
+
+// `--usage` was this mode's original name (#89). It kept being mistaken for
+// EAS's *billing* usage — which this CLI deliberately never queries (see
+// src/api.mjs#countBuildsByMonth) — so it is now `--stats`. The old flag still
+// works but warns; it goes away in the next major.
+export const DEPRECATED_USAGE_WARNING =
+  '--usage is deprecated and will be removed in the next major version. Use --stats instead.';
 
 export const HELP = `
   expo-shelfit — List every Expo (EAS) app with its latest build version per platform.
@@ -27,24 +34,28 @@ export const HELP = `
     -h, --help              Show this help
     -v, --version           Show version
     --platform <platform>   Only show "ios" or "android" builds
-    --usage                 Show success/errored/canceled/total build counts per UTC
+    --stats                 Show success/errored/canceled/total build counts per UTC
                              calendar month and platform (last 3 months by default)
                              instead of the app list. Cannot be combined with --plan or
                              --history.
-    --month <n>             Widen --usage to the last <n> calendar months (1-12, default
-                             3). Only valid together with --usage.
+    --month <n>             Widen --stats to the last <n> calendar months (1-12, default
+                             3). Only valid together with --stats.
     --plan                  Show current account subscription (plan/concurrency) instead
-                             of the app list. Cannot be combined with --usage or --history.
+                             of the app list. Cannot be combined with --stats or --history.
     --history <N>           Show the N most recent builds per platform instead of just
-                             the latest (1-100). Cannot be combined with --usage or --plan.
+                             the latest (1-100). Cannot be combined with --stats or --plan.
     --account <slug|name>   Only this account (matches slug or EAS Display name). Applies
                              to every display mode.
     --app <slug>            Only this app. Applies to every display mode except --plan
                              (--plan doesn't fetch apps).
     --local                 Show BUILD DATE in the local timezone (TZ env var or system
-                             default) instead of UTC. Only affects BUILD DATE — --usage's
+                             default) instead of UTC. Only affects BUILD DATE — --stats'
                              PERIOD and --plan's TRIAL END stay UTC. Cannot be combined
-                             with --usage or --plan (neither has a BUILD DATE column).
+                             with --stats or --plan (neither has a BUILD DATE column).
+
+  Deprecated
+    --usage                 Old name for --stats. Still works, prints a warning on
+                             stderr, and will be removed in the next major version.
 
   Authentication
     EXPO_TOKEN environment variable only. Create a personal access token at
@@ -77,13 +88,14 @@ export const HELP = `
     or not --history is set, since a row is not necessarily the "last" build
     once more than one is shown.
 
-    --usage prints one row per account *per UTC calendar month per
+    --stats prints one row per account *per UTC calendar month per
     platform* — the last 3 months by default, or the last <n> with --month
     <n> (1-12); both ios and android rows unless --platform narrows to one.
     Each row's SUCCESS/ERRORED/CANCELED build counts are counted
     client-side from every build in an app's history via the API (not
     EAS's own billing usage metric, which can't be sliced by arbitrary
     calendar ranges); they may differ from what EAS's dashboard reports.
+    That distinction is why this mode is called --stats and not --usage.
     TOTAL is SUCCESS + ERRORED + CANCELED for that row. A still
     in-progress or queued build isn't counted into any of the three
     categories, nor into TOTAL. The current (in-progress) month's rows
@@ -94,7 +106,7 @@ export const HELP = `
     --plan prints one row per account with its current subscription only —
     plan name, plan ID, status, concurrency (total/ios/android), and trial
     end — no build counts or billing period. Same degrade-to-"-" behavior as
-    --usage on a per-account failure. Cannot be combined with --usage or
+    --stats on a per-account failure. Cannot be combined with --stats or
     --history, since each is its own display mode.
 
     --account <slug|name> narrows every display mode to a single account.
@@ -110,13 +122,17 @@ export const HELP = `
 
     --local switches only the BUILD DATE column to the local timezone (the
     header shows the current UTC offset, e.g. "BUILD DATE (+09:00)"); every
-    other date/boundary this CLI shows — --usage's PERIOD calendar-month
-    boundaries and --plan's TRIAL END — stays UTC regardless, since --usage's
+    other date/boundary this CLI shows — --stats' PERIOD calendar-month
+    boundaries and --plan's TRIAL END — stays UTC regardless, since --stats'
     monthly counts would otherwise silently shift which month a build is
     counted in. Respects the TZ environment variable like any other Node
     process (e.g. TZ=America/New_York npx @my-shelfio/expo-shelfit --local).
-    Cannot be combined with --usage or --plan, since neither has a BUILD DATE
+    Cannot be combined with --stats or --plan, since neither has a BUILD DATE
     column for it to affect.
+
+    --usage is the old name for --stats and still works, but prints a
+    deprecation warning on stderr and will be removed in the next major
+    version. Error messages echo whichever of the two you actually typed.
 `;
 
 export function parseArgs(argv) {
@@ -124,14 +140,24 @@ export function parseArgs(argv) {
     help: false,
     version: false,
     platform: null,
-    usage: false,
+    stats: false,
     plan: false,
     history: null,
     month: null,
     account: null,
     app: null,
     local: false,
+    // Non-fatal notices for the caller to print (currently only the --usage
+    // deprecation). Collected here rather than printed so parseArgs stays a
+    // pure function, the same reason src/* never calls process.exit.
+    warnings: [],
   };
+
+  // --stats and its deprecated alias --usage are tracked separately so error
+  // messages can echo the flag the user actually typed (#89): `--usage --plan`
+  // must not report `--stats`, a flag they never wrote.
+  let sawStats = false;
+  let sawDeprecatedUsage = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -140,8 +166,10 @@ export function parseArgs(argv) {
       opts.help = true;
     } else if (arg === '-v' || arg === '--version') {
       opts.version = true;
+    } else if (arg === '--stats') {
+      sawStats = true;
     } else if (arg === '--usage') {
-      opts.usage = true;
+      sawDeprecatedUsage = true;
     } else if (arg === '--plan') {
       opts.plan = true;
     } else if (arg === '--platform') {
@@ -170,6 +198,12 @@ export function parseArgs(argv) {
       throw new CliError(`Unknown option: ${arg}\n  Run \`expo-shelfit --help\` to see usage.`);
     }
   }
+
+  opts.stats = sawStats || sawDeprecatedUsage;
+  // The flag name to use in this run's error messages: whichever the user
+  // typed, preferring --stats if somehow both were passed.
+  const statsFlag = sawStats ? '--stats' : '--usage';
+  if (sawDeprecatedUsage) opts.warnings.push(DEPRECATED_USAGE_WARNING);
 
   if (opts.platform !== null) {
     const normalized = opts.platform.toLowerCase();
@@ -214,10 +248,14 @@ export function parseArgs(argv) {
   const activeModes = EXCLUSIVE_MODES.filter((mode) => isModeActive(opts, mode));
   if (activeModes.length >= 2) {
     const [subject, other] = activeModes;
-    throw new CliError(`--${subject} cannot be combined with --${other}.`);
+    throw new CliError(
+      `${modeFlag(subject, statsFlag)} cannot be combined with ${modeFlag(other, statsFlag)}.`
+    );
   }
 
-  // Flags that only make sense alongside a specific display mode.
+  // Flags that only make sense alongside a specific display mode. The mode
+  // wasn't given here, so there is no typed flag name to echo — always name
+  // the current one (--stats), never the deprecated alias.
   for (const [flag, requiredMode] of Object.entries(MODE_ONLY_FLAGS)) {
     if (opts[flag] !== null && !opts[requiredMode]) {
       throw new CliError(`--${flag} can only be used with --${requiredMode}.`);
@@ -227,17 +265,17 @@ export function parseArgs(argv) {
   // Flags that are common filters but don't make sense with one or more
   // particular display modes — the inverse of MODE_ONLY_FLAGS above. Values
   // are arrays since a flag can be incompatible with more than one mode
-  // (--local with both --usage and --plan). Truthy check on opts[flag] works
+  // (--local with both --stats and --plan). Truthy check on opts[flag] works
   // for both nullable-string flags (--app) and boolean flags (--local).
   // --app is incompatible with --plan since --plan is account-only and never
   // fetches apps (#84, see src/commands/plan.mjs); --local is incompatible
-  // with --usage/--plan since neither has a BUILD DATE column for it to
+  // with --stats/--plan since neither has a BUILD DATE column for it to
   // affect (#85).
   for (const [flag, incompatibleModes] of Object.entries(MODE_INCOMPATIBLE_FLAGS)) {
     if (!opts[flag]) continue;
     for (const mode of incompatibleModes) {
       if (opts[mode]) {
-        throw new CliError(`--${flag} cannot be used with --${mode}.`);
+        throw new CliError(`--${flag} cannot be used with ${modeFlag(mode, statsFlag)}.`);
       }
     }
   }
@@ -245,9 +283,15 @@ export function parseArgs(argv) {
   return opts;
 }
 
-const EXCLUSIVE_MODES = ['plan', 'history', 'usage'];
-const MODE_ONLY_FLAGS = { month: 'usage' };
-const MODE_INCOMPATIBLE_FLAGS = { app: ['plan'], local: ['usage', 'plan'] };
+const EXCLUSIVE_MODES = ['plan', 'history', 'stats'];
+const MODE_ONLY_FLAGS = { month: 'stats' };
+const MODE_INCOMPATIBLE_FLAGS = { app: ['plan'], local: ['stats', 'plan'] };
+
+// Every mode's flag is just `--<mode>` except stats, which has the deprecated
+// --usage alias — there, echo whichever name this run was invoked with (#89).
+function modeFlag(mode, statsFlag) {
+  return mode === 'stats' ? statsFlag : `--${mode}`;
+}
 
 function isModeActive(opts, mode) {
   return mode === 'history' ? opts.history !== null : opts[mode] === true;

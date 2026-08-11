@@ -1,6 +1,6 @@
 // UTC date helpers shared across the CLI's layers. Every *boundary* this CLI
 // computes (calendarMonths, inclusiveEnd) and every date-only display
-// (isoDate — --usage's PERIOD, --plan's TRIAL END) is UTC, full stop, no
+// (isoDate — --stats' PERIOD, --plan's TRIAL END) is UTC, full stop, no
 // opt-out — so calendar-month bucketing stays reproducible and comparable
 // with EAS's own dashboard (design rule: 期間境界は UTC 固定). The one
 // exception is formatBuildDate's *display* timestamp (BUILD DATE), which
@@ -11,7 +11,7 @@
 // boundary would silently move builds into the wrong month.
 
 /**
- * UTC calendar-month boundaries for `--usage`, `count` months ending with
+ * UTC calendar-month boundaries for `--stats`, `count` months ending with
  * the month containing `now`, ordered newest first (index 0 is
  * the current, still-in-progress month). Each entry is `{ start, end }`
  * ISO 8601, with `end` exclusive (the instant the next month starts) —

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // Dev-only verification script (not shipped — see package.json#files).
-// --usage counts "successful builds" client-side (paging builds(...FINISHED) and
+// --stats counts "successful builds" client-side (paging builds(...FINISHED) and
 // bucketing by platform + UTC calendar month, src/api.mjs#countBuildsByMonth) rather
 // than using EAS's billing/usage metrics. This isn't guaranteed to match EAS's own
 // numbers (e.g. retry handling may differ) — run this against a real account and
 // compare with the EAS dashboard before shipping or changing the counting logic.
 //
 //   export EXPO_TOKEN=xxxxx
-//   node scripts/probe-usage.mjs                    # every account, last 3 months
-//   node scripts/probe-usage.mjs --account myorg
-//   node scripts/probe-usage.mjs --month 6          # widen the window (same cap as --usage: 12)
+//   node scripts/probe-stats.mjs                    # every account, last 3 months
+//   node scripts/probe-stats.mjs --account myorg
+//   node scripts/probe-stats.mjs --month 6          # widen the window (same cap as --stats: 12)
 //
 // Reads the token from the environment only (never printed). Output contains real
 // account/app/build data — review before sharing.
@@ -47,7 +47,7 @@ if (accounts.length === 0) {
   process.exit(1);
 }
 
-// Same calendar-month helper --usage calls, so this mirrors what the CLI computes.
+// Same calendar-month helper --stats calls, so this mirrors what the CLI computes.
 const months = calendarMonths(monthCount);
 
 console.log(`API: ${API_URL}`);

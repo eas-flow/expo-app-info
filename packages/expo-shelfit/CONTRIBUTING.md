@@ -57,7 +57,7 @@ src/cli.mjs           The top-level run() flow: resolve auth, fetch accounts,
 src/args.mjs          Argument parsing, validation limits, help text
 src/commands/
   list.mjs            Default app list (and --history)
-  usage.mjs           --usage (successful builds per UTC calendar month)
+  stats.mjs           --stats (successful builds per UTC calendar month)
   plan.mjs            --plan (current subscription per account)
 src/api.mjs           EAS GraphQL client (throws, never exits/prints) +
                       createSemaphore/mapWithConcurrency/CONCURRENCY

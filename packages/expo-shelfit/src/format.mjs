@@ -55,14 +55,14 @@ export function buildDateHeader(local = false) {
 // counts into; anything else EAS reports (e.g. a still in-progress/queued
 // build) isn't a terminal outcome and isn't counted into any of the three,
 // nor into TOTAL (#83).
-function usagePlatforms(platform) {
+function statsPlatforms(platform) {
   if (platform === 'ios') return ['ios'];
   if (platform === 'android') return ['android'];
   return ['ios', 'android'];
 }
 
 /**
- * Usage table rows: one row per account per UTC calendar month *per
+ * Stats table rows: one row per account per UTC calendar month *per
  * platform* — `[account, period, platform, success, errored, canceled,
  * total]` (#83 follow-up: PLATFORM became its own column, replacing the
  * earlier design of one row per account/month with a SUCCESS(IOS)/
@@ -80,11 +80,11 @@ function usagePlatforms(platform) {
  * (src/api.mjs#countBuildsByMonth's shape). TOTAL is simply
  * success + errored + canceled for that row.
  */
-export function toUsageDisplayRows(
+export function toStatsDisplayRows(
   entries,
   { platform = null, accountDisplayNames = new Map(), now = new Date() } = {}
 ) {
-  const platforms = usagePlatforms(platform);
+  const platforms = statsPlatforms(platform);
   const rows = [];
 
   for (const e of entries) {
@@ -131,17 +131,17 @@ function periodCell(entry, now) {
 /**
  * Headers for the build-count columns: always these 4 — SUCCESS, ERRORED,
  * CANCELED, TOTAL — since PLATFORM is now its own column and `--platform`
- * narrows *rows*, not columns (#83 follow-up; see toUsageDisplayRows above).
+ * narrows *rows*, not columns (#83 follow-up; see toStatsDisplayRows above).
  * A plain array (not a function of `platform`) since the column set no
  * longer depends on it.
  */
-export function usageBuildsHeaders() {
+export function statsBuildsHeaders() {
   return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL'];
 }
 
 /**
  * `--plan` table rows: display strings, "-" for null/missing. Unlike
- * `--usage`, PLAN ID is shown as its own column (there's no billing period
+ * `--stats`, PLAN ID is shown as its own column (there's no billing period
  * or build count column to compete for space with), and CONCURRENCY reports
  * all three numbers (total/ios/android) at once unless `--platform` narrows
  * it to one.
