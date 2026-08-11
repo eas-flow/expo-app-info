@@ -10,6 +10,7 @@ import { HELP, parseArgs } from './args.mjs';
 import { runList } from './commands/list.mjs';
 import { runPlan } from './commands/plan.mjs';
 import { runUsage } from './commands/usage.mjs';
+import { resolveAccount } from './filter.mjs';
 import { progress } from './progress.mjs';
 
 export class CliError extends Error {}
@@ -47,8 +48,16 @@ export async function run(argv = process.argv.slice(2)) {
   const client = createApiClient({ apiUrl, authHeaders });
 
   progress('Fetching accounts…');
-  const accounts = await client.fetchAccounts();
+  let accounts = await client.fetchAccounts();
   if (accounts.length === 0) throw new CliError('No accounts found for this token.');
+
+  // --account narrows to a single account before any app/build fetch, for
+  // every display mode alike (#84). Resolved against the full list above,
+  // matching slug or Display name; throws CliError (with suggestions) on no
+  // match or an ambiguous Display name.
+  if (opts.account !== null) {
+    accounts = [resolveAccount(accounts, opts.account)];
+  }
 
   // Table-only cosmetic slug -> "Display name" mapping; see
   // toDisplayRows/toUsageDisplayRows in format.mjs.

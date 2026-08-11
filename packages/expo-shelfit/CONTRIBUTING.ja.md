@@ -56,6 +56,8 @@ src/commands/
   plan.mjs            --plan（アカウントごとの現在のサブスクリプション）
 src/api.mjs           EAS GraphQLクライアント（throwのみ、exit/printしない）+
                       createSemaphore/mapWithConcurrency/CONCURRENCY
+src/filter.mjs         --account / --app のクライアント側解決（slug/表示名の
+                      完全一致、未一致時の候補提示）
 src/format.mjs        エントリ → 表示行への変換（機械可読な出力モードは
                       存在せず、テーブルが唯一のサポート対象出力）
 src/render.mjs        テーブル描画と列幅
@@ -67,8 +69,8 @@ test/                 Vitestテスト。srcの各モジュールに1ファイル
                       共通部分は helpers.mjs にまとめている）
 ```
 
-importの流れは一方向です — `bin → cli → args / commands/* → api / format /
-render / dates / progress`（`format` は `dates` を、`progress` は `render` も使用） — 逆方向になることはありません（例: `api.mjs` は `commands/` からimportしてはいけない）。
+importの流れは一方向です — `bin → cli → args / commands/* → api / filter /
+format / render / dates / progress`（`format` は `dates` を、`progress` は `render` も使用） — 逆方向になることはありません（例: `api.mjs` は `commands/` からimportしてはいけない）。
 
 `src/*` のファイルは `process.exit` を呼んだり `process.argv` を直接読んだりしないため、単体テスト可能な状態を保っています。プロセスを終了できるのは `bin/cli.mjs` だけです。
 

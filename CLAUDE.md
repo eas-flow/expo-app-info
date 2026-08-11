@@ -47,6 +47,8 @@ src/commands/
   plan.mjs                --plan (current subscription per account)
 src/api.mjs             EAS GraphQL client (throws, never exits/prints) +
                         createSemaphore/mapWithConcurrency/CONCURRENCY
+src/filter.mjs           Client-side --account / --app resolution (exact
+                        slug/Display name match, "Did you mean" suggestions)
 src/format.mjs           entries → display-row conversion (table is the only
                         supported output; no machine-readable mode)
 src/render.mjs           Table rendering and column widths
@@ -59,9 +61,9 @@ test/                   Vitest, one file per src module (run-*.test.mjs are
 ```
 
 **Import direction is one-way and enforced by convention, not tooling**:
-`bin → cli → args / commands/* → api / format / render / dates / progress`,
-with `format` also using `dates` and `progress` using `render` — never in
-reverse (e.g. `api.mjs` must not import from `commands/`).
+`bin → cli → args / commands/* → api / filter / format / render / dates /
+progress`, with `format` also using `dates` and `progress` using `render` —
+never in reverse (e.g. `api.mjs` must not import from `commands/`).
 
 **`src/*` never calls `process.exit` or reads `process.argv` directly**, so
 everything stays unit-testable. Only `bin/cli.mjs` is allowed to exit the
@@ -75,6 +77,14 @@ throws `CliError` in `resolveAuthHeaders` (`src/cli.mjs`).
 **Display modes are mutually exclusive**: `--usage`, `--plan`, and
 `--history` cannot be combined with each other — combining any two is a
 `CliError`.
+
+**`--account`/`--app` narrow every display mode client-side** (`src/filter.mjs`),
+applied before the expensive per-app build fetch, not after: `--account`
+once against the full account list in `src/cli.mjs` right after step 1 below
+(matches slug or EAS Display name); `--app` per-account in `src/commands/
+list.mjs`/`usage.mjs` right after step 2, before step 3 (matches slug only;
+incompatible with `--plan`, which skips step 2 entirely). No match throws
+`CliError` with "Did you mean" suggestions.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
 concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { run } from '../src/cli.mjs';
+import { CliError, run } from '../src/cli.mjs';
 import {
   accountsResponse,
   appsResponse,
@@ -254,5 +254,99 @@ describe('run --usage', () => {
     for (const account of manyAccounts) {
       expect(output).toContain(account.name);
     }
+  });
+
+  it("--account narrows to a single account — the other account's apps are never fetched", async () => {
+    const twoAccountsResponse = accountsResponse([
+      { id: 'acc-1', name: 'myorg' },
+      { id: 'acc-2', name: 'otherorg' },
+    ]);
+
+    const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes('CurrentAccounts')) return twoAccountsResponse;
+      if (body.query.includes('AccountApps')) {
+        // otherorg must never be queried at all — #84's --account narrows
+        // client.fetchAccounts()'s result before any command runs.
+        expect(body.variables.accountId).toBe('acc-1');
+        return appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }], 'acc-1');
+      }
+      if (body.query.includes('BuildsPage')) {
+        return buildsResponse({ ios: [{ createdAt: '2026-07-05T00:00:00.000Z' }] });
+      }
+      throw new Error(`unexpected query in test: ${body.query}`);
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--usage', '--account', 'myorg', '--month', '1']);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 accounts + 1 apps + 1 builds page
+    const output = tableOutput();
+    expect(output).toContain('myorg');
+    expect(output).not.toContain('otherorg');
+  });
+
+  it('--account matches the EAS Display name the same as the slug', async () => {
+    const fetchImpl = stubFetch([
+      accountsResponse([{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }]),
+      appsResponse(),
+      buildsPageResponse,
+    ]);
+
+    await run(['--usage', '--account', 'My Organization', '--month', '1']);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(tableOutput()).toContain('My Organization');
+  });
+
+  it('--app narrows so a non-matching account contributes no build-count pairs', async () => {
+    const fetchImpl = stubFetch([
+      accountsResponse(),
+      appsResponse([
+        { id: 'app-1', name: 'Storefront', slug: 'storefront' },
+        { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
+      ]),
+      buildsPageResponse,
+    ]);
+
+    await run(['--usage', '--app', 'storefront', '--month', '1']);
+
+    // accounts + apps + exactly one builds page (not two) — field-ops's
+    // build counts are never fetched.
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(buildsCallBody.variables.appId).toBe('app-1');
+  });
+
+  it('rejects with CliError when --account matches no account', async () => {
+    stubFetch([accountsResponse([{ id: 'acc-1', name: 'myorg' }])]);
+
+    let error;
+    try {
+      await run(['--usage', '--account', 'nope']);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.message).toContain('No account matched "nope"');
+  });
+
+  it('rejects with CliError and a suggestion when --app matches no app', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }]),
+    ]);
+
+    let error;
+    try {
+      // 'storfront' (missing 'e') is one edit away from 'storefront' —
+      // exercises the Levenshtein "Did you mean" path.
+      await run(['--usage', '--app', 'storfront']);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.message).toContain('No app matched "storfront"');
+    expect(error.message).toContain('Did you mean: storefront');
   });
 });

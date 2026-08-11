@@ -10,6 +10,8 @@ const DEFAULTS = {
   plan: false,
   history: null,
   month: null,
+  account: null,
+  app: null,
 };
 
 describe('parseArgs', () => {
@@ -33,6 +35,17 @@ describe('parseArgs', () => {
     [['--plan', '--platform', 'ios'], { plan: true, platform: 'ios' }],
     [['--usage', '--month', '6'], { usage: true, month: 6 }],
     [['--usage', '--month=12'], { usage: true, month: 12 }], // at MAX_MONTH
+    [['--account', 'myorg'], { account: 'myorg' }],
+    [['--account=myorg'], { account: 'myorg' }],
+    [['--app', 'storefront'], { app: 'storefront' }],
+    [['--app=storefront'], { app: 'storefront' }],
+    [
+      ['--account', 'myorg', '--app', 'storefront', '--history', '5'],
+      { account: 'myorg', app: 'storefront', history: 5 },
+    ],
+    [['--account', 'myorg', '--usage'], { account: 'myorg', usage: true }],
+    [['--account', 'myorg', '--plan'], { account: 'myorg', plan: true }],
+    [['--app', 'storefront', '--usage'], { app: 'storefront', usage: true }],
   ])('parses %j', (argv, expected) => {
     expect(parseArgs(argv)).toEqual({ ...DEFAULTS, ...expected });
   });
@@ -44,8 +57,6 @@ describe('parseArgs', () => {
   // non-numeric, non-integer, missing value.
   it.each([
     [['--bogus'], /Unknown option: --bogus/],
-    // --account was removed (displayName replaced slug filtering)
-    [['--account', 'myorg'], /Unknown option: --account/],
     // --json/--csv were removed
     [['--json'], /Unknown option: --json/],
     [['--csv'], /Unknown option: --csv/],
@@ -67,6 +78,13 @@ describe('parseArgs', () => {
     [['--usage', '--month', '2.5'], /Invalid --month value/],
     [['--usage', '--month', '13'], /Invalid --month value/],
     [['--month', '6'], /--month can only be used with --usage/],
+    [['--account'], /--account requires a value/],
+    [['--account', ''], /--account requires a non-empty value/],
+    [['--account', '   '], /--account requires a non-empty value/],
+    [['--app'], /--app requires a value/],
+    [['--app', ''], /--app requires a non-empty value/],
+    [['--app', 'storefront', '--plan'], /--app cannot be used with --plan/],
+    [['--plan', '--app', 'storefront'], /--app cannot be used with --plan/],
   ])('throws on %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(CliError);
     expect(() => parseArgs(argv)).toThrow(message);

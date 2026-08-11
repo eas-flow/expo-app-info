@@ -29,6 +29,7 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 
 - Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
 - `--platform` filter to narrow to `ios` or `android`
+- `--account <slug|name>` / `--app <slug>` — narrow to a single account or app, across every display mode
 - `--history <N>` — show the `N` most recent builds per platform, not just the latest
 - `--usage` — successful build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
 - `--plan` — current account subscription: plan, plan ID, status, concurrency, trial end
@@ -77,6 +78,22 @@ Filter by platform:
 ```bash
 npx @my-shelfio/expo-shelfit --platform ios
 ```
+
+Narrow to one account or app — every display mode below respects these:
+
+```bash
+npx @my-shelfio/expo-shelfit --account myorg
+npx @my-shelfio/expo-shelfit --app storefront
+npx @my-shelfio/expo-shelfit --account myorg --app storefront --history 5
+```
+
+`--account <slug|name>` matches the account's unique slug or its EAS Display
+name (case-insensitive exact match — no partial matching). If a Display name
+matches more than one account, pass the slug instead. `--app <slug>` matches
+an app's unique slug the same way, and is applied *before* fetching builds,
+so it also speeds up the run — it cannot be combined with `--plan`, which
+doesn't fetch apps at all. Neither flag matching anything exits 1 with a
+"Did you mean" suggestion.
 
 Show more than just the latest build per platform:
 
@@ -173,6 +190,8 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 ### Filtering
 
 - `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's `SUCCESSFUL BUILDS` column; with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
+- `--account <slug|name>` — only this account, matching the unique slug or EAS Display name (case-insensitive exact match). Applies to every display mode. No match exits 1 with a suggestion.
+- `--app <slug>` — only this app, matching the unique slug (case-insensitive exact match), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
 - `--month <n>` — only with `--usage`: widen the window to the last `n` calendar months (1–12, default 3).
 - `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage` or `--plan`.
 
