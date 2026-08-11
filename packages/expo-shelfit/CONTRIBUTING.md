@@ -1,7 +1,5 @@
 # Contributing
 
-English | [日本語](./CONTRIBUTING.ja.md)
-
 Thanks for considering a contribution to `expo-shelfit`. This is a small,
 dependency-free CLI, so the bar for changes is: does it earn its place?
 
@@ -103,23 +101,13 @@ process. Within a feature, `command.mjs` is the only file that calls
 No enforced commit message format. Keep commits focused and PRs small. Use
 the PR template's Verification checklist.
 
-**Never write an issue or PR number into a file in this repo** — not in a
-comment, a JSDoc block, a test name, a README, a workflow, or a template. A
-number is not an explanation: it sends the reader somewhere else to find out
-why the code is the way it is, and that somewhere else drifts, gets closed,
-or is unreachable to anyone reading the published package. Write the reason
-in place instead — what was observed, what was tried, what constraint the
-code is honoring.
-
-**Comments explain why, never what.** Code that can be read is not
-commented — don't restate a signature or narrate control flow. Comment only
-what the code cannot say for itself: an API behavior confirmed by probing, a
-constraint that silently breaks something if changed, a rejected alternative.
-Keep those to a sentence or two.
-
-Commit messages, branch names, PR titles/bodies, and Release notes are
-outside the issue-number rule; issue linkage there is fine and expected.
-Before opening a PR, run from the repo root:
+**Never write an issue or PR number into a file in this repo, and comments
+explain why, never what** — see the repo-root
+[CLAUDE.md](../../CLAUDE.md#never-write-issue-or-pr-numbers-into-the-repo)
+for the full rule and reasoning (commit messages, branch names, PR
+titles/bodies, and Release notes are outside the issue-number rule; issue
+linkage there is fine and expected). Before opening a PR, run from the repo
+root:
 
 ```bash
 git grep -nE '#[0-9]{2,4}|issues?/[0-9]+|pull/[0-9]+' -- . ':!package-lock.json'
@@ -175,4 +163,4 @@ EAS API it depends on is unofficial and undocumented.
 
 ## Security issues
 
-Do not open a public issue. See [SECURITY.md](./SECURITY.md).
+Do not open a public issue. See [SECURITY.md](../../.github/SECURITY.md).

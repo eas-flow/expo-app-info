@@ -81,21 +81,14 @@ part of that change, not a follow-up.
 
 ## Commands
 
-Run from the repo root (`npm install` here installs deps for every package):
+`npm install` at the repo root installs deps for every package. Per-package
+lint/test/dev commands are in
+[CONTRIBUTING.md#checks](packages/expo-shelfit/CONTRIBUTING.md#checks); the
+commands below are repo-wide or otherwise not there:
 
 ```bash
-npm run lint                                               # Biome lint + format check, whole repo
-npm run format                                             # Biome, write formatting fixes
-npm test --workspaces --if-present                         # run every package's tests
-npm test --workspace=packages/expo-shelfit                 # this package's tests only (Vitest)
-npm run test:coverage --workspace=packages/expo-shelfit    # Vitest with coverage
-npm start --workspace=packages/expo-shelfit                # run the CLI locally (needs EXPO_TOKEN)
-```
-
-Run a single test file with Vitest directly:
-
-```bash
-npx vitest run packages/expo-shelfit/test/features/list/format.test.mjs
+npm test --workspaces --if-present                                       # every package's tests
+npx vitest run packages/expo-shelfit/test/features/list/format.test.mjs  # a single test file
 ```
 
 CI (`.github/workflows/ci.yml`) runs on Node 22 and 24, in this order: `npm run lint`, `npm test --workspaces --if-present`, `npm pack --dry-run` for expo-shelfit, then two smoke tests (`--help` exits 0, missing `EXPO_TOKEN` exits 1). Match this locally before opening a PR.
@@ -104,40 +97,10 @@ A separate weekly workflow (`.github/workflows/api-canary.yml`) runs the CLI aga
 
 ## Architecture (`packages/expo-shelfit`)
 
-```
-bin/cli.mjs             Thin executable entry point (shebang + calls src/cli.mjs#run)
-src/cli.mjs             The top-level run() flow: resolve auth, fetch accounts,
-                        dispatch to a feature in src/features/
-src/args.mjs            Argument parsing, validation limits, help text
-src/errors.mjs          CliError / ApiError, kept out of cli.mjs and
-                        shared/api.mjs so args.mjs / shared/filter.mjs /
-                        shared/api.mjs can throw them without an import
-                        cycle back through cli.mjs
-src/shared/
-  api.mjs                EAS GraphQL client (throws, never exits/prints)
-  concurrency.mjs         createSemaphore / mapWithConcurrency / CONCURRENCY
-  filter.mjs              Client-side --account / --app resolution (exact
-                        slug/Display name match, "Did you mean" suggestions)
-  dates.mjs               UTC date helpers (calendar-month boundaries, display
-                        formatting) — every date this CLI shows is UTC
-  cells.mjs                cellOrDash — shared by stats/ and plan/'s format.mjs
-  terminal/
-    render.mjs              Table rendering and column widths
-    progress.mjs            TTY-only progress reporting on stderr
-src/features/
-  list/    command.mjs + service.mjs + format.mjs — default app list (and --history)
-  stats/   command.mjs + service.mjs + format.mjs — --stats (build counts per
-           UTC calendar month)
-  plan/    command.mjs + format.mjs — --plan (current subscription per
-           account); no service.mjs — at 58 lines it has no aggregation step
-           worth separating out
-test/                   Vitest, mirrors src/ 1:1 (test/features/*/command.test.mjs
-                        are the per-feature integration tests for run() with a
-                        mocked fetch; test/features/{list,stats}/service.test.mjs
-                        test fetching/aggregation directly against a fake
-                        client instead of parsing rendered table strings;
-                        shared bits live in test/helpers.mjs)
-```
+Directory layout is in
+[CONTRIBUTING.md#project-layout](packages/expo-shelfit/CONTRIBUTING.md#project-layout).
+The design decisions below aren't derivable from that tree alone, so they
+stay here rather than there.
 
 **Import direction is one-way and enforced by convention, not tooling**:
 `bin → cli → args / features/* → shared/*`, with `errors.mjs` importable by
@@ -221,17 +184,11 @@ and the reason goes to stderr.
 
 - `develop` — integration branch for day-to-day work.
 - `main` — released branch; a release PR moves `develop` → `main`.
-- Releasing (per package, independently versioned): bump the `version` field
-  in the package's `package.json` by hand as part of (or alongside) the
-  `develop` → `main` PR, merge, then create a GitHub Release with a bare
-  `v*.*.*` tag. Since one tag doesn't encode which package(s) it covers,
-  **the Release body must say explicitly which package(s) changed**
-  (`.github/RELEASE_TEMPLATE.md` has a spot for this per bullet). Publishing
-  the Release triggers `.github/workflows/release.yml`, which diffs every
-  package's local version against npm and publishes (via Trusted Publishing)
-  whichever package(s) changed.
 
-Three things about this process are easy to get wrong:
+Full release steps (version bump, lockfile, GitHub Release, publish workflow)
+are in
+[CONTRIBUTING.md#releasing-maintainers](packages/expo-shelfit/CONTRIBUTING.md#releasing-maintainers).
+Three things about that process are easy to get wrong:
 
 - **Bumping `package.json` alone isn't enough** — `package-lock.json` records
   the version for each `packages/*` entry too. Run
@@ -244,7 +201,7 @@ Three things about this process are easy to get wrong:
   `release: published` only, and npm refuses to re-publish a version that
   already exists. Recovering from a bad release means cutting a patch version.
 
-See [packages/expo-shelfit/CONTRIBUTING.md](packages/expo-shelfit/CONTRIBUTING.md) for the full contributor workflow, and its [SECURITY.md](packages/expo-shelfit/SECURITY.md) for the vulnerability-reporting policy (do not open a public issue for security bugs).
+See [packages/expo-shelfit/CONTRIBUTING.md](packages/expo-shelfit/CONTRIBUTING.md) for the full contributor workflow, and [.github/SECURITY.md](.github/SECURITY.md) for the vulnerability-reporting policy (do not open a public issue for security bugs).
 
 ## Skills (`.claude/skills/`)
 

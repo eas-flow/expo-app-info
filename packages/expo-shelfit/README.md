@@ -64,7 +64,11 @@ npx @my-shelfio/expo-shelfit
 
 Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
 
-This is deliberately the only option. The token is never read from `argv` and never written to disk, so it cannot leak through your shell history, the process list, or a forgotten config file. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+This is deliberately the only option. The token is never read from `argv`, never written to disk, and never printed — so it cannot leak through your shell history, the process list, a forgotten config file, or the CLI's own output. It is sent to exactly one destination, the EAS GraphQL endpoint (`https://api.expo.dev/graphql`), over HTTPS, in an `Authorization` header. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+
+> `EXPO_API_URL` can override that endpoint. It exists for local testing, is intentionally undocumented beyond this note, and is not covered by any compatibility guarantee. Do not point it at an untrusted host — doing so sends your token there.
+
+See [SECURITY.md](../../.github/SECURITY.md) to report a vulnerability privately.
 
 ## 🛠️ Usage
 
@@ -287,8 +291,7 @@ Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 ### Further reading
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, test/lint commands, project layout, and the release process
-- [SECURITY.md](./SECURITY.md) — vulnerability reporting policy and how to report an issue privately
-- [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) — the Contributor Covenant this project follows
+- [SECURITY.md](../../.github/SECURITY.md) — vulnerability reporting policy and how to report an issue privately
 
 ## ❓ FAQ
 
@@ -318,7 +321,7 @@ Those three are the only EAS build statuses confirmed against the real API so fa
 
 **Is the `EXPO_TOKEN` ever written to disk or logged?**
 
-No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](./SECURITY.md) for the full policy and how to report a vulnerability privately.
+No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](../../.github/SECURITY.md) for the full policy and how to report a vulnerability privately.
 
 ## 📄 License
 
