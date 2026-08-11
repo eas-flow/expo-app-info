@@ -10,15 +10,17 @@ import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
- * `--usage`: one row per account *per UTC calendar month* (last 3 months by
- * default, or the last `opts.month` with `--month`). Each row's build counts
- * are success/errored/canceled counts (#83) counted client-side from every
- * build in an app's history via the API (client.countBuildsByMonth), not
- * from EAS's own billing/usage metric, which is tied to the billing cycle
- * and can't be sliced into arbitrary calendar ranges (its `filterParams` was
- * also found not to actually filter by platform). A still in-progress or
- * queued build isn't counted into any of the three categories, since it
- * hasn't reached a terminal outcome yet.
+ * `--usage`: one row per account *per UTC calendar month* *per platform*
+ * (last 3 months by default, or the last `opts.month` with `--month`; both
+ * platforms unless `--platform` narrows to one — see toUsageDisplayRows).
+ * Each row's SUCCESS/ERRORED/CANCELED counts are counted client-side from
+ * every build in an app's history via the API (client.countBuildsByMonth),
+ * not from EAS's own billing/usage metric, which is tied to the billing
+ * cycle and can't be sliced into arbitrary calendar ranges (its
+ * `filterParams` was also found not to actually filter by platform). TOTAL
+ * is SUCCESS + ERRORED + CANCELED. A still in-progress or queued build isn't
+ * counted into any of the three categories (nor TOTAL), since it hasn't
+ * reached a terminal outcome yet.
  *
  * Unlike the old billing-period version, months have no inter-period
  * dependency, so accounts and account/app pairs are fetched with
@@ -119,17 +121,20 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
     });
   });
 
-  console.log(
-    renderTable(
-      ['ACCOUNT', 'PERIOD', ...usageBuildsHeaders(opts.platform)],
-      toUsageDisplayRows(entries, { platform: opts.platform, accountDisplayNames, now })
-    )
-  );
+  const displayRows = toUsageDisplayRows(entries, {
+    platform: opts.platform,
+    accountDisplayNames,
+    now,
+  });
+  const platformCount = opts.platform ? 1 : 2;
+
+  console.log(renderTable(['ACCOUNT', 'PERIOD', 'PLATFORM', ...usageBuildsHeaders()], displayRows));
   console.log(
     dim(
-      `\n  ${entries.length} row(s) across ${accounts.length} account(s), ${months.length} month(s) each. ` +
+      `\n  ${displayRows.length} row(s) across ${accounts.length} account(s), ${months.length} month(s), ${platformCount} platform(s) each. ` +
         'SUCCESS/ERRORED/CANCELED = counted client-side from build history via the API; ' +
-        'may differ from EAS billing usage. A still in-progress/queued build is counted in none of the three. ' +
+        'may differ from EAS billing usage. TOTAL = SUCCESS + ERRORED + CANCELED for that row. ' +
+        'A still in-progress/queued build is counted in none of the three (nor in TOTAL). ' +
         'PERIOD = UTC calendar month.'
     )
   );

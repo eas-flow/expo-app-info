@@ -27,9 +27,10 @@ export const HELP = `
     -h, --help              Show this help
     -v, --version           Show version
     --platform <platform>   Only show "ios" or "android" builds
-    --usage                 Show success/errored/canceled build counts per UTC calendar
-                             month (last 3 by default) instead of the app list. Cannot be
-                             combined with --plan or --history.
+    --usage                 Show success/errored/canceled/total build counts per UTC
+                             calendar month and platform (last 3 months by default)
+                             instead of the app list. Cannot be combined with --plan or
+                             --history.
     --month <n>             Widen --usage to the last <n> calendar months (1-12, default
                              3). Only valid together with --usage.
     --plan                  Show current account subscription (plan/concurrency) instead
@@ -76,15 +77,18 @@ export const HELP = `
     or not --history is set, since a row is not necessarily the "last" build
     once more than one is shown.
 
-    --usage prints one row per account *per UTC calendar month* — the last 3
-    months by default, or the last <n> with --month <n> (1-12). Each row's
-    SUCCESS/ERRORED/CANCELED build counts are counted client-side from every
-    build in an app's history via the API (not EAS's own billing usage
-    metric, which can't be sliced by arbitrary calendar ranges); they may
-    differ from what EAS's dashboard reports. A still in-progress or queued
-    build isn't counted into any of the three categories. The current
-    (in-progress) month's row shows "(today)" as its end. A token without
-    app/build read access on an account degrades that account's rows to "-"
+    --usage prints one row per account *per UTC calendar month per
+    platform* — the last 3 months by default, or the last <n> with --month
+    <n> (1-12); both ios and android rows unless --platform narrows to one.
+    Each row's SUCCESS/ERRORED/CANCELED build counts are counted
+    client-side from every build in an app's history via the API (not
+    EAS's own billing usage metric, which can't be sliced by arbitrary
+    calendar ranges); they may differ from what EAS's dashboard reports.
+    TOTAL is SUCCESS + ERRORED + CANCELED for that row. A still
+    in-progress or queued build isn't counted into any of the three
+    categories, nor into TOTAL. The current (in-progress) month's rows
+    show "(today)" as their end. A token without app/build read access on
+    an account degrades that account's rows to "-" (including TOTAL)
     rather than failing the run.
 
     --plan prints one row per account with its current subscription only —

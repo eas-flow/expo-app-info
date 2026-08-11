@@ -51,16 +51,10 @@ export function buildDateHeader(local = false) {
   return local ? `BUILD DATE (${localOffset()})` : 'BUILD DATE';
 }
 
-// Category-major, platform-minor column order shared by usageBuildsHeaders
-// and toUsageDisplayRows below, so header/cell order always line up:
-// SUCCESS(IOS), SUCCESS(AND), ERRORED(IOS), ERRORED(AND), CANCELED(IOS),
-// CANCELED(AND) (narrowed to one platform's column per category with
-// --platform). "success"/"errored"/"canceled" match the keys
-// src/api.mjs#countBuildsByMonth counts into; anything else EAS reports
-// (e.g. a still in-progress/queued build) isn't a terminal outcome and
-// isn't counted into any of the three (#83).
-const USAGE_CATEGORIES = ['success', 'errored', 'canceled'];
-
+// "success"/"errored"/"canceled" match the keys src/api.mjs#countBuildsByMonth
+// counts into; anything else EAS reports (e.g. a still in-progress/queued
+// build) isn't a terminal outcome and isn't counted into any of the three,
+// nor into TOTAL (#83).
 function usagePlatforms(platform) {
   if (platform === 'ios') return ['ios'];
   if (platform === 'android') return ['android'];
@@ -68,34 +62,50 @@ function usagePlatforms(platform) {
 }
 
 /**
- * Usage table rows: one row per account per UTC calendar month.
- * `[account, period, ...buildCells]` — `buildCells` follows USAGE_CATEGORIES
- * x usagePlatforms(platform) above, mirroring `usageBuildsHeaders` below so
- * header/cell order always line up. `accountDisplayNames` is the same
- * cosmetic, table-only slug -> Display name lookup described on
- * `toDisplayRows`. `now` (default current time) decides which row, if any,
- * is the still-in-progress current month for the `(today)` marker below.
+ * Usage table rows: one row per account per UTC calendar month *per
+ * platform* — `[account, period, platform, success, errored, canceled,
+ * total]` (#83 follow-up: PLATFORM became its own column, replacing the
+ * earlier design of one row per account/month with a SUCCESS(IOS)/
+ * SUCCESS(AND)/etc. column pair per category — that made the header wide and
+ * duplicated "which platform" across every category). `--platform` now
+ * narrows which platform *rows* appear, not which columns do.
+ * `accountDisplayNames` is the same cosmetic, table-only slug -> Display
+ * name lookup described on `toDisplayRows`. `now` (default current time)
+ * decides which row, if any, is the still-in-progress current month for the
+ * `(today)` marker below.
  *
  * `e.ios`/`e.android` are each either `null` (that platform's counts
- * couldn't be fetched — degrades every category cell to "-") or
- * `{ success, errored, canceled }` (src/api.mjs#countBuildsByMonth's shape).
+ * couldn't be fetched — degrades every cell on that platform's row,
+ * including TOTAL, to "-") or `{ success, errored, canceled }`
+ * (src/api.mjs#countBuildsByMonth's shape). TOTAL is simply
+ * success + errored + canceled for that row.
  */
 export function toUsageDisplayRows(
   entries,
   { platform = null, accountDisplayNames = new Map(), now = new Date() } = {}
 ) {
   const platforms = usagePlatforms(platform);
+  const rows = [];
 
-  return entries.map((e) => {
-    const row = [accountDisplayNames.get(e.account) ?? e.account, periodCell(e, now)];
-    for (const category of USAGE_CATEGORIES) {
-      for (const p of platforms) {
-        const counts = e[p];
-        row.push(cellOrDash(counts ? counts[category] : null));
-      }
+  for (const e of entries) {
+    const accountCell = accountDisplayNames.get(e.account) ?? e.account;
+    const periodText = periodCell(e, now);
+    for (const p of platforms) {
+      const counts = e[p];
+      const total = counts ? counts.success + counts.errored + counts.canceled : null;
+      rows.push([
+        accountCell,
+        periodText,
+        p,
+        cellOrDash(counts?.success),
+        cellOrDash(counts?.errored),
+        cellOrDash(counts?.canceled),
+        cellOrDash(total),
+      ]);
     }
-    return row;
-  });
+  }
+
+  return rows;
 }
 
 function cellOrDash(value) {
@@ -119,19 +129,14 @@ function periodCell(entry, now) {
 }
 
 /**
- * Header(s) for the build-count columns: up to 6 (SUCCESS/ERRORED/CANCELED x
- * IOS/AND) by default, narrowed to 3 (one platform's column per category)
- * with --platform. Shortened from the pre-#83 "SUCCESSFUL BUILDS (IOS)"
- * wording since 3 categories x 2 platforms would otherwise make the table
- * very wide. Returns an array so callers can spread it directly into a
- * header list next to however many cells `toUsageDisplayRows` produced.
+ * Headers for the build-count columns: always these 4 — SUCCESS, ERRORED,
+ * CANCELED, TOTAL — since PLATFORM is now its own column and `--platform`
+ * narrows *rows*, not columns (#83 follow-up; see toUsageDisplayRows above).
+ * A plain array (not a function of `platform`) since the column set no
+ * longer depends on it.
  */
-export function usageBuildsHeaders(platform = null) {
-  const platforms = usagePlatforms(platform);
-  const platformLabel = { ios: 'IOS', android: 'AND' };
-  return USAGE_CATEGORIES.flatMap((category) =>
-    platforms.map((p) => `${category.toUpperCase()}(${platformLabel[p]})`)
-  );
+export function usageBuildsHeaders() {
+  return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL'];
 }
 
 /**

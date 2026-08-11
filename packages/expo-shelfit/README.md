@@ -148,16 +148,19 @@ npx @my-shelfio/expo-shelfit --usage
 ```
 
 ```
-┌─────────┬─────────────────────────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────────┬───────────────┐
-│ ACCOUNT │ PERIOD                  │ SUCCESS(IOS) │ SUCCESS(AND) │ ERRORED(IOS) │ ERRORED(AND) │ CANCELED(IOS) │ CANCELED(AND) │
-├─────────┼─────────────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼───────────────┼───────────────┤
-│ myorg   │ 2026-08-01 → (today)    │ 18           │ 16           │ 3            │ 1            │ 2             │ 0             │
-│ myorg   │ 2026-07-01 → 2026-07-31 │ 14           │ 15           │ 0            │ 2            │ 1             │ 0             │
-│ myorg   │ 2026-06-01 → 2026-06-30 │ 21           │ 20           │ 1            │ 0            │ 0             │ 1             │
-└─────────┴─────────────────────────┴──────────────┴──────────────┴──────────────┴──────────────┴───────────────┴───────────────┘
+┌─────────┬─────────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┐
+│ ACCOUNT │ PERIOD                  │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │
+├─────────┼─────────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┤
+│ myorg   │ 2026-08-01 → (today)    │ ios      │ 18      │ 3       │ 2        │ 23    │
+│ myorg   │ 2026-08-01 → (today)    │ android  │ 16      │ 1       │ 0        │ 17    │
+│ myorg   │ 2026-07-01 → 2026-07-31 │ ios      │ 14      │ 0       │ 1        │ 15    │
+│ myorg   │ 2026-07-01 → 2026-07-31 │ android  │ 15      │ 2       │ 0        │ 17    │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ ios      │ 21      │ 1       │ 0        │ 22    │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ android  │ 20      │ 0       │ 1        │ 21    │
+└─────────┴─────────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┘
 ```
 
-One row per account **per UTC calendar month** — the last 3 months by default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESS`/`ERRORED`/`CANCELED` counts are computed client-side from every build in an app's history via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. A build that's still in progress or queued isn't counted into any of the three columns, since it hasn't reached a terminal outcome yet. Pass `--platform ios` or `--platform android` to narrow each category to just that platform's column (3 columns instead of 6). The still-in-progress current month's row shows `(today)` as its end, since it isn't a finished count yet.
+One row per account **per UTC calendar month, per platform** — the last 3 months by default, both `ios` and `android` unless `--platform` narrows to one. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESS`/`ERRORED`/`CANCELED` counts are computed client-side from every build in an app's history via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. `TOTAL` is `SUCCESS` + `ERRORED` + `CANCELED` for that row. A build that's still in progress or queued isn't counted into any of the three columns, nor into `TOTAL`, since it hasn't reached a terminal outcome yet. Pass `--platform ios` or `--platform android` to show only that platform's rows (half as many rows, same columns). The still-in-progress current month's rows show `(today)` as their end, since it isn't a finished count yet.
 
 Or just the account's current subscription, with no build counts or billing
 period at all:
@@ -188,17 +191,19 @@ npx @my-shelfio/expo-shelfit --plan
 | `STATUS`       | `Finished` / `Errored` / `Canceled` — any other status shows the raw value lowercased |
 | `BUILD DATE`   | When that build attempt finished (`YYYY/MM/DD-HH:mm:ss`, UTC unless `--local`) |
 
-With `--usage`, one row per account **per UTC calendar month** instead (last 3 months by default, or `--month <n>` for 1–12):
+With `--usage`, one row per account **per UTC calendar month, per platform** instead (last 3 months by default, or `--month <n>` for 1–12; both `ios` and `android` rows unless `--platform` narrows to one):
 
-| Column           | Source                                                                                                                                                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`        | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
-| `PERIOD`         | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
-| `SUCCESS(IOS/AND)`  | Finished iOS/Android builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                  |
-| `ERRORED(IOS/AND)`  | Same, for errored builds                                                                                                                                                  |
-| `CANCELED(IOS/AND)` | Same, for canceled builds                                                                                                                                                 |
+| Column      | Source                                                                                                                                                                      |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`   | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
+| `PERIOD`    | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
+| `PLATFORM`  | `ios` / `android` — one row per platform per account per month                                                                                                              |
+| `SUCCESS`   | Finished builds on that platform in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                               |
+| `ERRORED`   | Same, for errored builds                                                                                                                                                     |
+| `CANCELED`  | Same, for canceled builds                                                                                                                                                    |
+| `TOTAL`     | `SUCCESS` + `ERRORED` + `CANCELED` for that row                                                                                                                              |
 
-A build that's still in progress or queued isn't counted into any of the three categories, since it hasn't reached a terminal outcome. Pass `--platform ios` or `--platform android` to show only that platform's 3 columns (instead of 6).
+A build that's still in progress or queued isn't counted into any of the three categories, nor into `TOTAL`, since it hasn't reached a terminal outcome. Pass `--platform ios` or `--platform android` to show only that platform's rows (the column set stays the same).
 
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
@@ -219,7 +224,7 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 ### Filtering
 
-- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows each category to just that platform's column (3 instead of 6); with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
+- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's rows (half as many rows, same columns); with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
 - `--account <slug|name>` — only this account, matching the unique slug or EAS Display name (case-insensitive exact match). Applies to every display mode. No match exits 1 with a suggestion.
 - `--app <slug>` — only this app, matching the unique slug (case-insensitive exact match), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
 - `--local` — show `BUILD DATE` in the local timezone instead of UTC. Only affects `BUILD DATE`; `--usage`'s `PERIOD` and `--plan`'s `TRIAL END` stay UTC. Cannot be combined with `--usage` or `--plan` (neither has a `BUILD DATE` column).
