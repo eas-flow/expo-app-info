@@ -8,7 +8,7 @@ import {
   jsonResponse,
 } from './helpers.mjs';
 
-describe('run --usage', () => {
+describe('run --stats', () => {
   let logSpy;
   let errorSpy;
   let originalToken;
@@ -70,7 +70,7 @@ describe('run --usage', () => {
   it('fetches accounts, apps, and a single builds page — no subscription/billing query at all', async () => {
     const fetchImpl = stubFetch(happyResponses());
 
-    await run(['--usage']);
+    await run(['--stats']);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
@@ -101,7 +101,7 @@ describe('run --usage', () => {
   it('emits 6 rows (3 months × ios/android, newest month first) with client-side success-build counts', async () => {
     stubFetch(happyResponses());
 
-    await run(['--usage']);
+    await run(['--stats']);
 
     const output = tableOutput();
     expect(output).toContain('6 row(s)');
@@ -114,10 +114,38 @@ describe('run --usage', () => {
     expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['0', '0', '0', '0']);
   });
 
+  // #89: --usage is the old name for this mode. It must keep producing the
+  // identical table, with the deprecation notice confined to stderr so a
+  // redirected stdout is byte-for-byte unchanged.
+  it('accepts the deprecated --usage alias and prints the same table', async () => {
+    stubFetch(happyResponses());
+    await run(['--usage']);
+    const viaUsage = tableOutput();
+
+    logSpy.mockClear();
+    stubFetch(happyResponses());
+    await run(['--stats']);
+
+    expect(viaUsage).toEqual(tableOutput());
+  });
+
+  it('warns on stderr for --usage, and says nothing for --stats', async () => {
+    stubFetch(happyResponses());
+    await run(['--usage']);
+    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain(
+      '--usage is deprecated'
+    );
+
+    errorSpy.mockClear();
+    stubFetch(happyResponses());
+    await run(['--stats']);
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
   it('shows "(today)" for the current month and the inclusive last day for finished months', async () => {
     stubFetch(happyResponses());
 
-    await run(['--usage']);
+    await run(['--stats']);
 
     expect(tableOutput()).toContain('2026-07-01 → (today)');
     expect(tableOutput()).toContain('2026-06-01 → 2026-06-30');
@@ -127,7 +155,7 @@ describe('run --usage', () => {
   it('--month widens the window (e.g. --month 1 shows only the current month, as 2 rows — ios and android)', async () => {
     stubFetch(happyResponses());
 
-    await run(['--usage', '--month', '1']);
+    await run(['--stats', '--month', '1']);
 
     const output = tableOutput();
     expect(output).toContain('2 row(s)');
@@ -137,7 +165,7 @@ describe('run --usage', () => {
   it('shows only the requested platform rows with --platform, not the other platform at all', async () => {
     const fetchImpl = stubFetch(happyResponses());
 
-    await run(['--usage', '--platform', 'ios']);
+    await run(['--stats', '--platform', 'ios']);
 
     const output = tableOutput();
     expect(output).toContain('3 row(s)'); // 3 months × 1 platform
@@ -168,7 +196,7 @@ describe('run --usage', () => {
       }),
     ]);
 
-    await run(['--usage', '--month', '1']);
+    await run(['--stats', '--month', '1']);
 
     const output = tableOutput();
     expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['1', '1', '2', '4']);
@@ -178,7 +206,7 @@ describe('run --usage', () => {
   it('degrades a whole account to "-" build counts (not a failed run) when its apps/builds fetch fails', async () => {
     stubFetch([accountsResponse(), jsonResponse({ errors: [{ message: 'boom' }] })]);
 
-    await run(['--usage']);
+    await run(['--stats']);
 
     const output = tableOutput();
     expect(output).toContain('6 row(s)');
@@ -188,18 +216,18 @@ describe('run --usage', () => {
     expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['-', '-', '-', '-']);
     expect(buildCountsFor(output, '2026-06-01', 'ios')).toEqual(['-', '-', '-', '-']);
     expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['-', '-', '-', '-']);
-    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
+    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('stats unavailable');
   });
 
   it('degrades a whole account to "-" (not a crash) when its apps response is malformed', async () => {
     stubFetch([accountsResponse(), jsonResponse({ data: { account: { byId: null } } })]);
 
-    await run(['--usage']);
+    await run(['--stats']);
 
     const output = tableOutput();
     expect(output).toContain('6 row(s)');
     expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['-', '-', '-', '-']);
-    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
+    expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('stats unavailable');
   });
 
   it('reports warnings in account order even when the slower account resolves last', async () => {
@@ -217,7 +245,7 @@ describe('run --usage', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
 
-    const promise = run(['--usage']);
+    const promise = run(['--stats']);
     await vi.runAllTimersAsync();
     await promise;
 
@@ -256,7 +284,7 @@ describe('run --usage', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
 
-    await run(['--usage', '--month', '1']);
+    await run(['--stats', '--month', '1']);
 
     expect(calls).toBe(5); // 1 accounts + 2 apps + 2 builds pages
     const output = tableOutput();
@@ -287,7 +315,7 @@ describe('run --usage', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
 
-    await run(['--usage', '--month', '1']);
+    await run(['--stats', '--month', '1']);
 
     const output = tableOutput();
     expect(output).toContain('20 row(s)'); // 10 accounts × 1 month × 2 platforms
@@ -318,7 +346,7 @@ describe('run --usage', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
 
-    await run(['--usage', '--account', 'myorg', '--month', '1']);
+    await run(['--stats', '--account', 'myorg', '--month', '1']);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 accounts + 1 apps + 1 builds page
     const output = tableOutput();
@@ -333,7 +361,7 @@ describe('run --usage', () => {
       buildsPageResponse,
     ]);
 
-    await run(['--usage', '--account', 'My Organization', '--month', '1']);
+    await run(['--stats', '--account', 'My Organization', '--month', '1']);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(tableOutput()).toContain('My Organization');
@@ -349,7 +377,7 @@ describe('run --usage', () => {
       buildsPageResponse,
     ]);
 
-    await run(['--usage', '--app', 'storefront', '--month', '1']);
+    await run(['--stats', '--app', 'storefront', '--month', '1']);
 
     // accounts + apps + exactly one builds page (not two) — field-ops's
     // build counts are never fetched.
@@ -363,7 +391,7 @@ describe('run --usage', () => {
 
     let error;
     try {
-      await run(['--usage', '--account', 'nope']);
+      await run(['--stats', '--account', 'nope']);
     } catch (err) {
       error = err;
     }
@@ -381,7 +409,7 @@ describe('run --usage', () => {
     try {
       // 'storfront' (missing 'e') is one edit away from 'storefront' —
       // exercises the Levenshtein "Did you mean" path.
-      await run(['--usage', '--app', 'storfront']);
+      await run(['--stats', '--app', 'storfront']);
     } catch (err) {
       error = err;
     }
@@ -390,20 +418,20 @@ describe('run --usage', () => {
     expect(error.message).toContain('Did you mean: storefront');
   });
 
-  it('rejects with CliError when combined with --local, since --usage has no BUILD DATE column', async () => {
-    await expect(run(['--usage', '--local'])).rejects.toThrow(CliError);
-    await expect(run(['--usage', '--local'])).rejects.toThrow(
-      /--local cannot be used with --usage/
+  it('rejects with CliError when combined with --local, since --stats has no BUILD DATE column', async () => {
+    await expect(run(['--stats', '--local'])).rejects.toThrow(CliError);
+    await expect(run(['--stats', '--local'])).rejects.toThrow(
+      /--local cannot be used with --stats/
     );
   });
 
-  it("--usage's PERIOD stays UTC — not reachable via --local anyway, but pinned as a regression guard", async () => {
+  it("--stats' PERIOD stays UTC — not reachable via --local anyway, but pinned as a regression guard", async () => {
     stubFetch(happyResponses());
 
-    await run(['--usage']);
+    await run(['--stats']);
 
     // If --local's incompatibility check above ever regresses and silently
-    // lets --usage through, this still pins PERIOD to UTC calendar-month
+    // lets --stats through, this still pins PERIOD to UTC calendar-month
     // boundaries independent of the machine's timezone (#85).
     expect(tableOutput()).toContain('2026-07-01 → (today)');
   });

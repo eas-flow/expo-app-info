@@ -33,7 +33,7 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 - `--account <slug|name>` / `--app <slug>` — narrow to a single account or app, across every display mode
 - `--local` — show `BUILD DATE` in your local timezone instead of UTC
 - `--history <N>` — show the `N` most recent build attempts per platform, not just the latest
-- `--usage` — success/errored/canceled build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
+- `--stats` — success/errored/canceled build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
 - `--plan` — current account subscription: plan, plan ID, status, concurrency, trial end
 - `ACCOUNT` shows the EAS "Display name" when set, falling back to the unique slug
 - Zero runtime dependencies
@@ -117,10 +117,10 @@ environment variable like any other Node process (e.g. `TZ=America/New_York
 npx @my-shelfio/expo-shelfit --local`), and the column header shows the
 current UTC offset rather than a timezone abbreviation, since offsets don't
 require a lookup table to interpret. Every other date this CLI shows stays
-UTC regardless — `--usage`'s `PERIOD` calendar-month boundaries and
+UTC regardless — `--stats`'s `PERIOD` calendar-month boundaries and
 `--plan`'s `TRIAL END` are unaffected, since shifting those would silently
 move a build's build-count into the wrong month. For that reason `--local`
-cannot be combined with `--usage` or `--plan`: neither has a `BUILD DATE`
+cannot be combined with `--stats` or `--plan`: neither has a `BUILD DATE`
 column for it to affect.
 
 Show more than just the latest build per platform:
@@ -139,12 +139,12 @@ npx @my-shelfio/expo-shelfit --history 5
 └─────────┴────────────┴────────────┴──────────┴─────────┴───────┴──────────┴─────────────────────┘
 ```
 
-`--history <N>` (1–100, default: 1) prints the `N` most recent build **attempts** per platform — whatever their status — as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--usage` or `--plan`. `--history 1` prints exactly the same output as leaving the flag off entirely.
+`--history <N>` (1–100, default: 1) prints the `N` most recent build **attempts** per platform — whatever their status — as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--stats` or `--plan`. `--history 1` prints exactly the same output as leaving the flag off entirely.
 
 Or ask about success/errored/canceled build counts per calendar month instead of app versions:
 
 ```bash
-npx @my-shelfio/expo-shelfit --usage
+npx @my-shelfio/expo-shelfit --stats
 ```
 
 ```
@@ -160,7 +160,7 @@ npx @my-shelfio/expo-shelfit --usage
 └─────────┴─────────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┘
 ```
 
-One row per account **per UTC calendar month, per platform** — the last 3 months by default, both `ios` and `android` unless `--platform` narrows to one. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESS`/`ERRORED`/`CANCELED` counts are computed client-side from every build in an app's history via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. `TOTAL` is `SUCCESS` + `ERRORED` + `CANCELED` for that row. A build that's still in progress or queued isn't counted into any of the three columns, nor into `TOTAL`, since it hasn't reached a terminal outcome yet. Pass `--platform ios` or `--platform android` to show only that platform's rows (half as many rows, same columns). The still-in-progress current month's rows show `(today)` as their end, since it isn't a finished count yet.
+One row per account **per UTC calendar month, per platform** — the last 3 months by default, both `ios` and `android` unless `--platform` narrows to one. Pass `--month <n>` (1–12) to widen the window, e.g. `--stats --month 6` for the last half year. `SUCCESS`/`ERRORED`/`CANCELED` counts are computed client-side from every build in an app's history via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. `TOTAL` is `SUCCESS` + `ERRORED` + `CANCELED` for that row. A build that's still in progress or queued isn't counted into any of the three columns, nor into `TOTAL`, since it hasn't reached a terminal outcome yet. Pass `--platform ios` or `--platform android` to show only that platform's rows (half as many rows, same columns). The still-in-progress current month's rows show `(today)` as their end, since it isn't a finished count yet.
 
 Or just the account's current subscription, with no build counts or billing
 period at all:
@@ -177,7 +177,7 @@ npx @my-shelfio/expo-shelfit --plan
 └─────────┴────────────┴────────────┴────────┴─────────────────────────────┴───────────┘
 ```
 
-`--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--usage` or `--history`, since all three are separate display modes.
+`--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--stats` or `--history`, since all three are separate display modes.
 
 ### What the numbers mean
 
@@ -191,7 +191,7 @@ npx @my-shelfio/expo-shelfit --plan
 | `STATUS`       | `Finished` / `Errored` / `Canceled` — any other status shows the raw value lowercased |
 | `BUILD DATE`   | When that build attempt finished (`YYYY/MM/DD-HH:mm:ss`, UTC unless `--local`) |
 
-With `--usage`, one row per account **per UTC calendar month, per platform** instead (last 3 months by default, or `--month <n>` for 1–12; both `ios` and `android` rows unless `--platform` narrows to one):
+With `--stats`, one row per account **per UTC calendar month, per platform** instead (last 3 months by default, or `--month <n>` for 1–12; both `ios` and `android` rows unless `--platform` narrows to one):
 
 | Column      | Source                                                                                                                                                                      |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -224,14 +224,18 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 
 ### Filtering
 
-- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's rows (half as many rows, same columns); with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
+- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--stats`, it narrows to just that platform's rows (half as many rows, same columns); with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
 - `--account <slug|name>` — only this account, matching the unique slug or EAS Display name (case-insensitive exact match). Applies to every display mode. No match exits 1 with a suggestion.
 - `--app <slug>` — only this app, matching the unique slug (case-insensitive exact match), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
-- `--local` — show `BUILD DATE` in the local timezone instead of UTC. Only affects `BUILD DATE`; `--usage`'s `PERIOD` and `--plan`'s `TRIAL END` stay UTC. Cannot be combined with `--usage` or `--plan` (neither has a `BUILD DATE` column).
-- `--month <n>` — only with `--usage`: widen the window to the last `n` calendar months (1–12, default 3).
-- `--history <N>` — the `N` most recent build attempts per platform (1–100), whatever their status, newest first, instead of just the latest one. Cannot be combined with `--usage` or `--plan`.
+- `--local` — show `BUILD DATE` in the local timezone instead of UTC. Only affects `BUILD DATE`; `--stats`'s `PERIOD` and `--plan`'s `TRIAL END` stay UTC. Cannot be combined with `--stats` or `--plan` (neither has a `BUILD DATE` column).
+- `--month <n>` — only with `--stats`: widen the window to the last `n` calendar months (1–12, default 3).
+- `--history <N>` — the `N` most recent build attempts per platform (1–100), whatever their status, newest first, instead of just the latest one. Cannot be combined with `--stats` or `--plan`.
 
-`--usage`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
+`--stats`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
+
+### Deprecated
+
+- `--usage` — the old name for `--stats`. It still works and prints the identical table, but writes a deprecation warning to stderr and will be removed in the next major version. It was renamed because it kept being read as EAS's *billing* usage, which this CLI deliberately never queries. Error messages echo whichever of the two names you actually typed.
 
 ## 📚 Documentation
 
@@ -247,7 +251,7 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
-`--usage` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { platform })` (same unfiltered-by-status shape) for each app and buckets every build by platform + UTC calendar month + status (success/errored/canceled) on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Accounts and apps are fetched as two flat passes — first every account's app list, then every (account, app) pair — rather than nesting one concurrency-limited pass inside another, which would deadlock against the shared semaphore. Both passes run under the same overall concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
+`--stats` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { platform })` (same unfiltered-by-status shape) for each app and buckets every build by platform + UTC calendar month + status (success/errored/canceled) on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Accounts and apps are fetched as two flat passes — first every account's app list, then every (account, app) pair — rather than nesting one concurrency-limited pass inside another, which would deadlock against the shared semaphore. Both passes run under the same overall concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
 
 `--plan` skips 2 and 3 entirely, and runs a smaller query per account: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
 
@@ -269,7 +273,7 @@ A robot token can only see the account that issued it. Use a personal access tok
 
 **What happens if a token can't read an account's apps or builds?**
 
-`--usage` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
+`--stats` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
 
 **Why do some accounts show `-` in the `--plan` columns?**
 

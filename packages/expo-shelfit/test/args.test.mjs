@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { parseArgs } from '../src/args.mjs';
+import { DEPRECATED_USAGE_WARNING, parseArgs } from '../src/args.mjs';
 import { CliError } from '../src/cli.mjs';
 
 const DEFAULTS = {
   help: false,
   version: false,
   platform: null,
-  usage: false,
+  stats: false,
   plan: false,
   history: null,
   month: null,
   account: null,
   app: null,
   local: false,
+  warnings: [],
 };
 
 describe('parseArgs', () => {
@@ -24,7 +25,7 @@ describe('parseArgs', () => {
     [['-v'], { version: true }],
     [['--version'], { version: true }],
     [['--help', '--version'], { help: true, version: true }],
-    [['--usage'], { usage: true }],
+    [['--stats'], { stats: true }],
     [['--platform', 'IOS'], { platform: 'ios' }], // lowercased
     [['--platform=android'], { platform: 'android' }],
     [['--history', '5'], { history: 5 }],
@@ -34,8 +35,8 @@ describe('parseArgs', () => {
     [['--history', '3', '--platform', 'ios'], { history: 3, platform: 'ios' }],
     [['--plan'], { plan: true }],
     [['--plan', '--platform', 'ios'], { plan: true, platform: 'ios' }],
-    [['--usage', '--month', '6'], { usage: true, month: 6 }],
-    [['--usage', '--month=12'], { usage: true, month: 12 }], // at MAX_MONTH
+    [['--stats', '--month', '6'], { stats: true, month: 6 }],
+    [['--stats', '--month=12'], { stats: true, month: 12 }], // at MAX_MONTH
     [['--account', 'myorg'], { account: 'myorg' }],
     [['--account=myorg'], { account: 'myorg' }],
     [['--app', 'storefront'], { app: 'storefront' }],
@@ -44,9 +45,9 @@ describe('parseArgs', () => {
       ['--account', 'myorg', '--app', 'storefront', '--history', '5'],
       { account: 'myorg', app: 'storefront', history: 5 },
     ],
-    [['--account', 'myorg', '--usage'], { account: 'myorg', usage: true }],
+    [['--account', 'myorg', '--stats'], { account: 'myorg', stats: true }],
     [['--account', 'myorg', '--plan'], { account: 'myorg', plan: true }],
-    [['--app', 'storefront', '--usage'], { app: 'storefront', usage: true }],
+    [['--app', 'storefront', '--stats'], { app: 'storefront', stats: true }],
     [['--local'], { local: true }],
     [['--local', '--history', '5'], { local: true, history: 5 }],
     [['--local', '--platform', 'ios'], { local: true, platform: 'ios' }],
@@ -75,17 +76,17 @@ describe('parseArgs', () => {
     [['--history', '0'], /Invalid --history value/],
     [['--history', '2.5'], /Invalid --history value/],
     [['--history', '101'], /Invalid --history value/],
-    [['--usage', '--history', '5'], /--history cannot be combined with --usage/],
-    [['--plan', '--usage'], /--plan cannot be combined with --usage/],
+    [['--stats', '--history', '5'], /--history cannot be combined with --stats/],
+    [['--plan', '--stats'], /--plan cannot be combined with --stats/],
     [['--plan', '--history', '3'], /--plan cannot be combined with --history/],
     // 3 exclusive modes at once (#57): reports only the first colliding pair.
-    [['--usage', '--plan', '--history', '3'], /--plan cannot be combined with --history/],
-    [['--usage', '--month'], /--month requires a value/],
-    [['--usage', '--month', 'abc'], /Invalid --month value/],
-    [['--usage', '--month', '0'], /Invalid --month value/],
-    [['--usage', '--month', '2.5'], /Invalid --month value/],
-    [['--usage', '--month', '13'], /Invalid --month value/],
-    [['--month', '6'], /--month can only be used with --usage/],
+    [['--stats', '--plan', '--history', '3'], /--plan cannot be combined with --history/],
+    [['--stats', '--month'], /--month requires a value/],
+    [['--stats', '--month', 'abc'], /Invalid --month value/],
+    [['--stats', '--month', '0'], /Invalid --month value/],
+    [['--stats', '--month', '2.5'], /Invalid --month value/],
+    [['--stats', '--month', '13'], /Invalid --month value/],
+    [['--month', '6'], /--month can only be used with --stats/],
     [['--account'], /--account requires a value/],
     [['--account', ''], /--account requires a non-empty value/],
     [['--account', '   '], /--account requires a non-empty value/],
@@ -93,12 +94,70 @@ describe('parseArgs', () => {
     [['--app', ''], /--app requires a non-empty value/],
     [['--app', 'storefront', '--plan'], /--app cannot be used with --plan/],
     [['--plan', '--app', 'storefront'], /--app cannot be used with --plan/],
-    [['--local', '--usage'], /--local cannot be used with --usage/],
-    [['--usage', '--local'], /--local cannot be used with --usage/],
+    [['--local', '--stats'], /--local cannot be used with --stats/],
+    [['--stats', '--local'], /--local cannot be used with --stats/],
     [['--local', '--plan'], /--local cannot be used with --plan/],
     [['--plan', '--local'], /--local cannot be used with --plan/],
   ])('throws on %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(CliError);
     expect(() => parseArgs(argv)).toThrow(message);
+  });
+});
+
+// --usage is the pre-#89 name for --stats. It still parses to exactly the
+// same opts, plus a deprecation warning; it goes away in the next major.
+describe('parseArgs — the deprecated --usage alias', () => {
+  it('parses to the same opts as --stats, apart from the warning', () => {
+    const { warnings, ...deprecated } = parseArgs(['--usage', '--month', '6', '--platform', 'ios']);
+    const { warnings: none, ...current } = parseArgs([
+      '--stats',
+      '--month',
+      '6',
+      '--platform',
+      'ios',
+    ]);
+    expect(deprecated).toEqual(current);
+    expect(warnings).toEqual([DEPRECATED_USAGE_WARNING]);
+    expect(none).toEqual([]);
+  });
+
+  it('warns once even when --usage is repeated', () => {
+    expect(parseArgs(['--usage', '--usage']).warnings).toEqual([DEPRECATED_USAGE_WARNING]);
+  });
+
+  it('names --stats in the warning so the message is actionable', () => {
+    expect(DEPRECATED_USAGE_WARNING).toMatch(/--usage is deprecated/);
+    expect(DEPRECATED_USAGE_WARNING).toMatch(/Use --stats instead/);
+  });
+
+  // Errors echo the flag the user actually typed — reporting --stats to
+  // someone who wrote --usage would name a flag absent from their command.
+  it.each([
+    [['--usage', '--plan'], /--plan cannot be combined with --usage\./],
+    [['--usage', '--history', '5'], /--history cannot be combined with --usage\./],
+    [['--usage', '--local'], /--local cannot be used with --usage\./],
+  ])('reports --usage, not --stats, on %j', (argv, message) => {
+    expect(() => parseArgs(argv)).toThrow(message);
+  });
+
+  it.each([
+    [['--stats', '--plan'], /--plan cannot be combined with --stats\./],
+    [['--stats', '--history', '5'], /--history cannot be combined with --stats\./],
+    [['--stats', '--local'], /--local cannot be used with --stats\./],
+  ])('reports --stats on %j', (argv, message) => {
+    expect(() => parseArgs(argv)).toThrow(message);
+  });
+
+  // No mode flag was typed at all, so there is nothing to echo: point at the
+  // current name rather than the one on its way out.
+  it('points --month at --stats when neither mode flag was given', () => {
+    expect(() => parseArgs(['--month', '6'])).toThrow('--month can only be used with --stats.');
+  });
+
+  it('prefers --stats in errors when both flags are passed', () => {
+    expect(() => parseArgs(['--usage', '--stats', '--plan'])).toThrow(
+      '--plan cannot be combined with --stats.'
+    );
+    expect(parseArgs(['--usage', '--stats']).warnings).toEqual([DEPRECATED_USAGE_WARNING]);
   });
 });

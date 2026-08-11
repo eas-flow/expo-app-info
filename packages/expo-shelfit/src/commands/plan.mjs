@@ -9,9 +9,9 @@ import { dim, renderTable } from '../render.mjs';
 /**
  * `--plan`: one row per account with its current subscription only (plan,
  * plan ID, status, concurrency, trial end) — no build counts or billing
- * period, that's `--usage`.
+ * period, that's `--stats`.
  *
- * Unlike `runUsage`, accounts are fetched with `mapWithConcurrency` rather
+ * Unlike `runStats`, accounts are fetched with `mapWithConcurrency` rather
  * than a sequential loop: each account's subscription lookup is independent
  * of every other account's, so there is nothing to serialize on here.
  *

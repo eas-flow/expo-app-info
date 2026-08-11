@@ -52,7 +52,7 @@ src/cli.mjs           トップレベルの run() フロー: 認証解決・ア�
 src/args.mjs          引数パース、バリデーション上限値、ヘルプテキスト
 src/commands/
   list.mjs            デフォルトのアプリ一覧（および --history）
-  usage.mjs           --usage（UTC暦月ごとの成功ビルド数）
+  stats.mjs           --stats（UTC暦月ごとの成功ビルド数）
   plan.mjs            --plan（アカウントごとの現在のサブスクリプション）
 src/api.mjs           EAS GraphQLクライアント（throwのみ、exit/printしない）+
                       createSemaphore/mapWithConcurrency/CONCURRENCY

@@ -43,7 +43,7 @@ src/cli.mjs            The top-level run() flow: resolve auth, fetch accounts,
 src/args.mjs            Argument parsing, validation limits, help text
 src/commands/
   list.mjs               Default app list (and --history)
-  usage.mjs               --usage (successful builds per UTC calendar month)
+  stats.mjs               --stats (successful builds per UTC calendar month)
   plan.mjs                --plan (current subscription per account)
 src/api.mjs             EAS GraphQL client (throws, never exits/prints) +
                         createSemaphore/mapWithConcurrency/CONCURRENCY
@@ -74,15 +74,22 @@ them into a printed message + exit code.
 credential — never read from `argv`, never written to disk. Missing token
 throws `CliError` in `resolveAuthHeaders` (`src/cli.mjs`).
 
-**Display modes are mutually exclusive**: `--usage`, `--plan`, and
+**Display modes are mutually exclusive**: `--stats`, `--plan`, and
 `--history` cannot be combined with each other — combining any two is a
 `CliError`.
+
+**`--usage` is a deprecated alias for `--stats`** (#89, removed in the next
+major). `parseArgs` sets the same `opts.stats` for both and appends
+`DEPRECATED_USAGE_WARNING` to `opts.warnings`, which `run()` prints to
+stderr — `parseArgs` stays I/O-free for the same reason `src/*` never calls
+`process.exit`. Error messages echo whichever name was typed
+(`args.mjs#modeFlag`), so `--usage --plan` must not report `--stats`.
 
 **`--account`/`--app` narrow every display mode client-side** (`src/filter.mjs`),
 applied before the expensive per-app build fetch, not after: `--account`
 once against the full account list in `src/cli.mjs` right after step 1 below
 (matches slug or EAS Display name); `--app` per-account in `src/commands/
-list.mjs`/`usage.mjs` right after step 2, before step 3 (matches slug only;
+list.mjs`/`stats.mjs` right after step 2, before step 3 (matches slug only;
 incompatible with `--plan`, which skips step 2 entirely). No match throws
 `CliError` with "Did you mean" suggestions (Levenshtein edit distance,
 `src/filter.mjs#suggestNear`).
@@ -90,8 +97,8 @@ incompatible with `--plan`, which skips step 2 entirely). No match throws
 **`--local` switches only the BUILD DATE display timestamp to the local
 timezone** (`src/dates.mjs#formatBuildDate`) — every UTC *boundary*
 (`calendarMonths`, `inclusiveEnd`, `isoDate`) stays UTC unconditionally, since
-`--usage`'s month bucketing compares those boundaries directly against build
-`createdAt`. Incompatible with `--usage`/`--plan`, neither of which has a
+`--stats`'s month bucketing compares those boundaries directly against build
+`createdAt`. Incompatible with `--stats`/`--plan`, neither of which has a
 BUILD DATE column.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
@@ -101,7 +108,7 @@ concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
 3. `app.byId(...).builds(...)` — most recent build(s) per platform, client-sorted by `createdAt` descending since the API's order is undocumented
 
-`--usage` reuses steps 1–2 but instead pages through every finished build per
+`--stats` reuses steps 1–2 but instead pages through every finished build per
 app and buckets client-side by platform + UTC calendar month
 (`countBuildsByMonth`) — it does not query billing-scoped fields
 (`subscription`/`billingPeriod`/`usageMetrics`), since those are tied to

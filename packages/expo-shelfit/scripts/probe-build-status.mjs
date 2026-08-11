@@ -12,7 +12,7 @@
 // Run this against a real account with builds in more than one status, then
 // paste the full output into issue #83 — none of #83's design decisions
 // (status -> display-string mapping, whether "-" covers missing version
-// fields, the `--usage` ERRORED BUILDS column) should be written until this
+// fields, the `--stats` ERRORED BUILDS column) should be written until this
 // comes back.
 //
 //   export EXPO_TOKEN=xxxxx

@@ -1,18 +1,18 @@
-// `--usage` display mode. Moved out of src/cli.mjs so every display mode
+// `--stats` display mode. Moved out of src/cli.mjs so every display mode
 // lives in its own file under src/commands/.
 
 import { ApiError, mapWithConcurrency } from '../api.mjs';
-import { DEFAULT_USAGE_MONTHS } from '../args.mjs';
+import { DEFAULT_STATS_MONTHS } from '../args.mjs';
 import { calendarMonths } from '../dates.mjs';
 import { createAppFilter } from '../filter.mjs';
-import { toUsageDisplayRows, usageBuildsHeaders } from '../format.mjs';
+import { statsBuildsHeaders, toStatsDisplayRows } from '../format.mjs';
 import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
- * `--usage`: one row per account *per UTC calendar month* *per platform*
+ * `--stats`: one row per account *per UTC calendar month* *per platform*
  * (last 3 months by default, or the last `opts.month` with `--month`; both
- * platforms unless `--platform` narrows to one — see toUsageDisplayRows).
+ * platforms unless `--platform` narrows to one — see toStatsDisplayRows).
  * Each row's SUCCESS/ERRORED/CANCELED counts are counted client-side from
  * every build in an app's history via the API (client.countBuildsByMonth),
  * not from EAS's own billing/usage metric, which is tied to the billing
@@ -33,8 +33,8 @@ import { dim, renderTable } from '../render.mjs';
  * that whole account's rows degrade to "-" rather than failing the run,
  * and the reason is reported on stderr.
  */
-export async function runUsage(client, accounts, opts, accountDisplayNames, now = new Date()) {
-  const months = calendarMonths(opts.month ?? DEFAULT_USAGE_MONTHS, now);
+export async function runStats(client, accounts, opts, accountDisplayNames, now = new Date()) {
+  const months = calendarMonths(opts.month ?? DEFAULT_STATS_MONTHS, now);
   const warnings = [];
 
   // Pass 1: apps per account.
@@ -46,7 +46,7 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       if (!(err instanceof ApiError)) throw err;
       return { apps: [], error: err };
     } finally {
-      progressCount('Fetching usage', ++accountsDone, accounts.length, 'accounts (apps)');
+      progressCount('Fetching stats', ++accountsDone, accounts.length, 'accounts (apps)');
     }
   });
 
@@ -70,7 +70,7 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       if (!(err instanceof ApiError)) throw err;
       return { accountIndex, counts: null, error: err };
     } finally {
-      progressCount('Fetching usage', ++pairsDone, pairs.length, 'app(s)');
+      progressCount('Fetching stats', ++pairsDone, pairs.length, 'app(s)');
     }
   });
 
@@ -104,7 +104,7 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
   });
 
   for (const warning of warnings) {
-    console.error(dim(`  ! usage unavailable — ${warning}`));
+    console.error(dim(`  ! stats unavailable — ${warning}`));
   }
 
   const entries = [];
@@ -121,14 +121,14 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
     });
   });
 
-  const displayRows = toUsageDisplayRows(entries, {
+  const displayRows = toStatsDisplayRows(entries, {
     platform: opts.platform,
     accountDisplayNames,
     now,
   });
   const platformCount = opts.platform ? 1 : 2;
 
-  console.log(renderTable(['ACCOUNT', 'PERIOD', 'PLATFORM', ...usageBuildsHeaders()], displayRows));
+  console.log(renderTable(['ACCOUNT', 'PERIOD', 'PLATFORM', ...statsBuildsHeaders()], displayRows));
   console.log(
     dim(
       `\n  ${displayRows.length} row(s) across ${accounts.length} account(s), ${months.length} month(s), ${platformCount} platform(s) each. ` +

@@ -28,21 +28,21 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --usage no longer queries subscription/billingPeriod at all — it
+      # --stats no longer queries subscription/billingPeriod at all — it
       # pages app.byId(...).builds(offset, limit, filter) per app and
       # buckets client-side by UTC calendar month + status (success/errored/
       # canceled, #83). Separate step so a break in that pagination shape is
       # distinguishable from a break in the plain app/build queries above.
-      - name: Run --usage against the live EAS API
-        run: node packages/expo-shelfit/bin/cli.mjs --usage
+      - name: Run --stats against the live EAS API
+        run: node packages/expo-shelfit/bin/cli.mjs --stats
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --month widens --usage's pagination window (up to 12 months) rather
+      # --month widens --stats' pagination window (up to 12 months) rather
       # than changing query shape, but a separate step still catches an
       # unexpected error/timeout from the deeper paging on its own.
-      - name: Run --usage --month 6 against the live EAS API
-        run: node packages/expo-shelfit/bin/cli.mjs --usage --month 6
+      - name: Run --stats --month 6 against the live EAS API
+        run: node packages/expo-shelfit/bin/cli.mjs --stats --month 6
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -56,7 +56,7 @@ jobs:
 
       # --plan queries `subscription` on its own, without
       # `billingPeriod`/`usageMetrics` — a separate step so a break here is
-      # distinguishable from a break in --usage's larger query above.
+      # distinguishable from a break in --stats' larger query above.
       - name: Run --plan against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs --plan
         env:

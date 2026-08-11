@@ -75,7 +75,7 @@ function buildsQuery(platforms) {
 }`;
 }
 
-// `--usage` moved off this billing-scoped shape to client-side UTC calendar-month
+// `--stats` moved off this billing-scoped shape to client-side UTC calendar-month
 // counting below (buildsPageQuery/countBuildsByMonth): billing-period metrics can't
 // be sliced into arbitrary calendar ranges. Only the subscription fields survive
 // here, for `--plan`.
@@ -92,12 +92,12 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
   } }
 }`;
 
-// `--usage`. Same shape as buildsQuery above but paginated with
+// `--stats`. Same shape as buildsQuery above but paginated with
 // `offset`/`limit` instead of a fixed small `limit`, so callers can walk
 // arbitrarily far back into an app's build history. `createdAt` places a
 // build in a calendar month; `status` buckets it into success/errored/
 // canceled once there — see countBuildsByMonth. No appVersion/appBuildVersion,
-// since --usage never displays them.
+// since --stats never displays them.
 function buildsPageQuery(platforms) {
   return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
@@ -144,7 +144,7 @@ function monthIndexForBuild(createdAtMs, bounds) {
 }
 
 // Raw EAS `status` enum value -> the count bucket it lands in for
-// countBuildsByMonth (--usage). Only these 3 have been confirmed against the
+// countBuildsByMonth (--stats). Only these 3 have been confirmed against the
 // real API (scripts/probe-build-status.mjs, issue #83); anything not listed
 // here — a still in-progress/queued build, or any other status this
 // unofficial API introduces later — is deliberately not counted in any
@@ -273,7 +273,7 @@ export function createApiClient({
 
   /**
    * Success/errored/canceled build counts for one app, bucketed by platform
-   * and UTC calendar month, for `--usage` (#83 — before this, only FINISHED
+   * and UTC calendar month, for `--stats` (#83 — before this, only FINISHED
    * builds were counted at all). `months` is a list of `{ start, end }`
    * boundaries ordered newest first (src/dates.mjs's calendarMonths()); the
    * return value is a parallel array of `{ ios, android }` counts, one entry
@@ -295,7 +295,7 @@ export function createApiClient({
    * scripts/probe-history.mjs) — once a platform is done, its alias is
    * dropped from every subsequent page's query, not just skipped client-side.
    * Throws ApiError like every other method here; the caller
-   * (src/commands/usage.mjs#runUsage) decides a failure degrades that whole
+   * (src/commands/stats.mjs#runStats) decides a failure degrades that whole
    * account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {

@@ -1,7 +1,7 @@
 // Client-side --app/--account resolution (issue #84). Both flags narrow
 // *before* the expensive per-app build fetch — see src/cli.mjs (--account,
 // applied once against the full account list right after fetchAccounts())
-// and src/commands/list.mjs / usage.mjs (--app, applied per-account right
+// and src/commands/list.mjs / stats.mjs (--app, applied per-account right
 // after fetchApps(), before fetchBuilds()/countBuildsByMonth()). Sits
 // alongside api/format/render/dates/progress in the import graph: used by
 // cli.mjs and commands/*.mjs, imports nothing from either.
@@ -51,7 +51,7 @@ export function resolveAccount(accounts, value) {
 
 /**
  * Creates an `--app <slug>` filter for use inside a per-account apps loop
- * (src/commands/list.mjs, usage.mjs). `slug` is `opts.app` (nullable — a
+ * (src/commands/list.mjs, stats.mjs). `slug` is `opts.app` (nullable — a
  * no-op filter when unset). `filter(apps)` narrows one account's apps down
  * to the match (slug is unique within an account, so at most one); call
  * `finalize()` once after every account has been through `filter()` — it

@@ -9,9 +9,10 @@ import { createApiClient } from './api.mjs';
 import { HELP, parseArgs } from './args.mjs';
 import { runList } from './commands/list.mjs';
 import { runPlan } from './commands/plan.mjs';
-import { runUsage } from './commands/usage.mjs';
+import { runStats } from './commands/stats.mjs';
 import { resolveAccount } from './filter.mjs';
 import { progress } from './progress.mjs';
+import { dim } from './render.mjs';
 
 export class CliError extends Error {}
 
@@ -32,6 +33,14 @@ function resolveAuthHeaders(env = process.env) {
 
 export async function run(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
+
+  // parseArgs itself does no I/O, so its non-fatal notices (currently just
+  // the --usage deprecation, #89) are printed here. Before --help/--version
+  // so a deprecated flag is still called out when combined with them, and on
+  // stderr so it never lands in a redirected table.
+  for (const warning of opts.warnings) {
+    console.error(dim(`  ! ${warning}`));
+  }
 
   if (opts.help) {
     console.log(HELP);
@@ -60,11 +69,11 @@ export async function run(argv = process.argv.slice(2)) {
   }
 
   // Table-only cosmetic slug -> "Display name" mapping; see
-  // toDisplayRows/toUsageDisplayRows in format.mjs.
+  // toDisplayRows/toStatsDisplayRows in format.mjs.
   const accountDisplayNames = new Map(accounts.map((a) => [a.name, a.displayName || a.name]));
 
-  if (opts.usage) {
-    await runUsage(client, accounts, opts, accountDisplayNames);
+  if (opts.stats) {
+    await runStats(client, accounts, opts, accountDisplayNames);
     return;
   }
 
