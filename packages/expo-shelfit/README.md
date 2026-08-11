@@ -30,6 +30,7 @@ If you ship more than one Expo app, there is no quick way to answer *"which app 
 - Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
 - `--platform` filter to narrow to `ios` or `android`
 - `--account <slug|name>` / `--app <slug>` — narrow to a single account or app, across every display mode
+- `--local` — show `BUILD DATE` in your local timezone instead of UTC
 - `--history <N>` — show the `N` most recent builds per platform, not just the latest
 - `--usage` — successful build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
 - `--plan` — current account subscription: plan, plan ID, status, concurrency, trial end
@@ -95,6 +96,32 @@ so it also speeds up the run — it cannot be combined with `--plan`, which
 doesn't fetch apps at all. Neither flag matching anything exits 1 with a
 "Did you mean" suggestion.
 
+By default `BUILD DATE` is always UTC. Add `--local` to read it in your
+machine's timezone instead:
+
+```bash
+npx @my-shelfio/expo-shelfit --local
+```
+
+```
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE (+09:00) │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-18:12:34 │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
+```
+
+`--local` only affects the `BUILD DATE` column — it respects the `TZ`
+environment variable like any other Node process (e.g. `TZ=America/New_York
+npx @my-shelfio/expo-shelfit --local`), and the column header shows the
+current UTC offset rather than a timezone abbreviation, since offsets don't
+require a lookup table to interpret. Every other date this CLI shows stays
+UTC regardless — `--usage`'s `PERIOD` calendar-month boundaries and
+`--plan`'s `TRIAL END` are unaffected, since shifting those would silently
+move a build's build-count into the wrong month. For that reason `--local`
+cannot be combined with `--usage` or `--plan`: neither has a `BUILD DATE`
+column for it to affect.
+
 Show more than just the latest build per platform:
 
 ```bash
@@ -157,7 +184,7 @@ npx @my-shelfio/expo-shelfit --plan
 | `PLATFORM`     | `ios` / `android`                                             |
 | `VERSION`      | `appVersion` of the latest **successful** build               |
 | `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)    |
-| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)         |
+| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC unless `--local`) |
 
 With `--usage`, one row per account **per UTC calendar month** instead (last 3 months by default, or `--month <n>` for 1–12):
 
@@ -192,6 +219,7 @@ There is no monthly price column yet — it hasn't been confirmed to exist in th
 - `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's `SUCCESSFUL BUILDS` column; with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
 - `--account <slug|name>` — only this account, matching the unique slug or EAS Display name (case-insensitive exact match). Applies to every display mode. No match exits 1 with a suggestion.
 - `--app <slug>` — only this app, matching the unique slug (case-insensitive exact match), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
+- `--local` — show `BUILD DATE` in the local timezone instead of UTC. Only affects `BUILD DATE`; `--usage`'s `PERIOD` and `--plan`'s `TRIAL END` stay UTC. Cannot be combined with `--usage` or `--plan` (neither has a `BUILD DATE` column).
 - `--month <n>` — only with `--usage`: widen the window to the last `n` calendar months (1–12, default 3).
 - `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage` or `--plan`.
 

@@ -4,7 +4,7 @@
 
 import { mapWithConcurrency } from '../api.mjs';
 import { createAppFilter } from '../filter.mjs';
-import { toDisplayRows } from '../format.mjs';
+import { buildDateHeader, toDisplayRows } from '../format.mjs';
 import { clearProgress, progress } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
@@ -79,8 +79,8 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
 
   console.log(
     renderTable(
-      ['ACCOUNT', 'APP', 'SLUG', 'PLATFORM', 'VERSION', 'BUILD', 'BUILD DATE'],
-      toDisplayRows(filtered, { accountDisplayNames })
+      ['ACCOUNT', 'APP', 'SLUG', 'PLATFORM', 'VERSION', 'BUILD', buildDateHeader(opts.local)],
+      toDisplayRows(filtered, { accountDisplayNames, local: opts.local })
     )
   );
   // The effective count is what matters here, not whether --history was

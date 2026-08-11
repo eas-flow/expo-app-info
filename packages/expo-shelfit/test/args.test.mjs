@@ -12,6 +12,7 @@ const DEFAULTS = {
   month: null,
   account: null,
   app: null,
+  local: false,
 };
 
 describe('parseArgs', () => {
@@ -46,6 +47,13 @@ describe('parseArgs', () => {
     [['--account', 'myorg', '--usage'], { account: 'myorg', usage: true }],
     [['--account', 'myorg', '--plan'], { account: 'myorg', plan: true }],
     [['--app', 'storefront', '--usage'], { app: 'storefront', usage: true }],
+    [['--local'], { local: true }],
+    [['--local', '--history', '5'], { local: true, history: 5 }],
+    [['--local', '--platform', 'ios'], { local: true, platform: 'ios' }],
+    [
+      ['--local', '--account', 'myorg', '--app', 'storefront'],
+      { local: true, account: 'myorg', app: 'storefront' },
+    ],
   ])('parses %j', (argv, expected) => {
     expect(parseArgs(argv)).toEqual({ ...DEFAULTS, ...expected });
   });
@@ -85,6 +93,10 @@ describe('parseArgs', () => {
     [['--app', ''], /--app requires a non-empty value/],
     [['--app', 'storefront', '--plan'], /--app cannot be used with --plan/],
     [['--plan', '--app', 'storefront'], /--app cannot be used with --plan/],
+    [['--local', '--usage'], /--local cannot be used with --usage/],
+    [['--usage', '--local'], /--local cannot be used with --usage/],
+    [['--local', '--plan'], /--local cannot be used with --plan/],
+    [['--plan', '--local'], /--local cannot be used with --plan/],
   ])('throws on %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(CliError);
     expect(() => parseArgs(argv)).toThrow(message);

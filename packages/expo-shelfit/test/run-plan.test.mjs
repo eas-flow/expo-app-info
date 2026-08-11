@@ -179,4 +179,9 @@ describe('run --plan', () => {
       /--app cannot be used with --plan/
     );
   });
+
+  it('rejects with CliError when combined with --local, since --plan has no BUILD DATE column', async () => {
+    await expect(run(['--plan', '--local'])).rejects.toThrow(CliError);
+    await expect(run(['--plan', '--local'])).rejects.toThrow(/--local cannot be used with --plan/);
+  });
 });

@@ -40,6 +40,10 @@ export const HELP = `
                              to every display mode.
     --app <slug>            Only this app. Applies to every display mode except --plan
                              (--plan doesn't fetch apps).
+    --local                 Show BUILD DATE in the local timezone (TZ env var or system
+                             default) instead of UTC. Only affects BUILD DATE — --usage's
+                             PERIOD and --plan's TRIAL END stay UTC. Cannot be combined
+                             with --usage or --plan (neither has a BUILD DATE column).
 
   Authentication
     EXPO_TOKEN environment variable only. Create a personal access token at
@@ -87,6 +91,16 @@ export const HELP = `
     --app is a CliError). Matches the app's unique slug, case-insensitively.
     The filter is applied before fetching builds, not after, so it also
     speeds up the run. No match exits 1 with "Did you mean" suggestions.
+
+    --local switches only the BUILD DATE column to the local timezone (the
+    header shows the current UTC offset, e.g. "BUILD DATE (+09:00)"); every
+    other date/boundary this CLI shows — --usage's PERIOD calendar-month
+    boundaries and --plan's TRIAL END — stays UTC regardless, since --usage's
+    monthly counts would otherwise silently shift which month a build is
+    counted in. Respects the TZ environment variable like any other Node
+    process (e.g. TZ=America/New_York npx @my-shelfio/expo-shelfit --local).
+    Cannot be combined with --usage or --plan, since neither has a BUILD DATE
+    column for it to affect.
 `;
 
 export function parseArgs(argv) {
@@ -100,6 +114,7 @@ export function parseArgs(argv) {
     month: null,
     account: null,
     app: null,
+    local: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -133,6 +148,8 @@ export function parseArgs(argv) {
       opts.app = requireValue(argv, ++i, '--app');
     } else if (arg.startsWith('--app=')) {
       opts.app = arg.slice('--app='.length);
+    } else if (arg === '--local') {
+      opts.local = true;
     } else {
       throw new CliError(`Unknown option: ${arg}\n  Run \`expo-shelfit --help\` to see usage.`);
     }
@@ -191,13 +208,21 @@ export function parseArgs(argv) {
     }
   }
 
-  // Flags that are common filters but don't make sense with one particular
-  // display mode — the inverse of MODE_ONLY_FLAGS above. --app is one:
-  // --plan is account-only and never fetches apps (see src/commands/plan.mjs),
-  // so there is nothing for --app to narrow (#84).
-  for (const [flag, incompatibleMode] of Object.entries(MODE_INCOMPATIBLE_FLAGS)) {
-    if (opts[flag] !== null && opts[incompatibleMode]) {
-      throw new CliError(`--${flag} cannot be used with --${incompatibleMode}.`);
+  // Flags that are common filters but don't make sense with one or more
+  // particular display modes — the inverse of MODE_ONLY_FLAGS above. Values
+  // are arrays since a flag can be incompatible with more than one mode
+  // (--local with both --usage and --plan). Truthy check on opts[flag] works
+  // for both nullable-string flags (--app) and boolean flags (--local).
+  // --app is incompatible with --plan since --plan is account-only and never
+  // fetches apps (#84, see src/commands/plan.mjs); --local is incompatible
+  // with --usage/--plan since neither has a BUILD DATE column for it to
+  // affect (#85).
+  for (const [flag, incompatibleModes] of Object.entries(MODE_INCOMPATIBLE_FLAGS)) {
+    if (!opts[flag]) continue;
+    for (const mode of incompatibleModes) {
+      if (opts[mode]) {
+        throw new CliError(`--${flag} cannot be used with --${mode}.`);
+      }
     }
   }
 
@@ -206,7 +231,7 @@ export function parseArgs(argv) {
 
 const EXCLUSIVE_MODES = ['plan', 'history', 'usage'];
 const MODE_ONLY_FLAGS = { month: 'usage' };
-const MODE_INCOMPATIBLE_FLAGS = { app: 'plan' };
+const MODE_INCOMPATIBLE_FLAGS = { app: ['plan'], local: ['usage', 'plan'] };
 
 function isModeActive(opts, mode) {
   return mode === 'history' ? opts.history !== null : opts[mode] === true;

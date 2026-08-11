@@ -3,16 +3,18 @@
 // output mode; the table below is the only supported output and carries no
 // compatibility guarantee.
 
-import { formatBuildDate, inclusiveEnd, isoDate } from './dates.mjs';
+import { formatBuildDate, inclusiveEnd, isoDate, localOffset } from './dates.mjs';
 
 /**
  * Table rows: display strings, "-" for null/missing, absolute build dates.
  *
  * `accountDisplayNames` (account slug -> EAS "Display name") is an optional
  * lookup: when given and it has an entry for a row's account, the table
- * shows that instead of the slug.
+ * shows that instead of the slug. `local` (--local, #85) switches only the
+ * BUILD DATE cell to the machine's local timezone — see buildDateHeader
+ * below for the matching column header.
  */
-export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {}) {
+export function toDisplayRows(entries, { accountDisplayNames = new Map(), local = false } = {}) {
   return entries.map((e) => [
     accountDisplayNames.get(e.account) ?? e.account,
     e.app,
@@ -20,8 +22,18 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map() } = {})
     e.platform ?? '-',
     e.version ?? '-',
     e.build ?? '-',
-    formatBuildDate(e.lastBuildAt),
+    formatBuildDate(e.lastBuildAt, { local }),
   ]);
+}
+
+/**
+ * Header for the BUILD DATE column: plain "BUILD DATE" by default, or
+ * "BUILD DATE (+09:00)" with --local — the current local UTC offset, so the
+ * column is self-describing without a separate legend. See
+ * src/dates.mjs#localOffset for why this is "as of now", not per-row.
+ */
+export function buildDateHeader(local = false) {
+  return local ? `BUILD DATE (${localOffset()})` : 'BUILD DATE';
 }
 
 /**
