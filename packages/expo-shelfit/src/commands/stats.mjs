@@ -1,11 +1,11 @@
-import { mapWithConcurrency } from '../api.mjs';
 import { DEFAULT_STATS_MONTHS } from '../args.mjs';
-import { calendarMonths } from '../dates.mjs';
 import { ApiError } from '../errors.mjs';
-import { createAppFilter } from '../filter.mjs';
 import { statsBuildsHeaders, toStatsDisplayRows } from '../format.mjs';
-import { clearProgress, progressCount } from '../progress.mjs';
-import { dim, renderTable } from '../render.mjs';
+import { mapWithConcurrency } from '../shared/concurrency.mjs';
+import { calendarMonths } from '../shared/dates.mjs';
+import { createAppFilter } from '../shared/filter.mjs';
+import { clearProgress, progressCount } from '../shared/terminal/progress.mjs';
+import { dim, renderTable } from '../shared/terminal/render.mjs';
 
 /**
  * Counts are computed client-side from build history rather than read from

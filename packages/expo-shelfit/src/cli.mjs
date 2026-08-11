@@ -2,15 +2,15 @@
 // catches those and converts them into a printed message + exit code.
 
 import { readFileSync } from 'node:fs';
-import { createApiClient } from './api.mjs';
 import { HELP, parseArgs } from './args.mjs';
 import { runList } from './commands/list.mjs';
 import { runPlan } from './commands/plan.mjs';
 import { runStats } from './commands/stats.mjs';
 import { CliError } from './errors.mjs';
-import { resolveAccount } from './filter.mjs';
-import { progress } from './progress.mjs';
-import { dim } from './render.mjs';
+import { createApiClient } from './shared/api.mjs';
+import { resolveAccount } from './shared/filter.mjs';
+import { progress } from './shared/terminal/progress.mjs';
+import { dim } from './shared/terminal/render.mjs';
 
 function resolveAuthHeaders(env = process.env) {
   const token = env.EXPO_TOKEN?.trim();

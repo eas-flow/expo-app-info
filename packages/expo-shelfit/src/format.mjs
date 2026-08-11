@@ -3,7 +3,8 @@
 // output mode; the table is the only supported output and carries no
 // compatibility guarantee.
 
-import { formatBuildDate, inclusiveEnd, isoDate, localOffset } from './dates.mjs';
+import { cellOrDash } from './shared/cells.mjs';
+import { formatBuildDate, inclusiveEnd, isoDate, localOffset } from './shared/dates.mjs';
 
 /**
  * `accountDisplayNames` (account slug -> EAS "Display name") is a cosmetic,
@@ -91,10 +92,6 @@ export function toStatsDisplayRows(
   }
 
   return rows;
-}
-
-function cellOrDash(value) {
-  return value === null || value === undefined ? '-' : String(value);
 }
 
 /**
