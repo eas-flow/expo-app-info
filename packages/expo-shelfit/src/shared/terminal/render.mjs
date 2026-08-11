@@ -62,6 +62,16 @@ export function bold(s, isTTY = process.stdout.isTTY) {
   return isTTY ? `\x1b[1m${s}\x1b[0m` : s;
 }
 
+/** ANSI yellow, for non-fatal deprecation notices. See `dim` for why `isTTY` is a parameter. */
+export function yellow(s, isTTY = process.stdout.isTTY) {
+  return isTTY ? `\x1b[33m${s}\x1b[0m` : s;
+}
+
+/** ANSI red, for errors and per-account/app failures. See `dim` for why `isTTY` is a parameter. */
+export function red(s, isTTY = process.stdout.isTTY) {
+  return isTTY ? `\x1b[31m${s}\x1b[0m` : s;
+}
+
 // Single pass over rows rather than Math.max(...rows.map(...)) per column,
 // which turns row count into Math.max's argument count and blows the call
 // stack on large tables.
