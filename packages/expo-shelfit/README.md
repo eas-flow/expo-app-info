@@ -13,24 +13,27 @@ English | [日本語](./README.ja.md)
 ```
 $ npx @my-shelfio/expo-shelfit
 
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
-│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
-│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
-│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:05:02 │
-│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ 2026/05/28-18:40:11 │
-│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -                   │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬──────────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ STATUS   │ BUILD DATE          │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼──────────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.2   │ 42    │ Errored  │ 2026/08/10-11:02:47 │
+│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ Finished │ 2026/06/30-14:05:02 │
+│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ Finished │ 2026/05/28-18:40:11 │
+│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -        │ -                   │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴──────────┴─────────────────────┘
 ```
 
 ## 🚀 Features
 
 If you ship more than one Expo app, there is no quick way to answer *"which app is on which version right now?"* — `eas build:list` only works **inside** a project directory and shows one project at a time, there is no `eas project:list`, and the Expo dashboard means clicking into every project one by one. `expo-shelfit` walks your whole account via the EAS GraphQL API and prints one table.
 
-- Lists every Expo (EAS) app in your account, with the latest **successful** build version per platform, from **any** directory
+- Lists every Expo (EAS) app in your account, with its latest build **attempt** per platform — including errored and canceled ones, not just successful ones — from **any** directory
+- `STATUS` column shows `Finished` / `Errored` / `Canceled` for that latest attempt, so a failing build is visible without opening the EAS dashboard
 - `--platform` filter to narrow to `ios` or `android`
-- `--history <N>` — show the `N` most recent builds per platform, not just the latest
-- `--usage` — successful build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history
+- `--account <slug|name>` / `--app <slug|name>` — narrow to a single account or app, across every display mode
+- `--local` — show `BUILD DATE` in your local timezone instead of UTC
+- `--history <N>` — show the `N` most recent build attempts per platform, not just the latest
+- `--stats` — success/errored/canceled build counts per UTC calendar month (last 3 by default, `--month <n>` up to 12), computed client-side from build history. `--group-by app` counts per app instead of per account
 - `--plan` — current account subscription: plan, plan ID, status, concurrency, trial end
 - `ACCOUNT` shows the EAS "Display name" when set, falling back to the unique slug
 - Zero runtime dependencies
@@ -61,7 +64,11 @@ npx @my-shelfio/expo-shelfit
 
 Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
 
-This is deliberately the only option. The token is never read from `argv` and never written to disk, so it cannot leak through your shell history, the process list, or a forgotten config file. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+This is deliberately the only option. The token is never read from `argv`, never written to disk, and never printed — so it cannot leak through your shell history, the process list, a forgotten config file, or the CLI's own output. It is sent to exactly one destination, the EAS GraphQL endpoint (`https://api.expo.dev/graphql`), over HTTPS, in an `Authorization` header. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+
+> `EXPO_API_URL` can override that endpoint. It exists for local testing, is intentionally undocumented beyond this note, and is not covered by any compatibility guarantee. Do not point it at an untrusted host — doing so sends your token there.
+
+See [SECURITY.md](../../.github/SECURITY.md) to report a vulnerability privately.
 
 ## 🛠️ Usage
 
@@ -78,6 +85,51 @@ Filter by platform:
 npx @my-shelfio/expo-shelfit --platform ios
 ```
 
+Narrow to one account or app — every display mode below respects these:
+
+```bash
+npx @my-shelfio/expo-shelfit --account myorg
+npx @my-shelfio/expo-shelfit --app storefront
+npx @my-shelfio/expo-shelfit --account myorg --app storefront --history 5
+```
+
+`--account <slug|name>` matches the account's unique slug or its EAS Display
+name (case-insensitive exact match — no partial matching). If a Display name
+matches more than one account, pass the slug instead. `--app <slug|name>`
+matches the same way — unique slug or EAS Display name — except the
+ambiguity check is scoped to a single account: a Display name shared by two
+apps in the *same* account is ambiguous (pass the slug instead), but the
+same Display name in two *different* accounts is not, and both match.
+`--app` is applied *before* fetching builds, so it also speeds up the run —
+it cannot be combined with `--plan`, which doesn't fetch apps at all.
+Neither flag matching anything exits 1 with a "Did you mean" suggestion.
+
+By default `BUILD DATE` is always UTC. Add `--local` to read it in your
+machine's timezone instead:
+
+```bash
+npx @my-shelfio/expo-shelfit --local
+```
+
+```
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬──────────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ STATUS   │ BUILD DATE (+09:00) │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼──────────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ Finished │ 2026/07/26-18:12:34 │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴──────────┴─────────────────────┘
+```
+
+`--local` only affects the `BUILD DATE` column — it respects the `TZ`
+environment variable like any other Node process (e.g. `TZ=America/New_York
+npx @my-shelfio/expo-shelfit --local`), and the column header shows the
+current UTC offset rather than a timezone abbreviation, since offsets don't
+require a lookup table to interpret. Every other date this CLI shows stays
+UTC regardless — `--stats`'s `PERIOD` calendar-month boundaries and
+`--plan`'s `TRIAL END` are unaffected, since shifting those would silently
+move a build's build-count into the wrong month. For that reason `--local`
+cannot be combined with `--stats` or `--plan`: neither has a `BUILD DATE`
+column for it to affect.
+
 Show more than just the latest build per platform:
 
 ```bash
@@ -85,34 +137,62 @@ npx @my-shelfio/expo-shelfit --history 5
 ```
 
 ```
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬─────────────────────┐
-│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼─────────────────────┤
-│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ 2026/07/26-09:12:34 │
-│ myorg   │ Storefront │ storefront │ ios      │ 3.2.0   │ 40    │ 2026/06/30-14:05:02 │
-│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 2026/06/30-14:03:47 │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴─────────────────────┘
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬──────────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ STATUS   │ BUILD DATE          │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼──────────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.1   │ 41    │ Finished │ 2026/07/26-09:12:34 │
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.0   │ 40    │ Finished │ 2026/06/30-14:05:02 │
+│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ Finished │ 2026/06/30-14:03:47 │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴──────────┴─────────────────────┘
 ```
 
-`--history <N>` (1–100, default: 1) prints the `N` most recent **successful** builds per platform as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--usage` or `--plan`. `--history 1` prints exactly the same output as leaving the flag off entirely.
+`--history <N>` (1–100, default: 1) prints the `N` most recent build **attempts** per platform — whatever their status — as separate rows instead of collapsing each app/platform down to a single row. Rows are always newest-first by build date — sorted on the client, not just trusted from the API's response order, since that order isn't documented anywhere. It works with `--platform`, but cannot be combined with `--stats` or `--plan`. `--history 1` prints exactly the same output as leaving the flag off entirely.
 
-Or ask about successful build counts per calendar month instead of app versions:
+Or ask about success/errored/canceled build counts per calendar month instead of app versions:
 
 ```bash
-npx @my-shelfio/expo-shelfit --usage
+npx @my-shelfio/expo-shelfit --stats
 ```
 
 ```
-┌─────────┬─────────────────────────┬─────────────────────────┬─────────────────────────┐
-│ ACCOUNT │ PERIOD                  │ SUCCESSFUL BUILDS (IOS) │ SUCCESSFUL BUILDS (AND) │
-├─────────┼─────────────────────────┼─────────────────────────┼─────────────────────────┤
-│ myorg   │ 2026-07-01 → (today)    │ 18                      │ 16                      │
-│ myorg   │ 2026-06-01 → 2026-06-30 │ 14                      │ 15                      │
-│ myorg   │ 2026-05-01 → 2026-05-31 │ 21                      │ 20                      │
-└─────────┴─────────────────────────┴─────────────────────────┴─────────────────────────┘
+┌─────────┬─────────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┐
+│ ACCOUNT │ PERIOD                  │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │
+├─────────┼─────────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┤
+│ myorg   │ 2026-08-01 → (today)    │ ios      │ 18      │ 3       │ 2        │ 23    │
+│ myorg   │ 2026-08-01 → (today)    │ android  │ 16      │ 1       │ 0        │ 17    │
+│ myorg   │ 2026-07-01 → 2026-07-31 │ ios      │ 14      │ 0       │ 1        │ 15    │
+│ myorg   │ 2026-07-01 → 2026-07-31 │ android  │ 15      │ 2       │ 0        │ 17    │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ ios      │ 21      │ 1       │ 0        │ 22    │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ android  │ 20      │ 0       │ 1        │ 21    │
+└─────────┴─────────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┘
 ```
 
-One row per account **per UTC calendar month** — the last 3 months by default. Pass `--month <n>` (1–12) to widen the window, e.g. `--usage --month 6` for the last half year. `SUCCESSFUL BUILDS` counts are computed client-side from finished builds via the API — not read from EAS's own billing/usage metric, which is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match what the EAS dashboard reports. Pass `--platform ios` or `--platform android` to narrow to just that platform's column. The still-in-progress current month's row shows `(today)` as its end, since it isn't a finished count yet.
+The last 3 months by default; `--month <n>` (1–12) widens the window, `--platform` narrows to one platform's rows.
+
+Counts are computed client-side from build history, not read from EAS's billing/usage metric — that metric is tied to the billing cycle and can't be sliced into arbitrary calendar ranges — so they may not exactly match the EAS dashboard. A build that's still in progress or queued has no terminal outcome yet, so it lands in none of the three columns nor in `TOTAL`. The current month ends at `(today)`, since it isn't a finished count.
+
+Pass `--group-by app` to count per app instead of per account — the `ACCOUNT` column becomes `APP`:
+
+```bash
+npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
+```
+
+```
+┌────────────┬──────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┐
+│ APP        │ PERIOD               │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │
+├────────────┼──────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┤
+│ Storefront │ 2026-08-01 → (today) │ ios      │ 15      │ 3       │ 2        │ 20    │
+│ Storefront │ 2026-08-01 → (today) │ android  │ 16      │ 1       │ 0        │ 17    │
+│ Admin      │ 2026-08-01 → (today) │ ios      │ 3       │ 0       │ 0        │ 3     │
+│ Admin      │ 2026-08-01 → (today) │ android  │ 0       │ 0       │ 0        │ 0     │
+└────────────┴──────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┘
+```
+
+This answers "which app is responsible for that spike?" without re-running the CLI once per app, and it **costs no extra API calls** — the per-app counts were always being fetched, just summed per account before showing them.
+
+An app with no builds in a month still gets a row of zeros, so "this app wasn't built" is visible rather than absent. Two apps in different accounts sharing a Display name stay on separate rows and are never summed — pass `--account` to tell them apart.
+
+Failure handling gets finer-grained too: a failed build-count fetch degrades only that app's rows to `-` rather than the whole account's, while an account whose *app list* couldn't be fetched contributes no rows at all and is reported on stderr.
 
 Or just the account's current subscription, with no build counts or billing
 period at all:
@@ -129,29 +209,33 @@ npx @my-shelfio/expo-shelfit --plan
 └─────────┴────────────┴────────────┴────────┴─────────────────────────────┴───────────┘
 ```
 
-`--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--usage` or `--history`, since all three are separate display modes.
+`--plan` shows only the account's *current* subscription — no build counts, no billing period — since those are "as of now" facts that would otherwise be repeated identically on every row if shown alongside historical data. Pass `--platform ios` or `--platform android` to narrow `CONCURRENCY` to just that platform's number. Cannot be combined with `--stats` or `--history`, since all three are separate display modes.
 
 ### What the numbers mean
 
-| Column         | Source                                                        |
-| -------------- | ------------------------------------------------------------- |
-| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug |
-| `APP` / `SLUG` | EAS project name and slug                                     |
-| `PLATFORM`     | `ios` / `android`                                             |
-| `VERSION`      | `appVersion` of the latest **successful** build               |
-| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)    |
-| `BUILD DATE`   | When that build finished (`YYYY/MM/DD-HH:mm:ss`, UTC)         |
+| Column         | Source                                                                                |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `ACCOUNT`      | The account's EAS "Display name" if set, else its unique slug                         |
+| `APP` / `SLUG` | EAS project name and slug                                                             |
+| `PLATFORM`     | `ios` / `android`                                                                     |
+| `VERSION`      | `appVersion` of the latest build **attempt** (any status)                             |
+| `BUILD`        | `appBuildVersion` (iOS build number / Android versionCode)                            |
+| `STATUS`       | `Finished` / `Errored` / `Canceled` — any other status shows the raw value lowercased |
+| `BUILD DATE`   | When that build attempt finished (`YYYY/MM/DD-HH:mm:ss`, UTC unless `--local`)        |
 
-With `--usage`, one row per account **per UTC calendar month** instead (last 3 months by default, or `--month <n>` for 1–12):
+With `--stats`, one row per account **per UTC calendar month, per platform** instead (last 3 months by default, or `--month <n>` for 1–12; both `ios` and `android` rows unless `--platform` narrows to one):
 
-| Column                    | Source                                                                                                                                                                      |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ACCOUNT`                 | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
-| `PERIOD`                  | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
-| `SUCCESSFUL BUILDS (IOS)` | Finished iOS builds in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                              |
-| `SUCCESSFUL BUILDS (AND)` | Same, for Android                                                                                                                                                           |
+| Column     | Source                                                                                                                                                                      |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACCOUNT`  | Same as above — the account's EAS "Display name" if set, else its unique slug                                                                                               |
+| `PERIOD`   | A UTC calendar month. Shows `(today)` as the end for the still-in-progress current month, else the last inclusive day (the underlying boundary, `periodEnd`, is exclusive). |
+| `PLATFORM` | `ios` / `android` — one row per platform per account per month                                                                                                              |
+| `SUCCESS`  | Finished builds on that platform in that month, counted client-side from the build history via the API — not EAS's own billing/usage metric                                 |
+| `ERRORED`  | Same, for errored builds                                                                                                                                                    |
+| `CANCELED` | Same, for canceled builds                                                                                                                                                   |
+| `TOTAL`    | `SUCCESS` + `ERRORED` + `CANCELED` for that row                                                                                                                             |
 
-Pass `--platform ios` or `--platform android` to show only that platform's column.
+A build that's still in progress or queued isn't counted into any of the three categories, nor into `TOTAL`, since it hasn't reached a terminal outcome. Pass `--platform ios` or `--platform android` to show only that platform's rows (the column set stays the same).
 
 With `--plan`, one row per account instead, with only the current subscription (no build counts or billing period):
 
@@ -166,17 +250,25 @@ With `--plan`, one row per account instead, with only the current subscription (
 
 There is no monthly price column yet — it hasn't been confirmed to exist in the EAS schema. It may be added later once that's checked against a real token.
 
-**`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
+**`VERSION` is not read from your local `app.json`.** EAS does not store a version on the project itself, so the number shown is the one baked into the most recent build *attempt* — whatever its status. Apps that have never had any build attempt show `-`.
 
 **`ACCOUNT` shows the "Display name" when set, falling back to the unique slug otherwise**, since the display name is friendlier to read and is not guaranteed to be unique.
 
 ### Filtering
 
-- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--usage`, it narrows to just that platform's `SUCCESSFUL BUILDS` column; with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
-- `--month <n>` — only with `--usage`: widen the window to the last `n` calendar months (1–12, default 3).
-- `--history <N>` — the `N` most recent successful builds per platform (1–100), newest first, instead of just the latest one. Cannot be combined with `--usage` or `--plan`.
+- `--platform <ios|android>` — only builds for this platform. Apps with zero builds are omitted when this filter is set, since they don't match a specific platform. With `--stats`, it narrows to just that platform's rows (half as many rows, same columns); with `--plan`, it narrows `CONCURRENCY` to that platform's number instead of the account total.
+- `--account <slug|name>` — only this account, matching the unique slug or EAS Display name (case-insensitive exact match). Applies to every display mode. No match exits 1 with a suggestion.
+- `--app <slug|name>` — only this app, matching the unique slug or EAS Display name (case-insensitive exact match, same rule as `--account` but with ambiguity scoped to one account — see above), applied before builds are fetched. Applies to every display mode except `--plan` (account-only, never fetches apps — combining the two is a `CliError`). No match exits 1 with a suggestion.
+- `--local` — show `BUILD DATE` in the local timezone instead of UTC. Only affects `BUILD DATE`; `--stats`'s `PERIOD` and `--plan`'s `TRIAL END` stay UTC. Cannot be combined with `--stats` or `--plan` (neither has a `BUILD DATE` column).
+- `--month <n>` — only with `--stats`: widen the window to the last `n` calendar months (1–12, default 3).
+- `--group-by <account|app>` — only with `--stats`: count per account (default) or per app. `app` replaces the `ACCOUNT` column with `APP`. No extra API calls.
+- `--history <N>` — the `N` most recent build attempts per platform (1–100), whatever their status, newest first, instead of just the latest one. Cannot be combined with `--stats` or `--plan`.
 
-`--usage`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
+`--stats`, `--plan`, and `--history` are mutually exclusive display modes — combining any two of them is a `CliError`.
+
+### Deprecated
+
+- `--usage` — the old name for `--stats`. It still works and prints the identical table, but writes a deprecation warning to stderr and will be removed in the next major version. It was renamed because it kept being read as EAS's *billing* usage, which this CLI deliberately never queries. Error messages echo whichever of the two names you actually typed.
 
 ## 📚 Documentation
 
@@ -186,19 +278,20 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform, status: FINISHED })` — the `N` most recent builds per platform (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
+3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client, since the API's own build order is undocumented
+
+`filter` deliberately has no `status` key — confirmed against the real API (`scripts/probe-build-status.mjs`) that omitting it returns builds in every status and that the field isn't required. It used to be hardcoded to `status: FINISHED`, so a build that errored or was canceled was invisible; the `STATUS` column now surfaces it instead.
 
 Build queries run with a concurrency limit of 8. Zero runtime dependencies.
 
-`--usage` still walks accounts → apps (steps 1–2), but instead of step 3 it pages through `app.byId(...).builds(offset, limit, filter: { status: FINISHED })` for each app and buckets every build by platform + UTC calendar month on the client (`countBuildsByMonth`). It no longer queries `subscription`, `billingPeriod`, or `usageMetrics` at all — those were tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform (it silently returns the combined total regardless of what's passed). Accounts and apps are fetched as two flat passes — first every account's app list, then every (account, app) pair — rather than nesting one concurrency-limited pass inside another, which would deadlock against the shared semaphore. Both passes run under the same overall concurrency limit of 8, since UTC calendar-month boundaries have no inter-period dependency (unlike the old billing-period chaining, which needed the previous period's `start` before it could compute the next one).
+`--stats` reuses steps 1–2, then pages through each app's builds and buckets them by platform + UTC calendar month + status on the client. It queries no billing fields (`subscription`, `billingPeriod`, `usageMetrics`) at all: those are tied to EAS's billing cycle and can't be sliced into arbitrary calendar ranges, and `metricsForServiceMetric`'s `filterParams` was found not to actually filter by platform — it silently returns the combined total whatever you pass. Accounts and apps are fetched as two flat passes rather than one nested inside the other, which would deadlock against the shared semaphore.
 
-`--plan` skips 2 and 3 entirely, and runs a smaller query per account: `account.byId(...) { subscription }` only — no `billingPeriod` or `usageMetrics`. Accounts are fetched in parallel (concurrency limit of 8, same as build queries), since each account's subscription lookup is independent of the others.
+`--plan` skips steps 2–3 and queries `account.byId(...) { subscription }` per account, in parallel.
 
 ### Further reading
 
 - [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, test/lint commands, project layout, and the release process
-- [SECURITY.md](./SECURITY.md) — vulnerability reporting policy and how to report an issue privately
-- [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) — the Contributor Covenant this project follows
+- [SECURITY.md](../../.github/SECURITY.md) — vulnerability reporting policy and how to report an issue privately
 
 ## ❓ FAQ
 
@@ -212,7 +305,7 @@ A robot token can only see the account that issued it. Use a personal access tok
 
 **What happens if a token can't read an account's apps or builds?**
 
-`--usage` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
+`--stats` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
 
 **Why do some accounts show `-` in the `--plan` columns?**
 
@@ -220,11 +313,15 @@ Plan data is billing-scoped. If the token lacks billing permission on an account
 
 **Does `VERSION` come from my local `app.json`?**
 
-No. EAS does not store a version on the project itself, so the number shown is the one baked into the most recent successful build. Apps that have never been built show `-`.
+No. EAS does not store a version on the project itself, so the number shown is the one baked into the most recent build attempt. Apps that have never had any build attempt show `-`.
+
+**What if `STATUS` shows something other than `Finished`/`Errored`/`Canceled`?**
+
+Those three are the only EAS build statuses confirmed against the real API so far (`scripts/probe-build-status.mjs`). A still in-progress or queued build — or any other status this unofficial API introduces later — shows the raw enum value lowercased instead of a friendly label, rather than breaking or hiding the row.
 
 **Is the `EXPO_TOKEN` ever written to disk or logged?**
 
-No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](./SECURITY.md) for the full policy and how to report a vulnerability privately.
+No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](../../.github/SECURITY.md) for the full policy and how to report a vulnerability privately.
 
 ## 📄 License
 

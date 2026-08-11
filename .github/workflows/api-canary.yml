@@ -28,21 +28,21 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --usage no longer queries subscription/billingPeriod at all — it
+      # --stats no longer queries subscription/billingPeriod at all — it
       # pages app.byId(...).builds(offset, limit, filter) per app and
-      # buckets client-side by UTC calendar month. Separate step so a break
-      # in that pagination shape is distinguishable from a break in the
-      # plain app/build queries above.
-      - name: Run --usage against the live EAS API
-        run: node packages/expo-shelfit/bin/cli.mjs --usage
+      # buckets client-side by UTC calendar month + status (success/errored/
+      # canceled). Separate step so a break in that pagination shape is
+      # distinguishable from a break in the plain app/build queries above.
+      - name: Run --stats against the live EAS API
+        run: node packages/expo-shelfit/bin/cli.mjs --stats
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --month widens --usage's pagination window (up to 12 months) rather
+      # --month widens --stats' pagination window (up to 12 months) rather
       # than changing query shape, but a separate step still catches an
       # unexpected error/timeout from the deeper paging on its own.
-      - name: Run --usage --month 6 against the live EAS API
-        run: node packages/expo-shelfit/bin/cli.mjs --usage --month 6
+      - name: Run --stats --month 6 against the live EAS API
+        run: node packages/expo-shelfit/bin/cli.mjs --stats --month 6
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -56,14 +56,14 @@ jobs:
 
       # --plan queries `subscription` on its own, without
       # `billingPeriod`/`usageMetrics` — a separate step so a break here is
-      # distinguishable from a break in --usage's larger query above.
+      # distinguishable from a break in --stats' larger query above.
       - name: Run --plan against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs --plan
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       # --platform narrows the RecentBuilds/BuildsPage query to a single
-      # `ios:`/`android:` alias instead of always requesting both (#59) — a
+      # `ios:`/`android:` alias instead of always requesting both — a
       # separate step so a break in that single-alias query shape is
       # distinguishable from a break in the always-both queries above.
       - name: Run --platform ios against the live EAS API

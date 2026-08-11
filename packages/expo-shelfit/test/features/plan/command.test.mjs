@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { run } from '../src/cli.mjs';
-import { accountsResponse, fetchSequence, jsonResponse } from './helpers.mjs';
+import { run } from '../../../src/cli.mjs';
+import { CliError } from '../../../src/errors.mjs';
+import { accountsResponse, fetchSequence, jsonResponse } from '../../helpers.mjs';
 
 describe('run --plan', () => {
   let logSpy;
@@ -131,7 +132,7 @@ describe('run --plan', () => {
 
   it('fetches accounts in parallel (mapWithConcurrency) rather than a strictly sequential loop', async () => {
     // Order-preservation is mapWithConcurrency's job, already covered in
-    // test/api.test.mjs; this just proves runPlan uses it end to end for
+    // test/shared/api.test.mjs; this just proves runPlan uses it end to end for
     // --plan specifically.
     stubFetch([
       accountsResponse([
@@ -148,5 +149,40 @@ describe('run --plan', () => {
     expect(output).toContain('2 account(s)');
     // Row order must match input account order despite parallel fetching.
     expect(output.indexOf('myorg')).toBeLessThan(output.indexOf('otherorg'));
+  });
+
+  it('--account narrows to a single account — the other account is never queried for a subscription', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes('CurrentAccounts')) {
+        return accountsResponse([
+          { id: 'acc-1', name: 'myorg' },
+          { id: 'acc-2', name: 'otherorg' },
+        ]);
+      }
+      expect(body.variables.accountId).toBe('acc-1'); // otherorg must never be queried
+      return subscriptionResponseFor('acc-1');
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await run(['--plan', '--account', 'myorg']);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // 1 accounts + 1 subscription, not 2
+    const output = tableOutput();
+    expect(output).toContain('myorg');
+    expect(output).not.toContain('otherorg');
+    expect(output).toContain('1 account(s)');
+  });
+
+  it('rejects with CliError when combined with --app, since --plan never fetches apps', async () => {
+    await expect(run(['--plan', '--app', 'storefront'])).rejects.toThrow(CliError);
+    await expect(run(['--plan', '--app', 'storefront'])).rejects.toThrow(
+      /--app cannot be used with --plan/
+    );
+  });
+
+  it('rejects with CliError when combined with --local, since --plan has no BUILD DATE column', async () => {
+    await expect(run(['--plan', '--local'])).rejects.toThrow(CliError);
+    await expect(run(['--plan', '--local'])).rejects.toThrow(/--local cannot be used with --plan/);
   });
 });

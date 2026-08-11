@@ -1,18 +1,16 @@
-// The top-level run() flow: parse arguments, resolve auth, fetch the
-// account list, and dispatch to the requested display mode's flow in
-// src/commands/. Throws CliError/ApiError on failure; bin/cli.mjs is the
-// only place that catches and converts those into a printed message + exit
-// code.
+// Throws CliError/ApiError on failure; bin/cli.mjs is the only place that
+// catches those and converts them into a printed message + exit code.
 
 import { readFileSync } from 'node:fs';
-import { createApiClient } from './api.mjs';
 import { HELP, parseArgs } from './args.mjs';
-import { runList } from './commands/list.mjs';
-import { runPlan } from './commands/plan.mjs';
-import { runUsage } from './commands/usage.mjs';
-import { progress } from './progress.mjs';
-
-export class CliError extends Error {}
+import { CliError } from './errors.mjs';
+import { runList } from './features/list/command.mjs';
+import { runPlan } from './features/plan/command.mjs';
+import { runStats } from './features/stats/command.mjs';
+import { createApiClient } from './shared/api.mjs';
+import { resolveAccount } from './shared/filter.mjs';
+import { progress } from './shared/terminal/progress.mjs';
+import { dim } from './shared/terminal/render.mjs';
 
 function resolveAuthHeaders(env = process.env) {
   const token = env.EXPO_TOKEN?.trim();
@@ -32,6 +30,13 @@ function resolveAuthHeaders(env = process.env) {
 export async function run(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
 
+  // parseArgs does no I/O, so its notices are printed here — before
+  // --help/--version, so a deprecated flag is still called out when combined
+  // with them, and on stderr so it never lands in a redirected table.
+  for (const warning of opts.warnings) {
+    console.error(dim(`  ! ${warning}`));
+  }
+
   if (opts.help) {
     console.log(HELP);
     return;
@@ -47,15 +52,19 @@ export async function run(argv = process.argv.slice(2)) {
   const client = createApiClient({ apiUrl, authHeaders });
 
   progress('Fetching accounts…');
-  const accounts = await client.fetchAccounts();
+  let accounts = await client.fetchAccounts();
   if (accounts.length === 0) throw new CliError('No accounts found for this token.');
 
-  // Table-only cosmetic slug -> "Display name" mapping; see
-  // toDisplayRows/toUsageDisplayRows in format.mjs.
+  // Narrowed before any app/build fetch, for every display mode alike.
+  if (opts.account !== null) {
+    accounts = [resolveAccount(accounts, opts.account)];
+  }
+
+  // Table-only cosmetic mapping; see format.mjs.
   const accountDisplayNames = new Map(accounts.map((a) => [a.name, a.displayName || a.name]));
 
-  if (opts.usage) {
-    await runUsage(client, accounts, opts, accountDisplayNames);
+  if (opts.stats) {
+    await runStats(client, accounts, opts, accountDisplayNames);
     return;
   }
 
