@@ -339,14 +339,14 @@ describe('run --usage', () => {
 
     let error;
     try {
-      // 'store' is a prefix of 'storefront' but not an exact match —
-      // exercises the "Did you mean" path (prefix/substring, not Levenshtein).
-      await run(['--usage', '--app', 'store']);
+      // 'storfront' (missing 'e') is one edit away from 'storefront' —
+      // exercises the Levenshtein "Did you mean" path.
+      await run(['--usage', '--app', 'storfront']);
     } catch (err) {
       error = err;
     }
     expect(error).toBeInstanceOf(CliError);
-    expect(error.message).toContain('No app matched "store"');
+    expect(error.message).toContain('No app matched "storfront"');
     expect(error.message).toContain('Did you mean: storefront');
   });
 });

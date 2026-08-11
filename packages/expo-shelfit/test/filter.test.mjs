@@ -37,15 +37,29 @@ describe('resolveAccount', () => {
     expect(() => resolveAccount(accounts, 'Shared Name')).toThrow(/dup-a, dup-b/);
   });
 
-  it('throws with "Did you mean" suggestions on no match (prefix)', () => {
+  it('throws with a "Did you mean" suggestion for a 1-character typo', () => {
     expect(() => resolveAccount(accounts, 'myo')).toThrow(/Did you mean: myorg/);
   });
 
-  it('throws with "Did you mean" suggestions on no match (substring)', () => {
-    expect(() => resolveAccount(accounts, 'org')).toThrow(/Did you mean:.*myorg/);
+  it('throws with a "Did you mean" suggestion for transposed characters', () => {
+    // Levenshtein (not prefix/substring) is what catches this: 'myogr' isn't
+    // a prefix or substring of 'myorg', but it's one transposition away.
+    expect(() => resolveAccount(accounts, 'myogr')).toThrow(/Did you mean: myorg/);
   });
 
-  it('throws with no suggestion line when nothing is even a partial match', () => {
+  it('throws with a "Did you mean" suggestion for a Display name typo', () => {
+    expect(() => resolveAccount(accounts, 'My Organizaton')).toThrow(
+      /Did you mean: My Organization/
+    );
+  });
+
+  it('ranks suggestions by edit distance and includes ties', () => {
+    // 'dup-c' is one substitution away from both 'dup-a' and 'dup-b' — both
+    // should surface, not just the first one found.
+    expect(() => resolveAccount(accounts, 'dup-c')).toThrow(/Did you mean: dup-a, dup-b/);
+  });
+
+  it('throws with no suggestion line when nothing is even a near match', () => {
     let error;
     try {
       resolveAccount(accounts, 'zzz-nope');
@@ -83,14 +97,28 @@ describe('createAppFilter', () => {
     expect(filter.filter(appsB)).toEqual([]);
   });
 
-  it('finalize() throws with suggestions when nothing matched across every account seen', () => {
-    // 'store' is a prefix of 'storefront' but not an exact match — exercises
-    // the "Did you mean" path (prefix/substring, not Levenshtein — #84).
-    const filter = createAppFilter('store');
+  it('finalize() throws with a suggestion when nothing matched across every account seen', () => {
+    // 'storfront' (missing 'e') is one edit away from 'storefront' — the
+    // issue #84's own example of a typo the suggestions should catch.
+    const filter = createAppFilter('storfront');
     filter.filter(appsA);
     filter.filter(appsB);
     expect(() => filter.finalize()).toThrow(CliError);
     expect(() => filter.finalize()).toThrow(/Did you mean: storefront/);
+  });
+
+  it('finalize() throws with no suggestion when nothing is even a near match', () => {
+    const filter = createAppFilter('nope-at-all');
+    filter.filter(appsA);
+    filter.filter(appsB);
+    let error;
+    try {
+      filter.finalize();
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(CliError);
+    expect(error.message).not.toContain('Did you mean');
   });
 
   it('finalize() does not throw once any account has matched', () => {
