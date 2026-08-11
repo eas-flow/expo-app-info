@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { run } from '../src/cli.mjs';
-import { CliError } from '../src/errors.mjs';
-import { accountsResponse, fetchSequence, jsonResponse } from './helpers.mjs';
+import { run } from '../../../src/cli.mjs';
+import { CliError } from '../../../src/errors.mjs';
+import { accountsResponse, fetchSequence, jsonResponse } from '../../helpers.mjs';
 
 describe('run --plan', () => {
   let logSpy;

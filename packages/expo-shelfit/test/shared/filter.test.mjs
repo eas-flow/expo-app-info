@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CliError } from '../src/errors.mjs';
-import { createAppFilter, resolveAccount } from '../src/shared/filter.mjs';
+import { CliError } from '../../src/errors.mjs';
+import { createAppFilter, resolveAccount } from '../../src/shared/filter.mjs';
 
 describe('resolveAccount', () => {
   const accounts = [
