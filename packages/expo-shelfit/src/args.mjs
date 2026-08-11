@@ -27,9 +27,10 @@ export const HELP = `
     -h, --help              Show this help
     -v, --version           Show version
     --platform <platform>   Only show "ios" or "android" builds
-    --usage                 Show successful build counts per UTC calendar month (last 3
-                             by default) instead of the app list. Cannot be combined with
-                             --plan or --history.
+    --usage                 Show success/errored/canceled/total build counts per UTC
+                             calendar month and platform (last 3 months by default)
+                             instead of the app list. Cannot be combined with --plan or
+                             --history.
     --month <n>             Widen --usage to the last <n> calendar months (1-12, default
                              3). Only valid together with --usage.
     --plan                  Show current account subscription (plan/concurrency) instead
@@ -56,24 +57,39 @@ export const HELP = `
     ACCOUNT shows the account's EAS "Display name" when one is set, falling
     back to its unique slug otherwise.
 
-    VERSION / BUILD come from the latest *successful* EAS build, not from your
-    local app.json. Apps that have never been built show "-" in the table.
+    VERSION / BUILD / STATUS come from the latest EAS build *attempt*,
+    regardless of status — not from your local app.json, and not filtered
+    down to only successful builds. If the most recent attempt for a
+    platform errored or was canceled, that is what shows, not an older
+    successful one. Apps that have never had any build attempt show "-" in
+    the table.
 
-    --history <N> lists the N most recent successful builds per platform as
+    STATUS shows Finished / Errored / Canceled — the only EAS build statuses
+    confirmed against the real API so far. Any other status (most likely a
+    still in-progress or queued build) shows the raw value lowercased
+    instead of a friendly label, so an unrecognized status is still visible
+    rather than hidden.
+
+    --history <N> lists the N most recent build attempts per platform as
     separate rows (newest first, sorted by build date regardless of the order
     the API returns them in), instead of collapsing each app/platform down to
     a single latest-build row. The BUILD DATE column header applies whether
     or not --history is set, since a row is not necessarily the "last" build
     once more than one is shown.
 
-    --usage prints one row per account *per UTC calendar month* — the last 3
-    months by default, or the last <n> with --month <n> (1-12). Each row's
-    successful build counts are counted client-side from finished builds via
-    the API (not EAS's own billing usage metric, which can't be sliced by
-    arbitrary calendar ranges); they may differ from what EAS's dashboard
-    reports. The current (in-progress) month's row shows "(today)" as its end.
-    A token without app/build read access on an account degrades that
-    account's rows to "-" rather than failing the run.
+    --usage prints one row per account *per UTC calendar month per
+    platform* — the last 3 months by default, or the last <n> with --month
+    <n> (1-12); both ios and android rows unless --platform narrows to one.
+    Each row's SUCCESS/ERRORED/CANCELED build counts are counted
+    client-side from every build in an app's history via the API (not
+    EAS's own billing usage metric, which can't be sliced by arbitrary
+    calendar ranges); they may differ from what EAS's dashboard reports.
+    TOTAL is SUCCESS + ERRORED + CANCELED for that row. A still
+    in-progress or queued build isn't counted into any of the three
+    categories, nor into TOTAL. The current (in-progress) month's rows
+    show "(today)" as their end. A token without app/build read access on
+    an account degrades that account's rows to "-" (including TOTAL)
+    rather than failing the run.
 
     --plan prints one row per account with its current subscription only —
     plan name, plan ID, status, concurrency (total/ios/android), and trial

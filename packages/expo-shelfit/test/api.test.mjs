@@ -418,6 +418,39 @@ describe('fetchBuilds', () => {
     expect(query).toContain('ios:');
     expect(query).not.toContain('android:');
   });
+
+  it('requests status and passes it through on each returned build, without filtering on it (#83)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: {
+          app: {
+            byId: {
+              id: 'app-1',
+              ios: [
+                {
+                  platform: 'IOS',
+                  status: 'ERRORED',
+                  appVersion: '3.2.2',
+                  appBuildVersion: '42',
+                  createdAt: '2026-08-01T00:00:00.000Z',
+                },
+              ],
+              android: [],
+            },
+          },
+        },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const builds = await client.fetchBuilds('app-1');
+
+    expect(builds[0].status).toBe('ERRORED');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('status');
+    expect(query).not.toContain('status: FINISHED');
+  });
 });
 
 describe('mapWithConcurrency', () => {
@@ -549,27 +582,39 @@ describe('countBuildsByMonth', () => {
     { start: '2026-06-01T00:00:00.000Z', end: '2026-07-01T00:00:00.000Z' },
   ];
 
-  function buildsPage(iosCreatedAts, androidCreatedAts) {
+  const zero = () => ({ success: 0, errored: 0, canceled: 0 });
+
+  // `status` defaults to FINISHED so callers that don't care about status
+  // bucketing (most of these tests) don't have to repeat it everywhere.
+  function build(createdAt, status = 'FINISHED') {
+    return { createdAt, status };
+  }
+
+  function buildsPage(iosBuilds, androidBuilds) {
     return jsonResponse({
       data: {
         app: {
           byId: {
             id: 'app-1',
-            ios: iosCreatedAts.map((createdAt) => ({ createdAt })),
-            android: androidCreatedAts.map((createdAt) => ({ createdAt })),
+            ios: iosBuilds,
+            android: androidBuilds,
           },
         },
       },
     });
   }
 
-  it('buckets builds into the right platform/month, in a single page', async () => {
+  it('buckets builds into the right platform/month/status, in a single page', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
         buildsPage(
-          ['2026-07-20T00:00:00.000Z', '2026-06-15T00:00:00.000Z', '2026-06-10T00:00:00.000Z'],
-          ['2026-07-05T00:00:00.000Z']
+          [
+            build('2026-07-20T00:00:00.000Z', 'FINISHED'),
+            build('2026-06-15T00:00:00.000Z', 'ERRORED'),
+            build('2026-06-10T00:00:00.000Z', 'CANCELED'),
+          ],
+          [build('2026-07-05T00:00:00.000Z', 'FINISHED')]
         )
       );
     // Both platforms are short of BUILD_PAGE_SIZE on the first page, so
@@ -577,8 +622,11 @@ describe('countBuildsByMonth', () => {
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: 1, android: 1 },
-      { ios: 2, android: 0 },
+      {
+        ios: { success: 1, errored: 0, canceled: 0 },
+        android: { success: 1, errored: 0, canceled: 0 },
+      },
+      { ios: { success: 0, errored: 1, canceled: 1 }, android: zero() },
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 
@@ -586,17 +634,40 @@ describe('countBuildsByMonth', () => {
     expect(body.variables).toEqual({ appId: 'app-1', offset: 0, limit: 50 });
   });
 
-  it('ignores builds older than the oldest requested month', async () => {
+  it('does not count a build whose status is not FINISHED/ERRORED/CANCELED into any bucket (#83)', async () => {
+    // Most likely a still in-progress/queued build — its exact enum name was
+    // never confirmed against the real API, so an arbitrary placeholder
+    // stands in here to prove the "unknown status" path, not a guessed name.
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(
-        buildsPage(['2026-07-01T00:00:00.000Z', '2026-05-15T00:00:00.000Z'], [])
+        buildsPage(
+          [
+            build('2026-07-20T00:00:00.000Z', 'SOME_UNKNOWN_STATUS'),
+            build('2026-07-21T00:00:00.000Z'),
+          ],
+          []
+        )
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: 1, android: 0 },
-      { ios: 0, android: 0 },
+      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
+      { ios: zero(), android: zero() },
+    ]);
+  });
+
+  it('ignores builds older than the oldest requested month', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildsPage([build('2026-07-01T00:00:00.000Z'), build('2026-05-15T00:00:00.000Z')], [])
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
+      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
+      { ios: zero(), android: zero() },
     ]);
   });
 
@@ -604,13 +675,13 @@ describe('countBuildsByMonth', () => {
     // 50 distinct minutes on the same day (not 50 distinct days — July only
     // has 31) so every build stays inside the current month bucket.
     const fullIosPage = Array.from({ length: 50 }, (_, i) =>
-      new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString()
+      build(new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString())
     );
 
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(buildsPage(fullIosPage, []))
-      .mockResolvedValueOnce(buildsPage(['2026-06-01T00:00:00.000Z'], []));
+      .mockResolvedValueOnce(buildsPage([build('2026-06-01T00:00:00.000Z')], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     const counts = await client.countBuildsByMonth('app-1', MONTHS);
@@ -619,8 +690,8 @@ describe('countBuildsByMonth', () => {
     const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
     expect(secondBody.variables).toEqual({ appId: 'app-1', offset: 50, limit: 50 });
 
-    expect(counts[0].ios).toBe(50);
-    expect(counts[1].ios).toBe(1);
+    expect(counts[0].ios.success).toBe(50);
+    expect(counts[1].ios.success).toBe(1);
   });
 
   it('returns all-zero counts when the app has no builds at all', async () => {
@@ -628,8 +699,8 @@ describe('countBuildsByMonth', () => {
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: 0, android: 0 },
-      { ios: 0, android: 0 },
+      { ios: zero(), android: zero() },
+      { ios: zero(), android: zero() },
     ]);
   });
 
@@ -645,12 +716,14 @@ describe('countBuildsByMonth', () => {
     // bucket (index -1) rather than throwing or landing in month 0.
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(buildsPage(['2026-07-20T00:00:00.000Z', 'not-a-date'], []));
+      .mockResolvedValueOnce(
+        buildsPage([build('2026-07-20T00:00:00.000Z'), build('not-a-date')], [])
+      );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: 1, android: 0 },
-      { ios: 0, android: 0 },
+      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
+      { ios: zero(), android: zero() },
     ]);
   });
 
@@ -662,7 +735,7 @@ describe('countBuildsByMonth', () => {
   });
 
   it('stops after MAX_BUILD_PAGES instead of looping forever on a non-terminating page sequence', async () => {
-    const fullPage = Array.from({ length: 50 }, () => '2026-07-15T00:00:00.000Z');
+    const fullPage = Array.from({ length: 50 }, () => build('2026-07-15T00:00:00.000Z'));
     const fetchImpl = vi.fn().mockImplementation(async () => buildsPage(fullPage, []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
@@ -671,14 +744,16 @@ describe('countBuildsByMonth', () => {
   });
 
   it('with { platform: "android" }, never requests the ios alias', async () => {
-    const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], ['2026-07-05T00:00:00.000Z']));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage([], [build('2026-07-05T00:00:00.000Z')]));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(
       client.countBuildsByMonth('app-1', MONTHS, { platform: 'android' })
     ).resolves.toEqual([
-      { ios: 0, android: 1 },
-      { ios: 0, android: 0 },
+      { ios: zero(), android: { success: 1, errored: 0, canceled: 0 } },
+      { ios: zero(), android: zero() },
     ]);
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
@@ -690,13 +765,13 @@ describe('countBuildsByMonth', () => {
     // ios stays full-page (not done yet) into page 2; android is short on
     // page 1, so it should be done after page 1 and dropped from page 2's query.
     const fullIosPage = Array.from({ length: 50 }, (_, i) =>
-      new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString()
+      build(new Date(Date.UTC(2026, 6, 1, 0, i)).toISOString())
     );
 
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(buildsPage(fullIosPage, ['2026-07-05T00:00:00.000Z']))
-      .mockResolvedValueOnce(buildsPage(['2026-06-01T00:00:00.000Z'], []));
+      .mockResolvedValueOnce(buildsPage(fullIosPage, [build('2026-07-05T00:00:00.000Z')]))
+      .mockResolvedValueOnce(buildsPage([build('2026-06-01T00:00:00.000Z')], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await client.countBuildsByMonth('app-1', MONTHS);
@@ -710,6 +785,18 @@ describe('countBuildsByMonth', () => {
     const secondQuery = JSON.parse(fetchImpl.mock.calls[1][1].body).query;
     expect(secondQuery).toContain('ios:');
     expect(secondQuery).not.toContain('android:');
+  });
+
+  it('requests status (not appVersion/appBuildVersion) in the paged builds query', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.countBuildsByMonth('app-1', MONTHS);
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('status');
+    expect(query).not.toContain('status: FINISHED');
+    expect(query).not.toContain('appVersion');
   });
 });
 

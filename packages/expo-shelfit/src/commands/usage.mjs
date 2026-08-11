@@ -10,13 +10,17 @@ import { clearProgress, progressCount } from '../progress.mjs';
 import { dim, renderTable } from '../render.mjs';
 
 /**
- * `--usage`: one row per account *per UTC calendar month* (last 3 months by
- * default, or the last `opts.month` with `--month`). Each row's build counts
- * are "successful build" counts counted client-side from finished builds via
- * the API (client.countBuildsByMonth), not from EAS's own billing/usage
- * metric, which is tied to the billing cycle and can't be sliced into
- * arbitrary calendar ranges (its `filterParams` was also found not to
- * actually filter by platform).
+ * `--usage`: one row per account *per UTC calendar month* *per platform*
+ * (last 3 months by default, or the last `opts.month` with `--month`; both
+ * platforms unless `--platform` narrows to one — see toUsageDisplayRows).
+ * Each row's SUCCESS/ERRORED/CANCELED counts are counted client-side from
+ * every build in an app's history via the API (client.countBuildsByMonth),
+ * not from EAS's own billing/usage metric, which is tied to the billing
+ * cycle and can't be sliced into arbitrary calendar ranges (its
+ * `filterParams` was also found not to actually filter by platform). TOTAL
+ * is SUCCESS + ERRORED + CANCELED. A still in-progress or queued build isn't
+ * counted into any of the three categories (nor TOTAL), since it hasn't
+ * reached a terminal outcome yet.
  *
  * Unlike the old billing-period version, months have no inter-period
  * dependency, so accounts and account/app pairs are fetched with
@@ -86,11 +90,14 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
       warnings.push(`${account.name}: ${failed.error.message}`);
       return null;
     }
-    const totals = months.map(() => ({ ios: 0, android: 0 }));
+    const totals = months.map(() => ({
+      ios: { success: 0, errored: 0, canceled: 0 },
+      android: { success: 0, errored: 0, canceled: 0 },
+    }));
     for (const { counts } of ownResults) {
       counts.forEach((c, i) => {
-        totals[i].ios += c.ios;
-        totals[i].android += c.android;
+        addCounts(totals[i].ios, c.ios);
+        addCounts(totals[i].android, c.android);
       });
     }
     return totals;
@@ -106,25 +113,35 @@ export async function runUsage(client, accounts, opts, accountDisplayNames, now 
     months.forEach((period, mi) => {
       entries.push({
         account: account.name,
-        buildsIos: totals ? totals[mi].ios : null,
-        buildsAndroid: totals ? totals[mi].android : null,
+        ios: totals ? totals[mi].ios : null,
+        android: totals ? totals[mi].android : null,
         periodStart: period.start,
         periodEnd: period.end,
       });
     });
   });
 
-  console.log(
-    renderTable(
-      ['ACCOUNT', 'PERIOD', ...usageBuildsHeaders(opts.platform)],
-      toUsageDisplayRows(entries, { platform: opts.platform, accountDisplayNames, now })
-    )
-  );
+  const displayRows = toUsageDisplayRows(entries, {
+    platform: opts.platform,
+    accountDisplayNames,
+    now,
+  });
+  const platformCount = opts.platform ? 1 : 2;
+
+  console.log(renderTable(['ACCOUNT', 'PERIOD', 'PLATFORM', ...usageBuildsHeaders()], displayRows));
   console.log(
     dim(
-      `\n  ${entries.length} row(s) across ${accounts.length} account(s), ${months.length} month(s) each. ` +
-        'SUCCESSFUL BUILDS = counted client-side from finished builds via the API; may differ from EAS billing usage. ' +
+      `\n  ${displayRows.length} row(s) across ${accounts.length} account(s), ${months.length} month(s), ${platformCount} platform(s) each. ` +
+        'SUCCESS/ERRORED/CANCELED = counted client-side from build history via the API; ' +
+        'may differ from EAS billing usage. TOTAL = SUCCESS + ERRORED + CANCELED for that row. ' +
+        'A still in-progress/queued build is counted in none of the three (nor in TOTAL). ' +
         'PERIOD = UTC calendar month.'
     )
   );
+}
+
+function addCounts(target, source) {
+  target.success += source.success;
+  target.errored += source.errored;
+  target.canceled += source.canceled;
 }

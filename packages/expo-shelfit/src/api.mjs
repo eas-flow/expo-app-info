@@ -52,11 +52,17 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
 // is the caller-facing switch for this; see fetchBuilds/countBuildsByMonth.
 const ALL_PLATFORMS = ['ios', 'android'];
 
+// `status` is deliberately omitted from `filter` — confirmed against the
+// real API (scripts/probe-build-status.mjs, issue #83) that leaving it out
+// returns builds in every status (FINISHED/ERRORED/CANCELED and whatever
+// else), not just FINISHED, and that the field does not require a value.
+// Filtering to one status client-side after the fact would still work but
+// would throw away exactly the information #83 exists to surface.
 function buildAliases(platforms, { offset, fields }) {
   return platforms
     .map(
       (p) =>
-        `${p}: builds(offset: ${offset}, limit: $limit, filter: { platform: ${p.toUpperCase()}, status: FINISHED }) { ${fields} }`
+        `${p}: builds(offset: ${offset}, limit: $limit, filter: { platform: ${p.toUpperCase()} }) { ${fields} }`
     )
     .join('\n    ');
 }
@@ -64,7 +70,7 @@ function buildAliases(platforms, { offset, fields }) {
 function buildsQuery(platforms) {
   return `query RecentBuilds($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ${buildAliases(platforms, { offset: 0, fields: 'platform appVersion appBuildVersion createdAt' })}
+    ${buildAliases(platforms, { offset: 0, fields: 'platform status appVersion appBuildVersion createdAt' })}
   } }
 }`;
 }
@@ -88,13 +94,14 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
 
 // `--usage`. Same shape as buildsQuery above but paginated with
 // `offset`/`limit` instead of a fixed small `limit`, so callers can walk
-// arbitrarily far back into an app's build history. Only `createdAt` is
-// needed here — counting/bucketing by calendar month happens client-side in
-// countBuildsByMonth, not appVersion/appBuildVersion display.
+// arbitrarily far back into an app's build history. `createdAt` places a
+// build in a calendar month; `status` buckets it into success/errored/
+// canceled once there — see countBuildsByMonth. No appVersion/appBuildVersion,
+// since --usage never displays them.
 function buildsPageQuery(platforms) {
   return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ${buildAliases(platforms, { offset: '$offset', fields: 'createdAt' })}
+    ${buildAliases(platforms, { offset: '$offset', fields: 'status createdAt' })}
   } }
 }`;
 }
@@ -134,6 +141,18 @@ function monthIndexForBuild(createdAtMs, bounds) {
     }
   }
   return -1;
+}
+
+// Raw EAS `status` enum value -> the count bucket it lands in for
+// countBuildsByMonth (--usage). Only these 3 have been confirmed against the
+// real API (scripts/probe-build-status.mjs, issue #83); anything not listed
+// here — a still in-progress/queued build, or any other status this
+// unofficial API introduces later — is deliberately not counted in any
+// bucket rather than guessed at, since it hasn't reached a terminal outcome.
+const STATUS_COUNT_KEY = { FINISHED: 'success', ERRORED: 'errored', CANCELED: 'canceled' };
+
+function emptyStatusCounts() {
+  return { success: 0, errored: 0, canceled: 0 };
 }
 
 /**
@@ -223,10 +242,14 @@ export function createApiClient({
   }
 
   /**
-   * Up to `limit` most recent *successful* (FINISHED) builds per platform,
-   * newest first, merged into one array (ios entries first, then android).
-   * `limit` defaults to 1 to preserve the "latest build per platform"
-   * behavior most callers want.
+   * Up to `limit` most recent builds per platform *regardless of status*
+   * (FINISHED/ERRORED/CANCELED/anything else — see the module comment on
+   * `buildAliases`), newest first, merged into one array (ios entries first,
+   * then android). `limit` defaults to 1 to preserve the "latest build
+   * attempt per platform" behavior most callers want — as of #83 that is the
+   * latest *attempt*, not the latest successful one; a platform whose most
+   * recent build errored or was canceled now surfaces that build instead of
+   * silently falling back to an older successful one.
    *
    * `platform` (`'ios'` | `'android'` | omitted for both) narrows which
    * `builds(...)` alias is even requested — the query is built to only ask
@@ -249,11 +272,17 @@ export function createApiClient({
   }
 
   /**
-   * Successful (FINISHED) build counts for one app, bucketed by platform and
-   * UTC calendar month, for `--usage`. `months` is a list of
-   * `{ start, end }` boundaries ordered newest first (src/dates.mjs's
-   * calendarMonths()); the return value is a parallel array of
-   * `{ ios, android }` counts, one entry per month in `months`.
+   * Success/errored/canceled build counts for one app, bucketed by platform
+   * and UTC calendar month, for `--usage` (#83 — before this, only FINISHED
+   * builds were counted at all). `months` is a list of `{ start, end }`
+   * boundaries ordered newest first (src/dates.mjs's calendarMonths()); the
+   * return value is a parallel array of `{ ios, android }` counts, one entry
+   * per month in `months`, where each of `ios`/`android` is
+   * `{ success, errored, canceled }` (see STATUS_COUNT_KEY/emptyStatusCounts
+   * above). A build whose status isn't one of those three — most commonly
+   * still in-progress/queued — falls into none of them: it hasn't reached a
+   * terminal outcome yet, so it would misrepresent whichever bucket it got
+   * dropped into.
    *
    * Pages through buildsPageQuery() newest-first, a fixed BUILD_PAGE_SIZE at
    * a time. By default both platforms are requested in the same page; with
@@ -271,7 +300,7 @@ export function createApiClient({
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
-    const counts = months.map(() => ({ ios: 0, android: 0 }));
+    const counts = months.map(() => ({ ios: emptyStatusCounts(), android: emptyStatusCounts() }));
     const oldestStartMs = bounds[bounds.length - 1].startMs;
 
     let offset = 0;
@@ -294,26 +323,35 @@ export function createApiClient({
       if (!page || platforms.some((p) => !Array.isArray(page[p]))) {
         throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
       }
-      const iosPage = iosDone ? [] : page.ios.map((b) => Date.parse(b.createdAt));
-      const androidPage = androidDone ? [] : page.android.map((b) => Date.parse(b.createdAt));
+      const iosPage = iosDone
+        ? []
+        : page.ios.map((b) => ({ ms: Date.parse(b.createdAt), status: b.status }));
+      const androidPage = androidDone
+        ? []
+        : page.android.map((b) => ({ ms: Date.parse(b.createdAt), status: b.status }));
 
-      for (const createdAtMs of iosPage) {
-        const i = monthIndexForBuild(createdAtMs, bounds);
-        if (i !== -1) counts[i].ios++;
+      for (const { ms, status } of iosPage) {
+        const i = monthIndexForBuild(ms, bounds);
+        if (i === -1) continue;
+        const key = STATUS_COUNT_KEY[status];
+        if (key) counts[i].ios[key]++;
       }
-      for (const createdAtMs of androidPage) {
-        const i = monthIndexForBuild(createdAtMs, bounds);
-        if (i !== -1) counts[i].android++;
+      for (const { ms, status } of androidPage) {
+        const i = monthIndexForBuild(ms, bounds);
+        if (i === -1) continue;
+        const key = STATUS_COUNT_KEY[status];
+        if (key) counts[i].android[key]++;
       }
 
       if (!iosDone) {
         const exhausted = iosPage.length < BUILD_PAGE_SIZE;
-        const pastOldest = iosPage.length > 0 && iosPage.every((ms) => ms < oldestStartMs);
+        const pastOldest = iosPage.length > 0 && iosPage.every(({ ms }) => ms < oldestStartMs);
         if (exhausted || pastOldest) iosDone = true;
       }
       if (!androidDone) {
         const exhausted = androidPage.length < BUILD_PAGE_SIZE;
-        const pastOldest = androidPage.length > 0 && androidPage.every((ms) => ms < oldestStartMs);
+        const pastOldest =
+          androidPage.length > 0 && androidPage.every(({ ms }) => ms < oldestStartMs);
         if (exhausted || pastOldest) androidDone = true;
       }
 

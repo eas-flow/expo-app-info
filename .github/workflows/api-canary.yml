@@ -30,9 +30,9 @@ jobs:
 
       # --usage no longer queries subscription/billingPeriod at all — it
       # pages app.byId(...).builds(offset, limit, filter) per app and
-      # buckets client-side by UTC calendar month. Separate step so a break
-      # in that pagination shape is distinguishable from a break in the
-      # plain app/build queries above.
+      # buckets client-side by UTC calendar month + status (success/errored/
+      # canceled, #83). Separate step so a break in that pagination shape is
+      # distinguishable from a break in the plain app/build queries above.
       - name: Run --usage against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs --usage
         env:

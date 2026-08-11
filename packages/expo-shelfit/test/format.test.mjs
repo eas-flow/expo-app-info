@@ -26,6 +26,7 @@ const withBuild = {
   platform: 'ios',
   version: '3.2.1',
   build: '41',
+  status: 'FINISHED',
   lastBuildAt: '2026-07-26T00:00:00.000Z',
 };
 
@@ -36,19 +37,29 @@ const noBuild = {
   platform: null,
   version: null,
   build: null,
+  status: null,
   lastBuildAt: null,
 };
 
 describe('toDisplayRows', () => {
   it('maps a built entry to display strings with an absolute UTC build date', () => {
     expect(toDisplayRows([withBuild])).toEqual([
-      ['myorg', 'Storefront', 'storefront', 'ios', '3.2.1', '41', '2026/07/26-00:00:00'],
+      [
+        'myorg',
+        'Storefront',
+        'storefront',
+        'ios',
+        '3.2.1',
+        '41',
+        'Finished',
+        '2026/07/26-00:00:00',
+      ],
     ]);
   });
 
   it('maps a no-build entry to "-" placeholders', () => {
     expect(toDisplayRows([noBuild])).toEqual([
-      ['myorg', 'Prototype', 'prototype', '-', '-', '-', '-'],
+      ['myorg', 'Prototype', 'prototype', '-', '-', '-', '-', '-'],
     ]);
   });
 
@@ -67,13 +78,22 @@ describe('toDisplayRows', () => {
   });
 
   it('shows the UTC build date by default even with { local: false } omitted', () => {
-    expect(toDisplayRows([withBuild])[0][6]).toBe('2026/07/26-00:00:00');
+    expect(toDisplayRows([withBuild])[0][7]).toBe('2026/07/26-00:00:00');
   });
 
   it('shows the local build date when { local: true } is passed', () => {
     withTz('Asia/Tokyo', () => {
-      expect(toDisplayRows([withBuild], { local: true })[0][6]).toBe('2026/07/26-09:00:00');
+      expect(toDisplayRows([withBuild], { local: true })[0][7]).toBe('2026/07/26-09:00:00');
     });
+  });
+
+  it('shows Errored/Canceled for the STATUS column', () => {
+    expect(toDisplayRows([{ ...withBuild, status: 'ERRORED' }])[0][6]).toBe('Errored');
+    expect(toDisplayRows([{ ...withBuild, status: 'CANCELED' }])[0][6]).toBe('Canceled');
+  });
+
+  it('falls back to the raw status lowercased when it is not FINISHED/ERRORED/CANCELED', () => {
+    expect(toDisplayRows([{ ...withBuild, status: 'IN_PROGRESS' }])[0][6]).toBe('in_progress');
   });
 });
 
@@ -99,8 +119,8 @@ const NOW = new Date('2026-07-15T00:00:00.000Z');
 // Current (still in progress) month: 2026-07-01 -> 2026-08-01 (exclusive).
 const currentMonthEntry = {
   account: 'myorg',
-  buildsIos: 18,
-  buildsAndroid: 16,
+  ios: { success: 18, errored: 3, canceled: 2 },
+  android: { success: 16, errored: 1, canceled: 0 },
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',
 };
@@ -108,8 +128,8 @@ const currentMonthEntry = {
 // A finished past month: 2026-06-01 -> 2026-07-01 (exclusive).
 const pastMonthEntry = {
   account: 'myorg',
-  buildsIos: 14,
-  buildsAndroid: 15,
+  ios: { success: 14, errored: 0, canceled: 1 },
+  android: { success: 15, errored: 2, canceled: 0 },
   periodStart: '2026-06-01T00:00:00.000Z',
   periodEnd: '2026-07-01T00:00:00.000Z',
 };
@@ -119,22 +139,24 @@ const pastMonthEntry = {
 // the build counts are null.
 const degradedMonthEntry = {
   account: 'other',
-  buildsIos: null,
-  buildsAndroid: null,
+  ios: null,
+  android: null,
   periodStart: '2026-06-01T00:00:00.000Z',
   periodEnd: '2026-07-01T00:00:00.000Z',
 };
 
 describe('toUsageDisplayRows', () => {
-  it('maps an account-month to [account, period, ios builds, android builds]', () => {
+  it('maps an account-month to two rows (ios, then android): [account, period, platform, success, errored, canceled, total]', () => {
     expect(toUsageDisplayRows([pastMonthEntry], { now: NOW })).toEqual([
-      ['myorg', '2026-06-01 → 2026-06-30', '14', '15'],
+      ['myorg', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15'],
+      ['myorg', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17'],
     ]);
   });
 
-  it('shows "(today)" as the period end for the still-in-progress current month', () => {
-    const row = toUsageDisplayRows([currentMonthEntry], { now: NOW })[0];
-    expect(row[1]).toBe('2026-07-01 → (today)');
+  it('shows "(today)" as the period end for the still-in-progress current month, on both platform rows', () => {
+    const rows = toUsageDisplayRows([currentMonthEntry], { now: NOW });
+    expect(rows[0][1]).toBe('2026-07-01 → (today)');
+    expect(rows[1][1]).toBe('2026-07-01 → (today)');
   });
 
   it("shows the last inclusive day of a finished month, not the API's exclusive end", () => {
@@ -142,28 +164,35 @@ describe('toUsageDisplayRows', () => {
     expect(row[1]).toBe('2026-06-01 → 2026-06-30');
   });
 
-  it('shows "-" for both build counts when the account is degraded (fetch failure)', () => {
+  it('shows "-" for every category and TOTAL on both rows when the account is degraded (fetch failure)', () => {
     expect(toUsageDisplayRows([degradedMonthEntry], { now: NOW })).toEqual([
-      ['other', '2026-06-01 → 2026-06-30', '-', '-'],
+      ['other', '2026-06-01 → 2026-06-30', 'ios', '-', '-', '-', '-'],
+      ['other', '2026-06-01 → 2026-06-30', 'android', '-', '-', '-', '-'],
     ]);
   });
 
-  it('renders a zero build count as "0", not "-"', () => {
-    const row = toUsageDisplayRows([{ ...pastMonthEntry, buildsIos: 0, buildsAndroid: 0 }], {
-      now: NOW,
-    })[0];
-    expect(row[2]).toBe('0');
-    expect(row[3]).toBe('0');
+  it('renders a zero build count as "0", not "-", and TOTAL as the sum', () => {
+    const row = toUsageDisplayRows(
+      [{ ...pastMonthEntry, ios: { success: 0, errored: 0, canceled: 0 } }],
+      { now: NOW }
+    )[0];
+    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', 'ios', '0', '0', '0', '0']);
   });
 
-  it('shows only the ios column when --platform ios is set', () => {
-    const row = toUsageDisplayRows([pastMonthEntry], { platform: 'ios', now: NOW })[0];
-    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', '14']);
+  it('computes TOTAL as success + errored + canceled', () => {
+    const [iosRow, androidRow] = toUsageDisplayRows([pastMonthEntry], { now: NOW });
+    expect(iosRow[6]).toBe('15'); // 14 + 0 + 1
+    expect(androidRow[6]).toBe('17'); // 15 + 2 + 0
   });
 
-  it('shows only the android column when --platform android is set', () => {
-    const row = toUsageDisplayRows([pastMonthEntry], { platform: 'android', now: NOW })[0];
-    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', '15']);
+  it('shows only the ios row when --platform ios is set', () => {
+    const rows = toUsageDisplayRows([pastMonthEntry], { platform: 'ios', now: NOW });
+    expect(rows).toEqual([['myorg', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15']]);
+  });
+
+  it('shows only the android row when --platform android is set', () => {
+    const rows = toUsageDisplayRows([pastMonthEntry], { platform: 'android', now: NOW });
+    expect(rows).toEqual([['myorg', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17']]);
   });
 
   it('shows "-" for the period when periodStart/periodEnd are both missing', () => {
@@ -173,10 +202,11 @@ describe('toUsageDisplayRows', () => {
     expect(row[1]).toBe('-');
   });
 
-  it('shows the account display name instead of the slug when mapped (table-only)', () => {
+  it('shows the account display name instead of the slug when mapped (table-only), on both rows', () => {
     const accountDisplayNames = new Map([['myorg', 'My Organization']]);
-    const row = toUsageDisplayRows([pastMonthEntry], { accountDisplayNames, now: NOW })[0];
-    expect(row[0]).toBe('My Organization');
+    const rows = toUsageDisplayRows([pastMonthEntry], { accountDisplayNames, now: NOW });
+    expect(rows[0][0]).toBe('My Organization');
+    expect(rows[1][0]).toBe('My Organization');
   });
 
   it('falls back to the slug when no accountDisplayNames map is given', () => {
@@ -190,19 +220,8 @@ describe('toUsageDisplayRows', () => {
 });
 
 describe('usageBuildsHeaders', () => {
-  it('returns both platform headers by default', () => {
-    expect(usageBuildsHeaders(null)).toEqual([
-      'SUCCESSFUL BUILDS (IOS)',
-      'SUCCESSFUL BUILDS (AND)',
-    ]);
-  });
-
-  it('returns only the ios header when platform is ios', () => {
-    expect(usageBuildsHeaders('ios')).toEqual(['SUCCESSFUL BUILDS (IOS)']);
-  });
-
-  it('returns only the android header when platform is android', () => {
-    expect(usageBuildsHeaders('android')).toEqual(['SUCCESSFUL BUILDS (AND)']);
+  it('always returns SUCCESS, ERRORED, CANCELED, TOTAL — PLATFORM is a separate column now', () => {
+    expect(usageBuildsHeaders()).toEqual(['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL']);
   });
 });
 

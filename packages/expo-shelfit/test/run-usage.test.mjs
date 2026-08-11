@@ -21,19 +21,21 @@ describe('run --usage', () => {
   // ios: 2 in July, 1 in June, 1 in May, 1 in April (outside the 3-month
   // default window — must not be counted). android: 1 in July, 2 in June.
   // Well under BUILD_PAGE_SIZE (50) on both platforms, so pagination stops
-  // after a single page regardless of --month.
+  // after a single page regardless of --month. All FINISHED, so they land
+  // in the SUCCESS bucket — ERRORED/CANCELED bucketing is covered by its
+  // own dedicated test below.
   const buildsPageResponse = buildsResponse({
     ios: [
-      { createdAt: '2026-07-05T00:00:00.000Z' },
-      { createdAt: '2026-07-10T00:00:00.000Z' },
-      { createdAt: '2026-06-15T00:00:00.000Z' },
-      { createdAt: '2026-05-20T00:00:00.000Z' },
-      { createdAt: '2026-04-25T00:00:00.000Z' },
+      { createdAt: '2026-07-05T00:00:00.000Z', status: 'FINISHED' },
+      { createdAt: '2026-07-10T00:00:00.000Z', status: 'FINISHED' },
+      { createdAt: '2026-06-15T00:00:00.000Z', status: 'FINISHED' },
+      { createdAt: '2026-05-20T00:00:00.000Z', status: 'FINISHED' },
+      { createdAt: '2026-04-25T00:00:00.000Z', status: 'FINISHED' },
     ],
     android: [
-      { createdAt: '2026-07-08T00:00:00.000Z' },
-      { createdAt: '2026-06-01T00:00:00.000Z' },
-      { createdAt: '2026-06-25T00:00:00.000Z' },
+      { createdAt: '2026-07-08T00:00:00.000Z', status: 'FINISHED' },
+      { createdAt: '2026-06-01T00:00:00.000Z', status: 'FINISHED' },
+      { createdAt: '2026-06-25T00:00:00.000Z', status: 'FINISHED' },
     ],
   });
 
@@ -74,31 +76,42 @@ describe('run --usage', () => {
     const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
     expect(buildsCallBody.variables).toEqual({ appId: 'app-1', offset: 0, limit: 50 });
 
-    expect(tableOutput()).toContain('SUCCESSFUL BUILDS (IOS)');
-    expect(tableOutput()).toContain('SUCCESSFUL BUILDS (AND)');
+    expect(tableOutput()).toContain('PLATFORM');
+    expect(tableOutput()).toContain('SUCCESS');
+    expect(tableOutput()).toContain('ERRORED');
+    expect(tableOutput()).toContain('CANCELED');
+    expect(tableOutput()).toContain('TOTAL');
     expect(tableOutput()).not.toContain('PLAN');
     expect(tableOutput()).not.toContain('SLUG');
   });
 
-  // Reads the IOS/AND build-count cells out of the `│`-delimited table row
-  // whose PERIOD cell contains `periodStartPrefix` (e.g. '2026-07-01').
-  const buildCountsForPeriod = (output, periodStartPrefix) => {
-    const line = output.split('\n').find((l) => l.includes(periodStartPrefix));
+  // Reads the SUCCESS/ERRORED/CANCELED/TOTAL cells out of the
+  // `│`-delimited table row whose PERIOD cell contains `periodStartPrefix`
+  // (e.g. '2026-07-01') and whose PLATFORM cell is `platform` ('ios' or
+  // 'android') — each account/month now spans two rows (#83 follow-up), so
+  // both are needed to pick a single row unambiguously.
+  const buildCountsFor = (output, periodStartPrefix, platform) => {
+    const line = output
+      .split('\n')
+      .find((l) => l.includes(periodStartPrefix) && l.includes(`│ ${platform}`));
     const cells = line.split('│').map((c) => c.trim());
-    return [cells[3], cells[4]]; // [ACCOUNT, PERIOD, IOS, AND, ...]
+    return cells.slice(4, 8); // [ACCOUNT, PERIOD, PLATFORM, SUCCESS, ERRORED, CANCELED, TOTAL]
   };
 
-  it('emits 3 rows (one per account per month, newest first) with client-side successful-build counts', async () => {
+  it('emits 6 rows (3 months × ios/android, newest month first) with client-side success-build counts', async () => {
     stubFetch(happyResponses());
 
     await run(['--usage']);
 
     const output = tableOutput();
-    expect(output).toContain('3 row(s)');
+    expect(output).toContain('6 row(s)');
     // July (current): 2 ios / 1 android. June: 1 ios / 2 android. May: 1 ios / 0 android.
-    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['2', '1']);
-    expect(buildCountsForPeriod(output, '2026-06-01')).toEqual(['1', '2']);
-    expect(buildCountsForPeriod(output, '2026-05-01')).toEqual(['1', '0']);
+    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['2', '0', '0', '2']);
+    expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['1', '0', '0', '1']);
+    expect(buildCountsFor(output, '2026-06-01', 'ios')).toEqual(['1', '0', '0', '1']);
+    expect(buildCountsFor(output, '2026-06-01', 'android')).toEqual(['2', '0', '0', '2']);
+    expect(buildCountsFor(output, '2026-05-01', 'ios')).toEqual(['1', '0', '0', '1']);
+    expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['0', '0', '0', '0']);
   });
 
   it('shows "(today)" for the current month and the inclusive last day for finished months', async () => {
@@ -111,23 +124,25 @@ describe('run --usage', () => {
     expect(tableOutput()).toContain('2026-05-01 → 2026-05-31');
   });
 
-  it('--month widens the window (e.g. --month 1 shows only the current month)', async () => {
+  it('--month widens the window (e.g. --month 1 shows only the current month, as 2 rows — ios and android)', async () => {
     stubFetch(happyResponses());
 
     await run(['--usage', '--month', '1']);
 
     const output = tableOutput();
-    expect(output).toContain('1 row(s)');
+    expect(output).toContain('2 row(s)');
     expect(output).toContain('2026-07-01');
   });
 
-  it('shows only the requested platform column with --platform', async () => {
+  it('shows only the requested platform rows with --platform, not the other platform at all', async () => {
     const fetchImpl = stubFetch(happyResponses());
 
     await run(['--usage', '--platform', 'ios']);
 
-    expect(tableOutput()).toContain('SUCCESSFUL BUILDS (IOS)');
-    expect(tableOutput()).not.toContain('SUCCESSFUL BUILDS (AND)');
+    const output = tableOutput();
+    expect(output).toContain('3 row(s)'); // 3 months × 1 platform
+    expect(output).toContain('│ ios');
+    expect(output).not.toContain('│ android');
 
     // #59: --platform narrows the query itself, not just the client-side
     // display — the request must never even ask for the other platform's alias.
@@ -136,18 +151,43 @@ describe('run --usage', () => {
     expect(buildsCallBody.query).not.toContain('android:');
   });
 
+  it('buckets errored and canceled builds into their own columns, separate from success, with TOTAL as the sum (#83)', async () => {
+    stubFetch([
+      accountsResponse(),
+      appsResponse(),
+      buildsResponse({
+        ios: [
+          { createdAt: '2026-07-05T00:00:00.000Z', status: 'FINISHED' },
+          { createdAt: '2026-07-06T00:00:00.000Z', status: 'ERRORED' },
+          { createdAt: '2026-07-07T00:00:00.000Z', status: 'CANCELED' },
+          { createdAt: '2026-07-08T00:00:00.000Z', status: 'CANCELED' },
+          // Still in-progress/queued — must not land in any of the three buckets, nor TOTAL.
+          { createdAt: '2026-07-09T00:00:00.000Z', status: 'SOME_UNKNOWN_STATUS' },
+        ],
+        android: [],
+      }),
+    ]);
+
+    await run(['--usage', '--month', '1']);
+
+    const output = tableOutput();
+    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['1', '1', '2', '4']);
+    expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['0', '0', '0', '0']);
+  });
+
   it('degrades a whole account to "-" build counts (not a failed run) when its apps/builds fetch fails', async () => {
     stubFetch([accountsResponse(), jsonResponse({ errors: [{ message: 'boom' }] })]);
 
     await run(['--usage']);
 
     const output = tableOutput();
-    expect(output).toContain('3 row(s)');
+    expect(output).toContain('6 row(s)');
     // periodStart/periodEnd are known upfront from `now` regardless of the
-    // fetch failure — only the build counts degrade to "-".
-    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['-', '-']);
-    expect(buildCountsForPeriod(output, '2026-06-01')).toEqual(['-', '-']);
-    expect(buildCountsForPeriod(output, '2026-05-01')).toEqual(['-', '-']);
+    // fetch failure — only the build counts (including TOTAL) degrade to "-".
+    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['-', '-', '-', '-']);
+    expect(buildCountsFor(output, '2026-07-01', 'android')).toEqual(['-', '-', '-', '-']);
+    expect(buildCountsFor(output, '2026-06-01', 'ios')).toEqual(['-', '-', '-', '-']);
+    expect(buildCountsFor(output, '2026-05-01', 'android')).toEqual(['-', '-', '-', '-']);
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
   });
 
@@ -157,8 +197,8 @@ describe('run --usage', () => {
     await run(['--usage']);
 
     const output = tableOutput();
-    expect(output).toContain('3 row(s)');
-    expect(buildCountsForPeriod(output, '2026-07-01')).toEqual(['-', '-']);
+    expect(output).toContain('6 row(s)');
+    expect(buildCountsFor(output, '2026-07-01', 'ios')).toEqual(['-', '-', '-', '-']);
     expect(errorSpy.mock.calls.map((args) => args[0]).join('\n')).toContain('usage unavailable');
   });
 
@@ -220,7 +260,7 @@ describe('run --usage', () => {
 
     expect(calls).toBe(5); // 1 accounts + 2 apps + 2 builds pages
     const output = tableOutput();
-    expect(output).toContain('2 row(s)');
+    expect(output).toContain('4 row(s)'); // 2 accounts × 1 month × 2 platforms
     expect(output).toContain('myorg');
     expect(output).toContain('otherorg');
   });
@@ -250,7 +290,7 @@ describe('run --usage', () => {
     await run(['--usage', '--month', '1']);
 
     const output = tableOutput();
-    expect(output).toContain('10 row(s)');
+    expect(output).toContain('20 row(s)'); // 10 accounts × 1 month × 2 platforms
     for (const account of manyAccounts) {
       expect(output).toContain(account.name);
     }
