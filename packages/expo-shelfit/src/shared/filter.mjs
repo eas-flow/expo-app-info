@@ -1,6 +1,7 @@
 // Client-side --app/--account resolution. Both flags narrow *before* the
 // expensive per-app build fetch: --account in src/cli.mjs right after
-// fetchAccounts(), --app per-account in src/commands/ right after fetchApps().
+// fetchAccounts(), --app per-account in src/features/{list,stats}/service.mjs
+// right after fetchApps().
 
 import { CliError } from '../errors.mjs';
 

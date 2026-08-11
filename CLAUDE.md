@@ -95,7 +95,7 @@ npm start --workspace=packages/expo-shelfit                # run the CLI locally
 Run a single test file with Vitest directly:
 
 ```bash
-npx vitest run packages/expo-shelfit/test/format.test.mjs
+npx vitest run packages/expo-shelfit/test/features/list/format.test.mjs
 ```
 
 CI (`.github/workflows/ci.yml`) runs on Node 22 and 24, in this order: `npm run lint`, `npm test --workspaces --if-present`, `npm pack --dry-run` for expo-shelfit, then two smoke tests (`--help` exits 0, missing `EXPO_TOKEN` exits 1). Match this locally before opening a PR.
@@ -105,38 +105,61 @@ A separate weekly workflow (`.github/workflows/api-canary.yml`) runs the CLI aga
 ## Architecture (`packages/expo-shelfit`)
 
 ```
-bin/cli.mjs           Thin executable entry point (shebang + calls src/cli.mjs#run)
-src/cli.mjs            The top-level run() flow: resolve auth, fetch accounts,
-                        dispatch to a display mode in src/commands/
+bin/cli.mjs             Thin executable entry point (shebang + calls src/cli.mjs#run)
+src/cli.mjs             The top-level run() flow: resolve auth, fetch accounts,
+                        dispatch to a feature in src/features/
 src/args.mjs            Argument parsing, validation limits, help text
-src/commands/
-  list.mjs               Default app list (and --history)
-  stats.mjs               --stats (successful builds per UTC calendar month)
-  plan.mjs                --plan (current subscription per account)
-src/api.mjs             EAS GraphQL client (throws, never exits/prints) +
-                        createSemaphore/mapWithConcurrency/CONCURRENCY
-src/filter.mjs           Client-side --account / --app resolution (exact
+src/errors.mjs          CliError / ApiError, kept out of cli.mjs and
+                        shared/api.mjs so args.mjs / shared/filter.mjs /
+                        shared/api.mjs can throw them without an import
+                        cycle back through cli.mjs
+src/shared/
+  api.mjs                EAS GraphQL client (throws, never exits/prints)
+  concurrency.mjs         createSemaphore / mapWithConcurrency / CONCURRENCY
+  filter.mjs              Client-side --account / --app resolution (exact
                         slug/Display name match, "Did you mean" suggestions)
-src/format.mjs           entries → display-row conversion (table is the only
-                        supported output; no machine-readable mode)
-src/render.mjs           Table rendering and column widths
-src/dates.mjs            UTC date helpers (calendar-month boundaries, display
+  dates.mjs               UTC date helpers (calendar-month boundaries, display
                         formatting) — every date this CLI shows is UTC
-src/progress.mjs         TTY-only progress reporting on stderr
-test/                   Vitest, one file per src module (run-*.test.mjs are
-                        per-display-mode integration tests for run() with a
-                        mocked fetch; shared bits live in helpers.mjs)
+  cells.mjs                cellOrDash — shared by stats/ and plan/'s format.mjs
+  terminal/
+    render.mjs              Table rendering and column widths
+    progress.mjs            TTY-only progress reporting on stderr
+src/features/
+  list/    command.mjs + service.mjs + format.mjs — default app list (and --history)
+  stats/   command.mjs + service.mjs + format.mjs — --stats (build counts per
+           UTC calendar month)
+  plan/    command.mjs + format.mjs — --plan (current subscription per
+           account); no service.mjs — at 58 lines it has no aggregation step
+           worth separating out
+test/                   Vitest, mirrors src/ 1:1 (test/features/*/command.test.mjs
+                        are the per-feature integration tests for run() with a
+                        mocked fetch; test/features/{list,stats}/service.test.mjs
+                        test fetching/aggregation directly against a fake
+                        client instead of parsing rendered table strings;
+                        shared bits live in test/helpers.mjs)
 ```
 
 **Import direction is one-way and enforced by convention, not tooling**:
-`bin → cli → args / commands/* → api / filter / format / render / dates /
-progress`, with `format` also using `dates` and `progress` using `render` —
-never in reverse (e.g. `api.mjs` must not import from `commands/`).
+`bin → cli → args / features/* → shared/*`, with `errors.mjs` importable by
+anything (and importing nothing itself), `features/*/format.mjs` also using
+`shared/dates.mjs` and `shared/cells.mjs`, and `shared/terminal/progress.mjs`
+using `shared/terminal/render.mjs`'s `dim` — never in reverse (e.g.
+`shared/api.mjs` must not import from `features/`), and never sideways
+between features (e.g. `features/stats/` must not import from
+`features/list/`).
+
+**`command.mjs` is the only place that calls `console.*`.** `service.mjs`
+(list/stats) fetches and aggregates, returning plain data plus a `warnings`
+string array — no console output — so it can be tested directly against a
+fake client instead of a mocked `fetch`. `command.mjs` passes that data to
+`format.mjs`, renders the table, and prints warnings/footers. `plan/` has no
+`service.mjs`, so `command.mjs` does both, but still owns every `console.*`
+call in the feature.
 
 **`src/*` never calls `process.exit` or reads `process.argv` directly**, so
 everything stays unit-testable. Only `bin/cli.mjs` is allowed to exit the
-process — it's the sole place that catches `CliError`/`ApiError` and converts
-them into a printed message + exit code.
+process — it's the sole place that catches `CliError`/`ApiError` (`src/errors.mjs`)
+and converts them into a printed message + exit code.
 
 **Auth**: a personal access token in `EXPO_TOKEN` is the only supported
 credential — never read from `argv`, never written to disk. Missing token
@@ -152,7 +175,7 @@ major). `parseArgs` sets the same `opts.stats` for both and appends
 `parseArgs` stays I/O-free. Error messages echo whichever name was typed
 (`args.mjs#modeFlag`), so `--usage --plan` must not report `--stats`.
 
-**`--account`/`--app` narrow client-side** (`src/filter.mjs`), applied
+**`--account`/`--app` narrow client-side** (`src/shared/filter.mjs`), applied
 *before* the expensive per-app build fetch: `--account` right after step 1
 below, `--app` right after step 2. Both match slug or EAS Display name
 (case-insensitive, exact); `--app`'s ambiguity is scoped to one account, so a
@@ -161,14 +184,14 @@ with `--plan`, which skips step 2 entirely. No match throws `CliError` with
 Levenshtein "Did you mean" suggestions.
 
 **`--local` switches only the BUILD DATE display timestamp** to local time
-(`src/dates.mjs#formatBuildDate`). Every UTC boundary (`calendarMonths`,
+(`src/shared/dates.mjs#formatBuildDate`). Every UTC boundary (`calendarMonths`,
 `inclusiveEnd`, `isoDate`) stays UTC unconditionally, since `--stats`'s month
 bucketing compares them directly against build `createdAt`. Incompatible with
 `--stats`/`--plan`, neither of which has a BUILD DATE column.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
 concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
-`src/api.mjs`):
+`src/shared/concurrency.mjs`):
 1. `meActor { accounts }` — every account the token can see
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
 3. `app.byId(...).builds(...)` — most recent build(s) per platform, client-sorted by `createdAt` descending since the API's order is undocumented
@@ -184,8 +207,8 @@ per account, in parallel.
 **`--group-by <account|app>` picks what a `--stats` row counts**
 (`--stats`-only, default `account`). `app` swaps the ACCOUNT column for APP
 and makes each (account, app) pair its own group; it adds **no API calls**,
-since `src/commands/stats.mjs` already fetched per-app counts and was merely
-summing them. Two consequences worth keeping: grouping is by pair, so
+since `src/features/stats/service.mjs` already fetched per-app counts and was
+merely summing them. Two consequences worth keeping: grouping is by pair, so
 same-named apps in different accounts never merge; and failure gets
 finer-grained — one app's failed build fetch degrades only its own rows,
 while an account whose *app list* failed contributes no rows at all and is

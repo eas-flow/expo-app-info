@@ -455,7 +455,7 @@ describe('fetchBuilds', () => {
 });
 
 describe('countBuildsByMonth', () => {
-  // Two calendar months, newest first — mirrors src/dates.mjs#calendarMonths()'s
+  // Two calendar months, newest first — mirrors src/shared/dates.mjs#calendarMonths()'s
   // shape and ordering (index 0 = current month).
   const MONTHS = [
     { start: '2026-07-01T00:00:00.000Z', end: '2026-08-01T00:00:00.000Z' },

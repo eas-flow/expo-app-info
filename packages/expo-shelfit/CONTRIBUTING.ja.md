@@ -48,31 +48,36 @@ npm run format  # Biome（フォーマットを自動修正）
 ```
 bin/cli.mjs           シンプルな実行エントリポイント（shebang + src/cli.mjs#run を呼ぶだけ）
 src/cli.mjs           トップレベルの run() フロー: 認証解決・アカウント取得、
-                      src/commands/ 内の表示モードへのディスパッチ
+                      src/features/ 内のfeatureへのディスパッチ
 src/args.mjs          引数パース、バリデーション上限値、ヘルプテキスト
-src/commands/
-  list.mjs            デフォルトのアプリ一覧（および --history）
-  stats.mjs           --stats（UTC暦月ごとの成功ビルド数）
-  plan.mjs            --plan（アカウントごとの現在のサブスクリプション）
-src/api.mjs           EAS GraphQLクライアント（throwのみ、exit/printしない）+
-                      createSemaphore/mapWithConcurrency/CONCURRENCY
-src/filter.mjs         --account / --app のクライアント側解決（slug/表示名の
+src/errors.mjs        CliError / ApiError
+src/shared/
+  api.mjs               EAS GraphQLクライアント（throwのみ、exit/printしない）
+  concurrency.mjs        createSemaphore / mapWithConcurrency / CONCURRENCY
+  filter.mjs             --account / --app のクライアント側解決（slug/表示名の
                       完全一致、未一致時の候補提示）
-src/format.mjs        エントリ → 表示行への変換（機械可読な出力モードは
-                      存在せず、テーブルが唯一のサポート対象出力）
-src/render.mjs        テーブル描画と列幅
-src/dates.mjs         UTC日付ヘルパー（暦月境界、表示用フォーマット） —
+  dates.mjs              UTC日付ヘルパー（暦月境界、表示用フォーマット） —
                       このCLIが表示する日時はすべてUTC
-src/progress.mjs      TTY限定のstderr進捗表示
-test/                 Vitestテスト。srcの各モジュールに1ファイル対応（run-*.test.mjs
-                      はモックしたfetchを使った run() のモードごとの統合テスト。
+  cells.mjs               cellOrDash（stats/planのformat.mjsが共用）
+  terminal/
+    render.mjs              テーブル描画と列幅
+    progress.mjs            TTY限定のstderr進捗表示
+src/features/
+  list/  command.mjs + service.mjs + format.mjs — デフォルトのアプリ一覧（および --history）
+  stats/ command.mjs + service.mjs + format.mjs — --stats
+  plan/  command.mjs + format.mjs — --plan（service.mjsなし。58行程度で分離不要）
+test/                 Vitestテスト。srcと1:1で対応する階層構成（
+                      test/features/*/command.test.mjs はモックしたfetchを使った
+                      run() のfeatureごとの統合テスト。
+                      test/features/{list,stats}/service.test.mjs は
+                      フェイクのclientに対して取得・集計を直接テストする。
                       共通部分は helpers.mjs にまとめている）
 ```
 
-importの流れは一方向です — `bin → cli → args / commands/* → api / filter /
-format / render / dates / progress`（`format` は `dates` を、`progress` は `render` も使用） — 逆方向になることはありません（例: `api.mjs` は `commands/` からimportしてはいけない）。
+importの流れは一方向です — `bin → cli → args / features/* → shared/*`（`errors.mjs`
+はどこからでもimportでき、自身は何もimportしない） — 逆方向になることはありません（例: `shared/api.mjs` は `features/` からimportしてはいけない）。feature間の横方向のimportもありません（`features/stats/` は `features/list/` からimportしてはいけない）。
 
-`src/*` のファイルは `process.exit` を呼んだり `process.argv` を直接読んだりしないため、単体テスト可能な状態を保っています。プロセスを終了できるのは `bin/cli.mjs` だけです。
+`src/*` のファイルは `process.exit` を呼んだり `process.argv` を直接読んだりしないため、単体テスト可能な状態を保っています。プロセスを終了できるのは `bin/cli.mjs` だけです。各feature内では `command.mjs` だけが `console.*` を呼びます — `service.mjs`（list/stats）はプレーンなデータを返すだけです。
 
 ## ブランチ戦略
 

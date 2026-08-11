@@ -2,7 +2,7 @@
 // Dev-only verification script (not shipped — see package.json#files).
 // Checks whether `Account.displayName` is populated/non-null in practice and how it
 // compares to the unique `name` slug, to validate the ACCOUNT column fallback
-// (`displayName || name`) in src/format.mjs against real API data.
+// (`displayName || name`) in src/features/list/format.mjs against real API data.
 //
 //   export EXPO_TOKEN=xxxxx
 //   node scripts/probe-account-displayname.mjs
@@ -10,7 +10,7 @@
 // Reads the token from the environment only (never printed). Output contains real
 // account names — review before sharing.
 
-import { createApiClient } from '../src/api.mjs';
+import { createApiClient } from '../src/shared/api.mjs';
 
 const API_URL = process.env.EXPO_API_URL ?? 'https://api.expo.dev/graphql';
 
@@ -70,7 +70,7 @@ console.log(`  displayName === name       : ${sameAsNameCount}/${accounts.length
 console.log(`  displayName !== name       : ${usefulCount}/${accounts.length}`);
 console.log(
   usefulCount > 0
-    ? '\n[ok] At least one account has a distinct, non-empty displayName — the table fallback in src/format.mjs is exercising real data, not just falling back every time.'
+    ? '\n[ok] At least one account has a distinct, non-empty displayName — the table fallback in src/features/list/format.mjs is exercising real data, not just falling back every time.'
     : '\n[!!] No account here has a displayName distinct from its slug. That does not mean the feature is wrong (this token may just not see such an account), but it means this run cannot confirm the table shows anything different from before. Try again with an account that has a Display name set in the EAS dashboard, if one exists.'
 );
 

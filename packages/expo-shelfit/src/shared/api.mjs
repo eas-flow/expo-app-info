@@ -248,8 +248,8 @@ export function createApiClient({
    * scripts/probe-history.mjs. A finished platform's alias is dropped from
    * subsequent queries rather than skipped client-side.
    *
-   * Throws ApiError; src/commands/stats.mjs#runStats decides that degrades
-   * that account's rows rather than failing the run.
+   * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries decides
+   * that degrades that account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
@@ -314,7 +314,7 @@ export function createApiClient({
     return counts;
   }
 
-  /** Throws like everything else here; src/commands/plan.mjs treats a missing plan as non-fatal. */
+  /** Throws like everything else here; src/features/plan/command.mjs treats a missing plan as non-fatal. */
   async function fetchSubscription(accountId) {
     const data = await gql(Q_SUBSCRIPTION, { accountId });
     return data?.account?.byId?.subscription ?? null;

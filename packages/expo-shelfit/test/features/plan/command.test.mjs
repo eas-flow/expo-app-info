@@ -132,7 +132,7 @@ describe('run --plan', () => {
 
   it('fetches accounts in parallel (mapWithConcurrency) rather than a strictly sequential loop', async () => {
     // Order-preservation is mapWithConcurrency's job, already covered in
-    // test/api.test.mjs; this just proves runPlan uses it end to end for
+    // test/shared/api.test.mjs; this just proves runPlan uses it end to end for
     // --plan specifically.
     stubFetch([
       accountsResponse([

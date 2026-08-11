@@ -21,7 +21,7 @@ const MAX_MONTH = 12;
 
 // `--usage` was this mode's original name. It kept being mistaken for
 // EAS's *billing* usage — which this CLI deliberately never queries (see
-// src/api.mjs#countBuildsByMonth) — so it is now `--stats`. The old flag still
+// src/shared/api.mjs#countBuildsByMonth) — so it is now `--stats`. The old flag still
 // works but warns; it goes away in the next major.
 export const DEPRECATED_USAGE_WARNING =
   '--usage is deprecated and will be removed in the next major version. Use --stats instead.';

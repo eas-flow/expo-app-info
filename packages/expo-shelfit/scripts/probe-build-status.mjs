@@ -24,7 +24,7 @@
 // Reads the token from the environment only (never printed). Output contains real
 // account/app/build data — review before sharing.
 
-import { createApiClient } from '../src/api.mjs';
+import { createApiClient } from '../src/shared/api.mjs';
 
 const API_URL = process.env.EXPO_API_URL ?? 'https://api.expo.dev/graphql';
 

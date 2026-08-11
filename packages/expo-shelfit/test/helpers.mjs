@@ -15,7 +15,7 @@ export function accountsResponse(accounts = [{ id: 'acc-1', name: 'myorg' }]) {
   return jsonResponse({ data: { meActor: { accounts } } });
 }
 
-/** Single page only; multi-page pagination is covered in test/api.test.mjs. */
+/** Single page only; multi-page pagination is covered in test/shared/api.test.mjs. */
 export function appsResponse(
   apps = [{ id: 'app-1', name: 'Storefront', slug: 'storefront' }],
   accountId = 'acc-1'
