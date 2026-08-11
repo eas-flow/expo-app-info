@@ -39,7 +39,9 @@ export async function run(argv = process.argv.slice(2)) {
   }
 
   if (opts.help) {
-    console.log(HELP);
+    // Only the section heading is colored, not the whole block below it —
+    // enough to flag "this is going away" without drowning the rest of --help.
+    console.log(HELP.replace('\n  Deprecated\n', `\n  ${yellow('Deprecated')}\n`));
     return;
   }
   if (opts.version) {

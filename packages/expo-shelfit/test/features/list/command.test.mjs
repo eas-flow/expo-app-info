@@ -39,6 +39,8 @@ describe('run', () => {
   const tableOutput = () => logSpy.mock.calls.map((args) => args[0]).join('\n');
 
   it('prints HELP and returns for --help', async () => {
+    // Not a TTY in this test run, so the Deprecated-heading substitution is
+    // a no-op — this stays byte-identical to HELP.
     await run(['--help']);
     expect(logSpy).toHaveBeenCalledWith(HELP);
   });
