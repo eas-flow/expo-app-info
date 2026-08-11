@@ -52,13 +52,26 @@ export function width(str) {
 
 export const pad = (str, len) => str + ' '.repeat(Math.max(0, len - width(str)));
 
+/**
+ * Whether to emit ANSI color, per the no-color.org convention: NO_COLOR (any
+ * non-empty value) disables color outright and wins over FORCE_COLOR;
+ * FORCE_COLOR (any value other than "0") forces color on even off a TTY;
+ * otherwise it follows isTTY. Treated as a plain boolean rather than a 0-3
+ * level, since dim/bold are the only two effects this CLI ever emits.
+ */
+export function shouldUseColor(env = process.env, isTTY = process.stdout.isTTY) {
+  if (env.NO_COLOR !== undefined && env.NO_COLOR !== '') return false;
+  if (env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== '0') return true;
+  return Boolean(isTTY);
+}
+
 /** ANSI dim. `isTTY` is threaded through explicitly so this is testable without a real TTY. */
-export function dim(s, isTTY = process.stdout.isTTY) {
+export function dim(s, isTTY = shouldUseColor()) {
   return isTTY ? `\x1b[2m${s}\x1b[0m` : s;
 }
 
 /** ANSI bold. See `dim` for why `isTTY` is a parameter. */
-export function bold(s, isTTY = process.stdout.isTTY) {
+export function bold(s, isTTY = shouldUseColor()) {
   return isTTY ? `\x1b[1m${s}\x1b[0m` : s;
 }
 
@@ -76,7 +89,7 @@ function computeWidths(headers, rows) {
   return widths;
 }
 
-export function renderTable(headers, rows, { isTTY = process.stdout.isTTY } = {}) {
+export function renderTable(headers, rows, { isTTY = shouldUseColor() } = {}) {
   const widths = computeWidths(headers, rows);
   const line = (l, m, r) => dim(l + widths.map((w) => '─'.repeat(w + 2)).join(m) + r, isTTY);
 

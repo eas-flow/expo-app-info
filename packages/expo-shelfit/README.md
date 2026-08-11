@@ -55,6 +55,15 @@ This is deliberately the only option. The token is never read from `argv`, never
 
 See [SECURITY.md](../../.github/SECURITY.md) to report a vulnerability privately.
 
+## 🌈 Environment Variables
+
+| Variable       | Description                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| `EXPO_TOKEN`   | Personal access token — required, see Authentication above                                            |
+| `EXPO_API_URL` | Overrides the GraphQL endpoint — undocumented, local testing only                                      |
+| `NO_COLOR`     | Any non-empty value disables ANSI color, even on a TTY ([no-color.org](https://no-color.org/))         |
+| `FORCE_COLOR`  | Any value other than `0` forces ANSI color, even off a TTY. `NO_COLOR` wins if both are set             |
+
 ## 🛠️ Usage
 
 ```bash

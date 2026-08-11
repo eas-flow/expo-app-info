@@ -70,6 +70,11 @@ export const HELP = `
     The token is never read from argv or from disk, so it cannot leak through
     your shell history or the process list.
 
+  Colors
+    NO_COLOR (any non-empty value) disables ANSI color, even on a TTY.
+    FORCE_COLOR (any value other than "0") forces it on, even off a TTY.
+    NO_COLOR wins if both are set. See https://no-color.org/
+
   Notes
     ACCOUNT shows the account's EAS "Display name" when one is set, falling
     back to its unique slug otherwise.

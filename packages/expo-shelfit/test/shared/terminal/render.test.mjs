@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bold, dim, pad, renderTable, width } from '../../../src/shared/terminal/render.mjs';
+import {
+  bold,
+  dim,
+  pad,
+  renderTable,
+  shouldUseColor,
+  width,
+} from '../../../src/shared/terminal/render.mjs';
 
 describe('width', () => {
   it('counts ASCII as 1 column each', () => {
@@ -54,6 +61,35 @@ describe('dim / bold', () => {
   it('returns plain text when isTTY is false', () => {
     expect(dim('x', false)).toBe('x');
     expect(bold('x', false)).toBe('x');
+  });
+});
+
+describe('shouldUseColor', () => {
+  it('disables color when NO_COLOR is set, even on a TTY', () => {
+    expect(shouldUseColor({ NO_COLOR: '1' }, true)).toBe(false);
+  });
+
+  it('ignores an empty NO_COLOR and falls back to isTTY', () => {
+    expect(shouldUseColor({ NO_COLOR: '' }, true)).toBe(true);
+    expect(shouldUseColor({ NO_COLOR: '' }, false)).toBe(false);
+  });
+
+  it('forces color when FORCE_COLOR is set, even off a TTY', () => {
+    expect(shouldUseColor({ FORCE_COLOR: '1' }, false)).toBe(true);
+  });
+
+  it('treats FORCE_COLOR=0 as disabled, not forced on', () => {
+    expect(shouldUseColor({ FORCE_COLOR: '0' }, true)).toBe(true);
+    expect(shouldUseColor({ FORCE_COLOR: '0' }, false)).toBe(false);
+  });
+
+  it('lets NO_COLOR win when both NO_COLOR and FORCE_COLOR are set', () => {
+    expect(shouldUseColor({ NO_COLOR: '1', FORCE_COLOR: '1' }, true)).toBe(false);
+  });
+
+  it('falls back to isTTY when neither is set', () => {
+    expect(shouldUseColor({}, true)).toBe(true);
+    expect(shouldUseColor({}, false)).toBe(false);
   });
 });
 
