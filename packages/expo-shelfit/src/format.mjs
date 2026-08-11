@@ -62,17 +62,23 @@ function statsPlatforms(platform) {
 }
 
 /**
- * Stats table rows: one row per account per UTC calendar month *per
- * platform* — `[account, period, platform, success, errored, canceled,
+ * Stats table rows: one row per subject per UTC calendar month *per
+ * platform* — `[subject, period, platform, success, errored, canceled,
  * total]` (#83 follow-up: PLATFORM became its own column, replacing the
  * earlier design of one row per account/month with a SUCCESS(IOS)/
  * SUCCESS(AND)/etc. column pair per category — that made the header wide and
  * duplicated "which platform" across every category). `--platform` now
  * narrows which platform *rows* appear, not which columns do.
- * `accountDisplayNames` is the same cosmetic, table-only slug -> Display
- * name lookup described on `toDisplayRows`. `now` (default current time)
- * decides which row, if any, is the still-in-progress current month for the
- * `(today)` marker below.
+ * `now` (default current time) decides which row, if any, is the
+ * still-in-progress current month for the `(today)` marker below.
+ *
+ * `groupBy` (`--group-by`, #90) picks what the first column holds — the
+ * account (default) or the app. Both are display names with a fallback to
+ * the corresponding unique identifier: accounts go through
+ * `accountDisplayNames` (the same cosmetic, table-only slug -> Display name
+ * lookup described on `toDisplayRows`) and fall back to the account slug;
+ * apps use `e.app` and fall back to `e.appSlug`. The caller supplies the
+ * matching header, so nothing else about the table changes.
  *
  * `e.ios`/`e.android` are each either `null` (that platform's counts
  * couldn't be fetched — degrades every cell on that platform's row,
@@ -82,19 +88,20 @@ function statsPlatforms(platform) {
  */
 export function toStatsDisplayRows(
   entries,
-  { platform = null, accountDisplayNames = new Map(), now = new Date() } = {}
+  { platform = null, accountDisplayNames = new Map(), groupBy = 'account', now = new Date() } = {}
 ) {
   const platforms = statsPlatforms(platform);
   const rows = [];
 
   for (const e of entries) {
-    const accountCell = accountDisplayNames.get(e.account) ?? e.account;
+    const subjectCell =
+      groupBy === 'app' ? e.app || e.appSlug : (accountDisplayNames.get(e.account) ?? e.account);
     const periodText = periodCell(e, now);
     for (const p of platforms) {
       const counts = e[p];
       const total = counts ? counts.success + counts.errored + counts.canceled : null;
       rows.push([
-        accountCell,
+        subjectCell,
         periodText,
         p,
         cellOrDash(counts?.success),

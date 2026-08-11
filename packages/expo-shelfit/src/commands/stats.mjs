@@ -32,6 +32,13 @@ import { dim, renderTable } from '../render.mjs';
  * If a fetch fails for an account (apps or any of its apps' build counts),
  * that whole account's rows degrade to "-" rather than failing the run,
  * and the reason is reported on stderr.
+ *
+ * `--group-by app` (#90) keeps both passes exactly as they are and only
+ * changes what happens to `pairResults` afterwards: instead of summing every
+ * app of an account into one set of totals, each (account, app) pair becomes
+ * its own group of rows. No extra API call — the per-app counts were always
+ * being fetched, just added together. Same-named apps in different accounts
+ * stay separate, since grouping is by pair, not by display name.
  */
 export async function runStats(client, accounts, opts, accountDisplayNames, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_STATS_MONTHS, now);
@@ -65,10 +72,10 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
   const pairResults = await mapWithConcurrency(pairs, async ({ accountIndex, app }) => {
     try {
       const counts = await client.countBuildsByMonth(app.id, months, { platform: opts.platform });
-      return { accountIndex, counts, error: null };
+      return { accountIndex, app, counts, error: null };
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
-      return { accountIndex, counts: null, error: err };
+      return { accountIndex, app, counts: null, error: err };
     } finally {
       progressCount('Fetching stats', ++pairsDone, pairs.length, 'app(s)');
     }
@@ -76,68 +83,120 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
 
   clearProgress();
 
-  // Null totals -> "-" cells: an account's apps fetch failed, or any of
-  // its apps' build-count fetches failed.
-  const perAccountTotals = accounts.map((account, accountIndex) => {
-    const appsError = appsByAccount[accountIndex].error;
-    if (appsError) {
-      warnings.push(`${account.name}: ${appsError.message}`);
-      return null;
-    }
-    const ownResults = pairResults.filter((r) => r.accountIndex === accountIndex);
-    const failed = ownResults.find((r) => r.error);
-    if (failed) {
-      warnings.push(`${account.name}: ${failed.error.message}`);
-      return null;
-    }
-    const totals = months.map(() => ({
-      ios: { success: 0, errored: 0, canceled: 0 },
-      android: { success: 0, errored: 0, canceled: 0 },
-    }));
-    for (const { counts } of ownResults) {
-      counts.forEach((c, i) => {
-        addCounts(totals[i].ios, c.ios);
-        addCounts(totals[i].android, c.android);
-      });
-    }
-    return totals;
-  });
+  const byApp = (opts.groupBy ?? 'account') === 'app';
+  const groups = byApp
+    ? appGroups(accounts, appsByAccount, pairResults, months, warnings)
+    : accountGroups(accounts, appsByAccount, pairResults, months, warnings);
 
   for (const warning of warnings) {
     console.error(dim(`  ! stats unavailable — ${warning}`));
   }
 
   const entries = [];
-  accounts.forEach((account, ai) => {
-    const totals = perAccountTotals[ai];
+  for (const group of groups) {
     months.forEach((period, mi) => {
       entries.push({
-        account: account.name,
-        ios: totals ? totals[mi].ios : null,
-        android: totals ? totals[mi].android : null,
+        account: group.account,
+        app: group.app,
+        appSlug: group.appSlug,
+        ios: group.totals ? group.totals[mi].ios : null,
+        android: group.totals ? group.totals[mi].android : null,
         periodStart: period.start,
         periodEnd: period.end,
       });
     });
-  });
+  }
 
   const displayRows = toStatsDisplayRows(entries, {
     platform: opts.platform,
     accountDisplayNames,
+    groupBy: byApp ? 'app' : 'account',
     now,
   });
   const platformCount = opts.platform ? 1 : 2;
+  const subjectHeader = byApp ? 'APP' : 'ACCOUNT';
+  const subjectCount = `${groups.length} ${byApp ? 'app(s)' : 'account(s)'}`;
 
-  console.log(renderTable(['ACCOUNT', 'PERIOD', 'PLATFORM', ...statsBuildsHeaders()], displayRows));
+  console.log(
+    renderTable([subjectHeader, 'PERIOD', 'PLATFORM', ...statsBuildsHeaders()], displayRows)
+  );
   console.log(
     dim(
-      `\n  ${displayRows.length} row(s) across ${accounts.length} account(s), ${months.length} month(s), ${platformCount} platform(s) each. ` +
+      `\n  ${displayRows.length} row(s) across ${subjectCount}, ${months.length} month(s), ${platformCount} platform(s) each. ` +
         'SUCCESS/ERRORED/CANCELED = counted client-side from build history via the API; ' +
         'may differ from EAS billing usage. TOTAL = SUCCESS + ERRORED + CANCELED for that row. ' +
         'A still in-progress/queued build is counted in none of the three (nor in TOTAL). ' +
         'PERIOD = UTC calendar month.'
     )
   );
+}
+
+/**
+ * One group per account, its apps' counts summed (the pre-#90 behavior).
+ * `totals: null` renders every cell on that account's rows as "-": either
+ * its app list couldn't be fetched, or any one of its apps' build counts
+ * failed — with everything summed into a single number, one missing app
+ * makes the whole sum wrong, so it is not shown at all.
+ */
+function accountGroups(accounts, appsByAccount, pairResults, months, warnings) {
+  return accounts.map((account, accountIndex) => {
+    const base = { account: account.name, app: null, appSlug: null };
+    const appsError = appsByAccount[accountIndex].error;
+    if (appsError) {
+      warnings.push(`${account.name}: ${appsError.message}`);
+      return { ...base, totals: null };
+    }
+    const ownResults = pairResults.filter((r) => r.accountIndex === accountIndex);
+    const failed = ownResults.find((r) => r.error);
+    if (failed) {
+      warnings.push(`${account.name}: ${failed.error.message}`);
+      return { ...base, totals: null };
+    }
+    const totals = emptyTotals(months);
+    for (const { counts } of ownResults) addInto(totals, counts);
+    return { ...base, totals };
+  });
+}
+
+/**
+ * One group per (account, app) pair — same order as `pairs`, so accounts stay
+ * in order and apps keep the order the API returned them in (#90).
+ *
+ * Failure is finer-grained than in accountGroups: only the app whose fetch
+ * failed degrades to "-", because per-app counts stand on their own and one
+ * broken app says nothing about its neighbors. An account whose *app list*
+ * failed contributes no rows at all — its apps are unknown, so there is
+ * nothing to name in an APP column — and only the stderr warning reports it.
+ */
+function appGroups(accounts, appsByAccount, pairResults, months, warnings) {
+  appsByAccount.forEach(({ error }, accountIndex) => {
+    if (error) warnings.push(`${accounts[accountIndex].name}: ${error.message}`);
+  });
+
+  return pairResults.map(({ accountIndex, app, counts, error }) => {
+    const base = { account: accounts[accountIndex].name, app: app.name, appSlug: app.slug };
+    if (error) {
+      warnings.push(`${accounts[accountIndex].name} / ${app.slug}: ${error.message}`);
+      return { ...base, totals: null };
+    }
+    const totals = emptyTotals(months);
+    addInto(totals, counts);
+    return { ...base, totals };
+  });
+}
+
+function emptyTotals(months) {
+  return months.map(() => ({
+    ios: { success: 0, errored: 0, canceled: 0 },
+    android: { success: 0, errored: 0, canceled: 0 },
+  }));
+}
+
+function addInto(totals, counts) {
+  counts.forEach((c, i) => {
+    addCounts(totals[i].ios, c.ios);
+    addCounts(totals[i].android, c.android);
+  });
 }
 
 function addCounts(target, source) {

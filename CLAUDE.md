@@ -116,6 +116,17 @@ EAS's billing cycle and can't be sliced into arbitrary calendar ranges.
 `--plan` skips steps 2–3 and queries only `account.byId(...) { subscription }`
 per account, in parallel.
 
+**`--group-by <account|app>` picks what a `--stats` row counts** (#90,
+`--stats`-only). `account` is the default and unchanged. `app` swaps the
+ACCOUNT column for APP (the app's Display name, falling back to its slug) and
+makes each (account, app) pair its own group — `src/commands/stats.mjs`
+already fetched per-app counts and was merely summing them in
+`accountGroups`, so `appGroups` adds **no API calls**. Two consequences worth
+keeping: grouping is by pair, so same-named apps in different accounts never
+merge; and failure gets finer-grained — one app's failed build fetch degrades
+only its own rows, while an account whose *app list* failed contributes no
+rows at all (its apps are unknown) and is reported on stderr only.
+
 Per-account/per-app failures don't fail the run: a row still prints with `-`
 and the reason goes to stderr.
 
