@@ -11,6 +11,37 @@ version per platform). Each tool is its own independently versioned and
 published package under `packages/*`. Currently there is one package:
 [`@my-shelfio/expo-shelfit`](packages/expo-shelfit).
 
+## Never write issue or PR numbers into the repo
+
+**No file in this repo may reference a GitHub issue or PR number** — no
+`#NN`, no `issues/NN`, no `pull/NN`, no `Closes #NN`. This applies to source
+comments, JSDoc, test names, `README.md`/`README.ja.md`, this file,
+`.github/**` (workflows, PR and issue templates), and `.claude/**` (skills,
+agents). It applies to numbers of any width, in Japanese and English alike.
+
+A number is not an explanation. It sends the reader somewhere else to find
+out why the code is the way it is, and that somewhere else drifts, gets
+closed, or becomes unreachable to anyone reading the published package. The
+repo must stand on its own.
+
+Instead: **write the reason in place.** A comment that wants to point at an
+issue should carry what that issue said — what was observed, what was tried,
+what constraint the code is honoring. If the reason is too long for a
+comment, it belongs in the relevant `README.md`, `CONTRIBUTING.md`, or this
+file, not behind a link.
+
+Commit messages, branch names, PR titles/bodies, and Release notes are
+**outside** this rule — those are Git/GitHub metadata, not repo content, and
+issue linkage there is fine and expected.
+
+Before opening a PR:
+
+```bash
+git grep -nE '#[0-9]{2,4}|issues?/[0-9]+|pull/[0-9]+' -- . ':!package-lock.json'
+```
+
+This must return nothing.
+
 ## Commands
 
 Run from the repo root (`npm install` here installs deps for every package):
@@ -78,7 +109,7 @@ throws `CliError` in `resolveAuthHeaders` (`src/cli.mjs`).
 `--history` cannot be combined with each other — combining any two is a
 `CliError`.
 
-**`--usage` is a deprecated alias for `--stats`** (#89, removed in the next
+**`--usage` is a deprecated alias for `--stats`** (removed in the next
 major). `parseArgs` sets the same `opts.stats` for both and appends
 `DEPRECATED_USAGE_WARNING` to `opts.warnings`, which `run()` prints to
 stderr — `parseArgs` stays I/O-free for the same reason `src/*` never calls
@@ -91,8 +122,8 @@ once against the full account list in `src/cli.mjs` right after step 1 below
 (matches slug or EAS Display name); `--app` per-account in `src/commands/
 list.mjs`/`stats.mjs` right after step 2, before step 3 (matches slug or EAS
 Display name, same rule as `--account`, but ambiguity is scoped to a single
-account — a Display name shared across different accounts matches in both,
-#92; incompatible with `--plan`, which skips step 2 entirely). No match
+account — a Display name shared across different accounts matches in both;
+incompatible with `--plan`, which skips step 2 entirely). No match
 throws `CliError` with "Did you mean" suggestions (Levenshtein edit distance,
 `src/filter.mjs#suggestNear`).
 
@@ -118,8 +149,8 @@ EAS's billing cycle and can't be sliced into arbitrary calendar ranges.
 `--plan` skips steps 2–3 and queries only `account.byId(...) { subscription }`
 per account, in parallel.
 
-**`--group-by <account|app>` picks what a `--stats` row counts** (#90,
-`--stats`-only). `account` is the default and unchanged. `app` swaps the
+**`--group-by <account|app>` picks what a `--stats` row counts**
+(`--stats`-only). `account` is the default and unchanged. `app` swaps the
 ACCOUNT column for APP (the app's Display name, falling back to its slug) and
 makes each (account, app) pair its own group — `src/commands/stats.mjs`
 already fetched per-app counts and was merely summing them in
