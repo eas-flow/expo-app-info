@@ -10,8 +10,7 @@ const PLATFORMS = ['ios', 'android'];
 // output; "app" swaps the ACCOUNT column for an APP column.
 const GROUP_BY_AXES = ['account', 'app'];
 // Sanity cap on --history (no documented API max) — keeps a typo like
-// --history 99999 from hammering the API. Confirmed accepted at 100 via
-// scripts/probe-history.mjs.
+// --history 99999 from hammering the API. Confirmed accepted at 100.
 const MAX_HISTORY = 100;
 
 // --stats defaults to the last 3 UTC calendar months; --month widens it, capped

@@ -9,14 +9,7 @@
     "react-native",
     "cli",
     "npx",
-    "version",
-    "app-version",
-    "build",
-    "build-number",
-    "monorepo",
-    "devtools",
-    "shelf",
-    "portfolio"
+    "devtools"
   ],
   "license": "MIT",
   "author": "it0 (https://github.com/my-shelfio/shelfit)",
