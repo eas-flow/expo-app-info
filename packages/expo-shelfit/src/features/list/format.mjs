@@ -22,11 +22,11 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map(), local 
   ]);
 }
 
-// Only these 3 have been confirmed against the real API
-// (scripts/probe-build-status.mjs). Anything else — most likely a still
-// in-progress/queued build whose enum name was never observed — falls back to
-// the raw value lowercased rather than being guessed at, so an unrecognized
-// status still shows something instead of breaking or disappearing.
+// Only these 3 have been confirmed against the real API. Anything else —
+// most likely a still in-progress/queued build whose enum name was never
+// observed — falls back to the raw value lowercased rather than being
+// guessed at, so an unrecognized status still shows something instead of
+// breaking or disappearing.
 const STATUS_LABELS = { FINISHED: 'Finished', ERRORED: 'Errored', CANCELED: 'Canceled' };
 
 function statusLabel(status) {

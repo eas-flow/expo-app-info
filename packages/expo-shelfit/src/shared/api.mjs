@@ -51,10 +51,9 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
 const ALL_PLATFORMS = ['ios', 'android'];
 
 // `status` is deliberately omitted from `filter` — confirmed against the real
-// API (scripts/probe-build-status.mjs) that leaving it out returns builds in
-// every status, not just FINISHED, and that the field isn't required.
-// Filtering client-side afterwards would throw away exactly what the STATUS
-// column exists to show.
+// API that leaving it out returns builds in every status, not just FINISHED,
+// and that the field isn't required. Filtering client-side afterwards would
+// throw away exactly what the STATUS column exists to show.
 function buildAliases(platforms, { offset, fields }) {
   return platforms
     .map(
@@ -95,8 +94,7 @@ function buildsPageQuery(platforms) {
 }`;
 }
 
-// Well under the `limit: 100` confirmed accepted by the API
-// (scripts/probe-history.mjs).
+// Well under the `limit: 100` confirmed accepted by the API.
 const BUILD_PAGE_SIZE = 50;
 
 // Hard stop in case the API's undocumented offset behavior stops holding (e.g.
@@ -119,10 +117,10 @@ function monthIndexForBuild(createdAtMs, bounds) {
   return -1;
 }
 
-// Only these 3 have been confirmed against the real API
-// (scripts/probe-build-status.mjs). Anything else — a queued build, or a status
-// this unofficial API adds later — is counted in no bucket rather than guessed
-// at, since it hasn't reached a terminal outcome.
+// Only these 3 have been confirmed against the real API. Anything else — a
+// queued build, or a status this unofficial API adds later — is counted in
+// no bucket rather than guessed at, since it hasn't reached a terminal
+// outcome.
 const STATUS_COUNT_KEY = { FINISHED: 'success', ERRORED: 'errored', CANCELED: 'canceled' };
 
 function emptyStatusCounts() {
@@ -244,9 +242,9 @@ export function createApiClient({
    *
    * Each platform stops paging independently, once a page comes back short or
    * every build in it predates the oldest requested month — the latter relies
-   * on the API's undocumented order holding newest-first, as observed in
-   * scripts/probe-history.mjs. A finished platform's alias is dropped from
-   * subsequent queries rather than skipped client-side.
+   * on the API's undocumented order holding newest-first, as observed by
+   * probing. A finished platform's alias is dropped from subsequent queries
+   * rather than skipped client-side.
    *
    * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries decides
    * that degrades that account's rows rather than failing the run.
