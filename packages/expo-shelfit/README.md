@@ -24,7 +24,7 @@ $ npx @my-shelfio/expo-shelfit
 
 ## 🔑 Authentication & 📦 Install
 
-First, create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
+First, create a personal access token at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
 
 ```bash
 export EXPO_TOKEN=xxxxxxxx
@@ -80,27 +80,31 @@ npx @my-shelfio/expo-shelfit --members
 ```
 $ npx @my-shelfio/expo-shelfit --stats
 
-┌──────────┬──────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┬───────────────┐
-│ ACCOUNT  │ PERIOD               │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │ BUILD MINUTES │
-├──────────┼──────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┼───────────────┤
-│ itokohei │ 2026-07-01 → (today) │ ios      │ 1       │ 1       │ 0        │ 2     │ 6.9           │
-│ itokohei │ 2026-07-01 → (today) │ android  │ 2       │ 0       │ 0        │ 2     │ 9.4           │
-└──────────┴──────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┴───────────────┘
+┌─────────┬─────────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┬───────────────┐
+│ ACCOUNT │ PERIOD                  │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │ BUILD MINUTES │
+├─────────┼─────────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┼───────────────┤
+│ myorg   │ 2026-08-01 → (today)    │ ios      │ 1       │ 1       │ 0        │ 2     │ 6.9           │
+│ myorg   │ 2026-08-01 → (today)    │ android  │ 2       │ 0       │ 0        │ 2     │ 9.4           │
+│ myorg   │ 2026-07-01 → 2026-07-31 │ ios      │ 3       │ 0       │ 1        │ 4     │ 21.8          │
+│ myorg   │ 2026-07-01 → 2026-07-31 │ android  │ 3       │ 1       │ 0        │ 4     │ 25.2          │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ ios      │ 0       │ 0       │ 0        │ 0     │ 0.0           │
+│ myorg   │ 2026-06-01 → 2026-06-30 │ android  │ 1       │ 0       │ 0        │ 1     │ 4.6           │
+└─────────┴─────────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┴───────────────┘
 ```
 
 ```
 $ npx @my-shelfio/expo-shelfit --members
 
-┌──────────┬───────────┬───────────┬──────┬─────────┬────────┬─────────────────────────────┬───────────┐
-│ ORG      │ MEMBER    │ ROLE      │ PLAN │ PLAN ID │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
-├──────────┼───────────┼───────────┼──────┼─────────┼────────┼─────────────────────────────┼───────────┤
-│ itokohei │ it0       │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
-│ itokohei │ kohei-dev │ DEVELOPER │ Free │ free    │ -      │ -                           │ -         │
-│ -        │ it0       │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
-└──────────┴───────────┴───────────┴──────┴─────────┴────────┴─────────────────────────────┴───────────┘
+┌───────┬────────┬───────────┬──────┬─────────┬────────┬─────────────────────────────┬───────────┐
+│ ORG   │ MEMBER │ ROLE      │ PLAN │ PLAN ID │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
+├───────┼────────┼───────────┼──────┼─────────┼────────┼─────────────────────────────┼───────────┤
+│ myorg │ alice  │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
+│ myorg │ bob    │ DEVELOPER │ Free │ free    │ -      │ -                           │ -         │
+│ -     │ alice  │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
+└───────┴────────┴───────────┴──────┴─────────┴────────┴─────────────────────────────┴───────────┘
 ```
 
-#### Deprecated
+### Deprecated
 
 `--usage` is a deprecated alias for `--stats`, and `--plan` is a deprecated alias for `--members`. Both still work and print the identical table, but write a deprecation warning to stderr and will be removed in the next major version.
 
@@ -115,7 +119,7 @@ $ npx @my-shelfio/expo-shelfit --members
 
 ### How it works
 
-Three GraphQL queries against `https://api.expo.dev/graphql`:
+The default app list is three GraphQL queries against `https://api.expo.dev/graphql`:
 
 1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
@@ -144,7 +148,11 @@ A robot token can only see the account that issued it. Use a personal access tok
 
 **What happens if a token can't read an account's apps or builds?**
 
-`--stats` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
+That account's rows still print with `-` in every column the CLI couldn't fill, the reason goes to stderr, and the run does not fail. Under `--stats --group-by app` the degradation is finer-grained: one app's failed build fetch degrades only its own rows, while an account whose *app list* failed contributes no rows at all and is reported on stderr only.
+
+**Do the `--stats` counts match my EAS billing usage?**
+
+Not necessarily. `--stats` never queries billing-scoped fields — counts come from each app's build history, bucketed client-side by UTC calendar month. EAS bills on its own cycle, which doesn't line up with calendar months, so the two can differ.
 
 **Why do some rows show `-` in the `--members` plan columns?**
 
@@ -176,7 +184,7 @@ Queue wait is driven by EAS's own congestion and your plan's concurrency limit, 
 
 **Is the `EXPO_TOKEN` ever written to disk or logged?**
 
-No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](../../.github/SECURITY.md) for the full policy and how to report a vulnerability privately.
+No — the bullets under **Authentication & Install** above list every guarantee. [SECURITY.md](../../.github/SECURITY.md) has the full policy and how to report a vulnerability privately.
 
 ## 📄 License
 
