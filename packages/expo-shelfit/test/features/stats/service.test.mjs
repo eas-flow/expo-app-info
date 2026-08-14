@@ -11,7 +11,15 @@ import { fetchStatsEntries } from '../../../src/features/stats/service.mjs';
 
 const NOW = new Date('2026-07-15T00:00:00.000Z');
 
-const zero = () => ({ success: 0, errored: 0, canceled: 0 });
+const zero = () => ({ success: 0, errored: 0, canceled: 0, buildDurationMs: 0 });
+
+/** Shorthand for a counts object with an explicit buildDurationMs, defaulting to 0. */
+const c = (success, errored, canceled, buildDurationMs = 0) => ({
+  success,
+  errored,
+  canceled,
+  buildDurationMs,
+});
 
 // Every test here uses month: 1, so countBuildsByMonth's parallel array has
 // exactly one element and each group ends up as exactly one entry.
@@ -32,11 +40,18 @@ function addCounts(a, b) {
     success: a.success + b.success,
     errored: a.errored + b.errored,
     canceled: a.canceled + b.canceled,
+    buildDurationMs: a.buildDurationMs + b.buildDurationMs,
   };
 }
 
-/** `apps`/`counts` values that are an Error are thrown instead of resolved, mirroring the real client's ApiError contract. */
-function makeClient({ apps = {}, counts = {} } = {}) {
+/**
+ * `apps`/`counts` values that are an Error are thrown instead of resolved,
+ * mirroring the real client's ApiError contract. `counts[appId]` is the
+ * `counts` array countBuildsByMonth would return; `missingMetrics[appId]`
+ * (default 0) is its `missingMetricsCount`, wrapped here the same way the
+ * real client wraps both in one object.
+ */
+function makeClient({ apps = {}, counts = {}, missingMetrics = {} } = {}) {
   const calls = { fetchApps: 0, countBuildsByMonth: [] };
   return {
     calls,
@@ -50,7 +65,7 @@ function makeClient({ apps = {}, counts = {} } = {}) {
       calls.countBuildsByMonth.push(appId);
       const result = counts[appId];
       if (result instanceof Error) throw result;
-      return result;
+      return { counts: result, missingMetricsCount: missingMetrics[appId] ?? 0 };
     },
   };
 }
@@ -66,11 +81,8 @@ describe('fetchStatsEntries — groupBy: account (default)', () => {
         ],
       },
       counts: {
-        'app-1': onePeriod(
-          { success: 2, errored: 1, canceled: 0 },
-          { success: 1, errored: 0, canceled: 1 }
-        ),
-        'app-2': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()),
+        'app-1': onePeriod(c(2, 1, 0), c(1, 0, 1)),
+        'app-2': onePeriod(c(1, 0, 0), zero()),
       },
     });
 
@@ -92,6 +104,7 @@ describe('fetchStatsEntries — groupBy: account (default)', () => {
       ios: { success: 3, errored: 1, canceled: 0 },
       android: { success: 1, errored: 0, canceled: 1 },
     });
+    expect(entries[0].ios.buildDurationMs).toBe(0);
   });
 
   it('degrades the whole account to null totals when its app list fetch fails, and records one warning', async () => {
@@ -115,7 +128,7 @@ describe('fetchStatsEntries — groupBy: account (default)', () => {
         ],
       },
       counts: {
-        'app-1': onePeriod({ success: 2, errored: 0, canceled: 0 }, zero()),
+        'app-1': onePeriod(c(2, 0, 0), zero()),
         'app-2': new ApiError('boom'),
       },
     });
@@ -140,6 +153,59 @@ describe('fetchStatsEntries — groupBy: account (default)', () => {
 
     expect(warnings).toEqual(['first: boom-1', 'second: boom-2']);
   });
+
+  it('sums buildDurationMs across apps into the account total, alongside the existing counts', async () => {
+    const accounts = [{ id: 'acc-1', name: 'myorg' }];
+    const client = makeClient({
+      apps: {
+        'acc-1': [
+          { id: 'app-1', name: 'Storefront', slug: 'storefront' },
+          { id: 'app-2', name: 'Admin', slug: 'admin' },
+        ],
+      },
+      counts: {
+        'app-1': onePeriod(c(2, 0, 0, 120_000), zero()),
+        'app-2': onePeriod(c(1, 0, 0, 30_000), zero()),
+      },
+    });
+
+    const { entries } = await fetchStatsEntries(client, accounts, opts(), NOW);
+
+    expect(entries[0].ios.buildDurationMs).toBe(150_000);
+  });
+
+  it("sums each app's missingMetricsCount into a single run-wide metricsMissingCount", async () => {
+    const accounts = [{ id: 'acc-1', name: 'myorg' }];
+    const client = makeClient({
+      apps: {
+        'acc-1': [
+          { id: 'app-1', name: 'Storefront', slug: 'storefront' },
+          { id: 'app-2', name: 'Admin', slug: 'admin' },
+        ],
+      },
+      counts: {
+        'app-1': onePeriod(c(2, 0, 0), zero()),
+        'app-2': onePeriod(c(1, 0, 0), zero()),
+      },
+      missingMetrics: { 'app-1': 2, 'app-2': 1 },
+    });
+
+    const { metricsMissingCount } = await fetchStatsEntries(client, accounts, opts(), NOW);
+
+    expect(metricsMissingCount).toBe(3);
+  });
+
+  it('does not count missingMetricsCount for an app whose counts fetch failed', async () => {
+    const accounts = [{ id: 'acc-1', name: 'myorg' }];
+    const client = makeClient({
+      apps: { 'acc-1': [{ id: 'app-1', name: 'Storefront', slug: 'storefront' }] },
+      counts: { 'app-1': new ApiError('boom') },
+    });
+
+    const { metricsMissingCount } = await fetchStatsEntries(client, accounts, opts(), NOW);
+
+    expect(metricsMissingCount).toBe(0);
+  });
 });
 
 describe('fetchStatsEntries — groupBy: app', () => {
@@ -152,11 +218,8 @@ describe('fetchStatsEntries — groupBy: app', () => {
       ],
     };
     const counts = {
-      'app-1': onePeriod(
-        { success: 2, errored: 1, canceled: 0 },
-        { success: 1, errored: 0, canceled: 1 }
-      ),
-      'app-2': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()),
+      'app-1': onePeriod(c(2, 1, 0), c(1, 0, 1)),
+      'app-2': onePeriod(c(1, 0, 0), zero()),
     };
 
     const byAccount = await fetchStatsEntries(makeClient({ apps, counts }), accounts, opts(), NOW);
@@ -181,7 +244,7 @@ describe('fetchStatsEntries — groupBy: app', () => {
   it('costs no extra client calls versus groupBy: account — per-app counts are fetched either way', async () => {
     const accounts = [{ id: 'acc-1', name: 'myorg' }];
     const apps = { 'acc-1': [{ id: 'app-1', name: 'Storefront', slug: 'storefront' }] };
-    const counts = { 'app-1': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()) };
+    const counts = { 'app-1': onePeriod(c(1, 0, 0), zero()) };
 
     const accountClient = makeClient({ apps, counts });
     await fetchStatsEntries(accountClient, accounts, opts(), NOW);
@@ -217,7 +280,7 @@ describe('fetchStatsEntries — groupBy: app', () => {
         ],
       },
       counts: {
-        'app-1': onePeriod({ success: 2, errored: 0, canceled: 0 }, zero()),
+        'app-1': onePeriod(c(2, 0, 0), zero()),
         'app-2': new ApiError('boom'),
       },
     });
@@ -231,7 +294,7 @@ describe('fetchStatsEntries — groupBy: app', () => {
 
     const storefront = entries.find((e) => e.app === 'Storefront');
     const admin = entries.find((e) => e.app === 'Admin');
-    expect(storefront.ios).toEqual({ success: 2, errored: 0, canceled: 0 });
+    expect(storefront.ios).toEqual(c(2, 0, 0));
     expect(admin.ios).toBeNull();
     expect(admin.android).toBeNull();
     expect(warnings.join('\n')).toContain('admin');
@@ -248,8 +311,8 @@ describe('fetchStatsEntries — groupBy: app', () => {
         'acc-2': [{ id: 'app-2', name: 'Storefront', slug: 'storefront-eu' }],
       },
       counts: {
-        'app-1': onePeriod({ success: 2, errored: 0, canceled: 0 }, zero()),
-        'app-2': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()),
+        'app-1': onePeriod(c(2, 0, 0), zero()),
+        'app-2': onePeriod(c(1, 0, 0), zero()),
       },
     });
 
@@ -274,7 +337,7 @@ describe('fetchStatsEntries — groupBy: app', () => {
         'acc-1': [{ id: 'app-1', name: 'Storefront', slug: 'storefront' }],
         'acc-2': new ApiError('nope'),
       },
-      counts: { 'app-1': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()) },
+      counts: { 'app-1': onePeriod(c(1, 0, 0), zero()) },
     });
 
     const { entries, groupCount, warnings } = await fetchStatsEntries(
@@ -299,8 +362,8 @@ describe('fetchStatsEntries — groupBy: app', () => {
         ],
       },
       counts: {
-        'app-1': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()),
-        'app-2': onePeriod({ success: 9, errored: 0, canceled: 0 }, zero()),
+        'app-1': onePeriod(c(1, 0, 0), zero()),
+        'app-2': onePeriod(c(9, 0, 0), zero()),
       },
     });
 
@@ -320,7 +383,7 @@ describe('fetchStatsEntries — groupBy: app', () => {
     const accounts = [{ id: 'acc-1', name: 'myorg' }];
     const client = makeClient({
       apps: { 'acc-1': [{ id: 'app-1', name: 'Storefront', slug: 'sf-ios-app' }] },
-      counts: { 'app-1': onePeriod({ success: 1, errored: 0, canceled: 0 }, zero()) },
+      counts: { 'app-1': onePeriod(c(1, 0, 0), zero()) },
     });
 
     const { entries } = await fetchStatsEntries(

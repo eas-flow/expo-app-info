@@ -21,9 +21,12 @@ function statsPlatforms(platform) {
  * display name is missing.
  *
  * `e.ios`/`e.android` are each either `null` — that platform's counts
- * couldn't be fetched, degrading every cell on its row, TOTAL included, to
- * "-" — or `{ success, errored, canceled }`. TOTAL sums exactly those three,
- * so a build EAS reports in some non-terminal status is counted nowhere.
+ * couldn't be fetched, degrading every cell on its row, TOTAL and BUILD MIN
+ * included, to "-" — or `{ success, errored, canceled, buildDurationMs }`.
+ * TOTAL sums exactly the first three, so a build EAS reports in some
+ * non-terminal status is counted nowhere. BUILD MIN is `buildDurationMs`
+ * (summed `Build.metrics.buildDuration` for that same TOTAL set — queue
+ * wait is deliberately excluded) converted to minutes, one decimal place.
  */
 export function toStatsDisplayRows(
   entries,
@@ -39,6 +42,7 @@ export function toStatsDisplayRows(
     for (const p of platforms) {
       const counts = e[p];
       const total = counts ? counts.success + counts.errored + counts.canceled : null;
+      const buildMinutes = counts ? (counts.buildDurationMs / 60_000).toFixed(1) : null;
       rows.push([
         subjectCell,
         periodText,
@@ -47,6 +51,7 @@ export function toStatsDisplayRows(
         cellOrDash(counts?.errored),
         cellOrDash(counts?.canceled),
         cellOrDash(total),
+        cellOrDash(buildMinutes),
       ]);
     }
   }
@@ -69,7 +74,7 @@ function periodCell(entry, now) {
   return `${isoDate(entry.periodStart)} → ${end}`;
 }
 
-/** Always these 4, since PLATFORM is its own column rather than a per-column suffix. */
+/** Always these 5, since PLATFORM is its own column rather than a per-column suffix. */
 export function statsBuildsHeaders() {
-  return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL'];
+  return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL', 'BUILD MIN'];
 }

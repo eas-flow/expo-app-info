@@ -462,12 +462,18 @@ describe('countBuildsByMonth', () => {
     { start: '2026-06-01T00:00:00.000Z', end: '2026-07-01T00:00:00.000Z' },
   ];
 
-  const zero = () => ({ success: 0, errored: 0, canceled: 0 });
+  const zero = () => ({ success: 0, errored: 0, canceled: 0, buildDurationMs: 0 });
 
   // `status` defaults to FINISHED so callers that don't care about status
   // bucketing (most of these tests) don't have to repeat it everywhere.
-  function build(createdAt, status = 'FINISHED') {
-    return { createdAt, status };
+  // `buildDuration` defaults to undefined (no `metrics`), matching a build
+  // whose duration metric hasn't landed yet.
+  function build(createdAt, status = 'FINISHED', buildDuration) {
+    return {
+      createdAt,
+      status,
+      ...(buildDuration === undefined ? {} : { metrics: { buildDuration } }),
+    };
   }
 
   function buildsPage(iosBuilds, androidBuilds) {
@@ -501,13 +507,16 @@ describe('countBuildsByMonth', () => {
     // pagination stops there; no second page should even be requested.
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      {
-        ios: { success: 1, errored: 0, canceled: 0 },
-        android: { success: 1, errored: 0, canceled: 0 },
-      },
-      { ios: { success: 0, errored: 1, canceled: 1 }, android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        {
+          ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 },
+          android: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 },
+        },
+        { ios: { success: 0, errored: 1, canceled: 1, buildDurationMs: 0 }, android: zero() },
+      ],
+      missingMetricsCount: 4,
+    });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
@@ -531,10 +540,13 @@ describe('countBuildsByMonth', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 }, android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
   });
 
   it('ignores builds older than the oldest requested month', async () => {
@@ -545,10 +557,13 @@ describe('countBuildsByMonth', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 }, android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
   });
 
   it('pages again when a platform returns a full page, stopping once a short page arrives', async () => {
@@ -564,7 +579,7 @@ describe('countBuildsByMonth', () => {
       .mockResolvedValueOnce(buildsPage([build('2026-06-01T00:00:00.000Z')], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const counts = await client.countBuildsByMonth('app-1', MONTHS);
+    const { counts } = await client.countBuildsByMonth('app-1', MONTHS);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
 
     const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
@@ -578,10 +593,13 @@ describe('countBuildsByMonth', () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: zero(), android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: zero(), android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 0,
+    });
   });
 
   it('throws ApiError when the build query fails', async () => {
@@ -601,10 +619,13 @@ describe('countBuildsByMonth', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 }, android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
   });
 
   it('throws ApiError (not TypeError) when the app is missing from a builds page response', async () => {
@@ -631,10 +652,13 @@ describe('countBuildsByMonth', () => {
 
     await expect(
       client.countBuildsByMonth('app-1', MONTHS, { platform: 'android' })
-    ).resolves.toEqual([
-      { ios: zero(), android: { success: 1, errored: 0, canceled: 0 } },
-      { ios: zero(), android: zero() },
-    ]);
+    ).resolves.toEqual({
+      counts: [
+        { ios: zero(), android: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 } },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(query).not.toContain('ios:');
@@ -667,7 +691,7 @@ describe('countBuildsByMonth', () => {
     expect(secondQuery).not.toContain('android:');
   });
 
-  it('requests status (not appVersion/appBuildVersion) in the paged builds query', async () => {
+  it('requests status and metrics { buildDuration } (not appVersion/appBuildVersion) in the paged builds query', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
@@ -677,6 +701,62 @@ describe('countBuildsByMonth', () => {
     expect(query).toContain('status');
     expect(query).not.toContain('status: FINISHED');
     expect(query).not.toContain('appVersion');
+    expect(query).toContain('metrics { buildDuration }');
+  });
+
+  it('sums metrics.buildDuration into buildDurationMs for counted builds, per platform/month', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildsPage(
+          [
+            build('2026-07-20T00:00:00.000Z', 'FINISHED', 100_000),
+            build('2026-07-21T00:00:00.000Z', 'ERRORED', 50_000),
+          ],
+          [build('2026-06-05T00:00:00.000Z', 'FINISHED', 30_000)]
+        )
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { counts, missingMetricsCount } = await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(counts[0].ios.buildDurationMs).toBe(150_000);
+    expect(counts[1].android.buildDurationMs).toBe(30_000);
+    expect(missingMetricsCount).toBe(0);
+  });
+
+  it('counts a build with no metrics.buildDuration towards missingMetricsCount, not buildDurationMs, while still counting its status', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      buildsPage(
+        [
+          build('2026-07-20T00:00:00.000Z', 'FINISHED', 100_000),
+          build('2026-07-21T00:00:00.000Z', 'FINISHED'), // no metrics
+        ],
+        []
+      )
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { counts, missingMetricsCount } = await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(counts[0].ios).toEqual({
+      success: 2,
+      errored: 0,
+      canceled: 0,
+      buildDurationMs: 100_000,
+    });
+    expect(missingMetricsCount).toBe(1);
+  });
+
+  it('does not count a build outside every requested month towards missingMetricsCount, since it was never counted at all', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage([build('2026-05-15T00:00:00.000Z', 'FINISHED')], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { missingMetricsCount } = await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(missingMetricsCount).toBe(0);
   });
 });
 

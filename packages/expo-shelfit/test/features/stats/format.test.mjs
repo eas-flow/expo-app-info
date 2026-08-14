@@ -5,16 +5,16 @@ const NOW = new Date('2026-07-15T00:00:00.000Z');
 
 const currentMonthEntry = {
   account: 'myorg',
-  ios: { success: 18, errored: 3, canceled: 2 },
-  android: { success: 16, errored: 1, canceled: 0 },
+  ios: { success: 18, errored: 3, canceled: 2, buildDurationMs: 1_380_000 },
+  android: { success: 16, errored: 1, canceled: 0, buildDurationMs: 1_020_000 },
   periodStart: '2026-07-01T00:00:00.000Z',
   periodEnd: '2026-08-01T00:00:00.000Z',
 };
 
 const pastMonthEntry = {
   account: 'myorg',
-  ios: { success: 14, errored: 0, canceled: 1 },
-  android: { success: 15, errored: 2, canceled: 0 },
+  ios: { success: 14, errored: 0, canceled: 1, buildDurationMs: 900_000 },
+  android: { success: 15, errored: 2, canceled: 0, buildDurationMs: 1_020_000 },
   periodStart: '2026-06-01T00:00:00.000Z',
   periodEnd: '2026-07-01T00:00:00.000Z',
 };
@@ -30,10 +30,10 @@ const degradedMonthEntry = {
 };
 
 describe('toStatsDisplayRows', () => {
-  it('maps an account-month to two rows (ios, then android): [account, period, platform, success, errored, canceled, total]', () => {
+  it('maps an account-month to two rows (ios, then android): [account, period, platform, success, errored, canceled, total, buildMin]', () => {
     expect(toStatsDisplayRows([pastMonthEntry], { now: NOW })).toEqual([
-      ['myorg', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15'],
-      ['myorg', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17'],
+      ['myorg', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15', '15.0'],
+      ['myorg', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17', '17.0'],
     ]);
   });
 
@@ -48,19 +48,19 @@ describe('toStatsDisplayRows', () => {
     expect(row[1]).toBe('2026-06-01 → 2026-06-30');
   });
 
-  it('shows "-" for every category and TOTAL on both rows when the account is degraded (fetch failure)', () => {
+  it('shows "-" for every category, TOTAL, and BUILD MIN on both rows when the account is degraded (fetch failure)', () => {
     expect(toStatsDisplayRows([degradedMonthEntry], { now: NOW })).toEqual([
-      ['other', '2026-06-01 → 2026-06-30', 'ios', '-', '-', '-', '-'],
-      ['other', '2026-06-01 → 2026-06-30', 'android', '-', '-', '-', '-'],
+      ['other', '2026-06-01 → 2026-06-30', 'ios', '-', '-', '-', '-', '-'],
+      ['other', '2026-06-01 → 2026-06-30', 'android', '-', '-', '-', '-', '-'],
     ]);
   });
 
-  it('renders a zero build count as "0", not "-", and TOTAL as the sum', () => {
+  it('renders a zero build count as "0", not "-", and TOTAL/BUILD MIN as 0/0.0', () => {
     const row = toStatsDisplayRows(
-      [{ ...pastMonthEntry, ios: { success: 0, errored: 0, canceled: 0 } }],
+      [{ ...pastMonthEntry, ios: { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 } }],
       { now: NOW }
     )[0];
-    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', 'ios', '0', '0', '0', '0']);
+    expect(row).toEqual(['myorg', '2026-06-01 → 2026-06-30', 'ios', '0', '0', '0', '0', '0.0']);
   });
 
   it('computes TOTAL as success + errored + canceled', () => {
@@ -69,14 +69,24 @@ describe('toStatsDisplayRows', () => {
     expect(androidRow[6]).toBe('17'); // 15 + 2 + 0
   });
 
+  it('computes BUILD MIN as buildDurationMs / 60000, one decimal place', () => {
+    const [iosRow, androidRow] = toStatsDisplayRows([pastMonthEntry], { now: NOW });
+    expect(iosRow[7]).toBe('15.0'); // 900,000ms
+    expect(androidRow[7]).toBe('17.0'); // 1,020,000ms
+  });
+
   it('shows only the ios row when --platform ios is set', () => {
     const rows = toStatsDisplayRows([pastMonthEntry], { platform: 'ios', now: NOW });
-    expect(rows).toEqual([['myorg', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15']]);
+    expect(rows).toEqual([
+      ['myorg', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15', '15.0'],
+    ]);
   });
 
   it('shows only the android row when --platform android is set', () => {
     const rows = toStatsDisplayRows([pastMonthEntry], { platform: 'android', now: NOW });
-    expect(rows).toEqual([['myorg', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17']]);
+    expect(rows).toEqual([
+      ['myorg', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17', '17.0'],
+    ]);
   });
 
   it('shows "-" for the period when periodStart/periodEnd are both missing', () => {
@@ -109,8 +119,8 @@ describe('toStatsDisplayRows', () => {
 
     it('puts the app name in the first column instead of the account', () => {
       expect(toStatsDisplayRows([appEntry], { groupBy: 'app', now: NOW })).toEqual([
-        ['Storefront', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15'],
-        ['Storefront', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17'],
+        ['Storefront', '2026-06-01 → 2026-06-30', 'ios', '14', '0', '1', '15', '15.0'],
+        ['Storefront', '2026-06-01 → 2026-06-30', 'android', '15', '2', '0', '17', '17.0'],
       ]);
     });
 
@@ -132,22 +142,22 @@ describe('toStatsDisplayRows', () => {
     it('prints an app with no builds as a row of zeros, not as "-" or a missing row', () => {
       const zeroEntry = {
         ...appEntry,
-        ios: { success: 0, errored: 0, canceled: 0 },
-        android: { success: 0, errored: 0, canceled: 0 },
+        ios: { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 },
+        android: { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 },
       };
       expect(toStatsDisplayRows([zeroEntry], { groupBy: 'app', now: NOW })).toEqual([
-        ['Storefront', '2026-06-01 → 2026-06-30', 'ios', '0', '0', '0', '0'],
-        ['Storefront', '2026-06-01 → 2026-06-30', 'android', '0', '0', '0', '0'],
+        ['Storefront', '2026-06-01 → 2026-06-30', 'ios', '0', '0', '0', '0', '0.0'],
+        ['Storefront', '2026-06-01 → 2026-06-30', 'android', '0', '0', '0', '0', '0.0'],
       ]);
     });
 
-    it('still degrades a failed app to "-" on every cell including TOTAL', () => {
+    it('still degrades a failed app to "-" on every cell including TOTAL and BUILD MIN', () => {
       const rows = toStatsDisplayRows([{ ...appEntry, ios: null, android: null }], {
         groupBy: 'app',
         now: NOW,
       });
-      expect(rows[0].slice(3)).toEqual(['-', '-', '-', '-']);
-      expect(rows[1].slice(3)).toEqual(['-', '-', '-', '-']);
+      expect(rows[0].slice(3)).toEqual(['-', '-', '-', '-', '-']);
+      expect(rows[1].slice(3)).toEqual(['-', '-', '-', '-', '-']);
     });
 
     it('keeps two same-named apps on their own rows rather than merging them', () => {
@@ -170,7 +180,7 @@ describe('toStatsDisplayRows', () => {
 });
 
 describe('statsBuildsHeaders', () => {
-  it('always returns SUCCESS, ERRORED, CANCELED, TOTAL — PLATFORM is a separate column now', () => {
-    expect(statsBuildsHeaders()).toEqual(['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL']);
+  it('always returns SUCCESS, ERRORED, CANCELED, TOTAL, BUILD MIN — PLATFORM is a separate column now', () => {
+    expect(statsBuildsHeaders()).toEqual(['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL', 'BUILD MIN']);
   });
 });
