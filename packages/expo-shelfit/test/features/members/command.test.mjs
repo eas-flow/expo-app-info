@@ -94,8 +94,8 @@ describe('run --members', () => {
         ownerUserActor: null,
         membersPaginated: {
           edges: orgMembersEdges([
-            { id: 'm1', role: 'OWNER', username: 'it0' },
-            { id: 'm2', role: 'DEVELOPER', username: 'kohei-dev' },
+            { id: 'm1', role: 'OWNER', username: 'alice' },
+            { id: 'm2', role: 'DEVELOPER', username: 'bob' },
           ]),
           pageInfo: { hasNextPage: false, endCursor: null },
         },
@@ -106,8 +106,8 @@ describe('run --members', () => {
 
     const output = tableOutput();
     expect(output).toContain('2 row(s)');
-    expect(output).toContain('it0');
-    expect(output).toContain('kohei-dev');
+    expect(output).toContain('alice');
+    expect(output).toContain('bob');
     expect(output).toContain('OWNER');
     expect(output).toContain('DEVELOPER');
     // ORG appears on both rows, not just once.
@@ -221,7 +221,7 @@ describe('run --members', () => {
         { id: 'acc-1', name: 'myorg' },
         { id: 'acc-2', name: 'otherorg' },
       ]),
-      orgResponseFor('acc-1', 'it0'),
+      orgResponseFor('acc-1', 'alice'),
       orgResponseFor('acc-2', 'other-owner'),
     ]);
 
@@ -243,7 +243,7 @@ describe('run --members', () => {
         ]);
       }
       expect(body.variables.accountId).toBe('acc-1'); // otherorg must never be queried
-      return orgResponseFor('acc-1', 'it0');
+      return orgResponseFor('acc-1', 'alice');
     });
     vi.stubGlobal('fetch', fetchImpl);
 

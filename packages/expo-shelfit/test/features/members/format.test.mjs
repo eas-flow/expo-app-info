@@ -7,7 +7,7 @@ import {
 const orgMemberEntry = {
   account: 'myorg',
   isPersonal: false,
-  member: 'it0',
+  member: 'alice',
   role: 'OWNER',
   plan: 'Production',
   planId: 'production',
@@ -25,9 +25,9 @@ const orgMemberEntryTrialing = {
 };
 
 const personalEntry = {
-  account: 'it0',
+  account: 'alice',
   isPersonal: true,
-  member: 'it0',
+  member: 'alice',
   role: 'OWNER',
   plan: 'Free',
   planId: 'free',
@@ -55,7 +55,7 @@ const degradedEntry = {
 describe('toMembersDisplayRows', () => {
   it('maps an organization member to display strings, combining all three concurrency numbers', () => {
     expect(toMembersDisplayRows([orgMemberEntry])).toEqual([
-      ['myorg', 'it0', 'OWNER', 'Production', 'production', 'active', '2 / 1 / 1', '-'],
+      ['myorg', 'alice', 'OWNER', 'Production', 'production', 'active', '2 / 1 / 1', '-'],
     ]);
   });
 
@@ -67,7 +67,7 @@ describe('toMembersDisplayRows', () => {
   it('shows "-" in ORG for a personal account, even though the account is known', () => {
     const row = toMembersDisplayRows([personalEntry])[0];
     expect(row[0]).toBe('-');
-    expect(row[1]).toBe('it0');
+    expect(row[1]).toBe('alice');
     expect(row[2]).toBe('OWNER');
   });
 
@@ -109,7 +109,7 @@ describe('toMembersDisplayRows', () => {
   });
 
   it('never applies accountDisplayNames to a personal row, since ORG is always "-" there', () => {
-    const accountDisplayNames = new Map([['it0', 'Somebody Else']]);
+    const accountDisplayNames = new Map([['alice', 'Somebody Else']]);
     const row = toMembersDisplayRows([personalEntry], { accountDisplayNames })[0];
     expect(row[0]).toBe('-');
   });
