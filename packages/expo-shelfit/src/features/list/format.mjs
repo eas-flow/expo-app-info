@@ -17,6 +17,8 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map(), local 
     e.platform ?? '-',
     e.version ?? '-',
     e.build ?? '-',
+    e.sdk ?? '-',
+    e.cli ?? '-',
     statusLabel(e.status),
     formatBuildDate(e.lastBuildAt, { local }),
   ]);

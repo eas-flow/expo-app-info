@@ -36,6 +36,8 @@ export async function fetchListEntries(client, accounts, opts) {
           platform: null,
           version: null,
           build: null,
+          sdk: null,
+          cli: null,
           status: null,
           lastBuildAt: null,
         });
@@ -49,6 +51,8 @@ export async function fetchListEntries(client, accounts, opts) {
           platform: b.platform.toLowerCase(),
           version: b.appVersion ?? null,
           build: b.appBuildVersion ?? null,
+          sdk: b.sdkVersion ?? null,
+          cli: b.cliVersion ?? null,
           status: b.status ?? null,
           lastBuildAt: b.createdAt ?? null,
         });

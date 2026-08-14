@@ -19,6 +19,8 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
         'PLATFORM',
         'VERSION',
         'BUILD',
+        'SDK',
+        'CLI',
         'STATUS',
         buildDateHeader(opts.local),
       ],

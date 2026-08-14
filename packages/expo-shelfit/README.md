@@ -13,14 +13,14 @@ English | [日本語](./README.ja.md)
 ```
 $ npx @my-shelfio/expo-shelfit
 
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬──────────┬─────────────────────┐
-│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ STATUS   │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼──────────┼─────────────────────┤
-│ myorg   │ Storefront │ storefront │ ios      │ 3.2.2   │ 42    │ Errored  │ 2026/08/10-11:02:47 │
-│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ Finished │ 2026/06/30-14:05:02 │
-│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ Finished │ 2026/05/28-18:40:11 │
-│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -        │ -                   │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴──────────┴─────────────────────┘
+┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬────────┬─────────┬──────────┬─────────────────────┐
+│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ SDK    │ CLI     │ STATUS   │ BUILD DATE          │
+├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼────────┼─────────┼──────────┼─────────────────────┤
+│ myorg   │ Storefront │ storefront │ ios      │ 3.2.2   │ 42    │ 54.0.0 │ 18.0.4  │ Errored  │ 2026/08/10-11:02:47 │
+│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 53.0.0 │ 17.0.0  │ Finished │ 2026/06/30-14:05:02 │
+│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ 52.0.0 │ 16.13.4 │ Finished │ 2026/05/28-18:40:11 │
+│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -      │ -       │ -        │ -                   │
+└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴────────┴─────────┴──────────┴─────────────────────┘
 ```
 
 ## Install & Authentication
@@ -87,7 +87,7 @@ npx @my-shelfio/expo-shelfit --plan
 
 ## 🚀 Features
 
-- **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account
+- **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account, with its Expo SDK and eas-cli version alongside each build
 - **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest
 - **Track build results by month** — `--stats` aggregates success/errored/canceled build counts per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
 - **Check your Expo subscription** — `--plan` shows the current account subscription: plan, plan ID, status, concurrency, trial end
@@ -100,7 +100,7 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client
+3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set), including each build's `sdkVersion`/`cliVersion` for the `SDK`/`CLI` columns; the response is sorted by `createdAt` descending on the client
 
 `--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side.
 

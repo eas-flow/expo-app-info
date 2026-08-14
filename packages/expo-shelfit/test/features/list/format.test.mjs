@@ -19,6 +19,8 @@ const withBuild = {
   platform: 'ios',
   version: '3.2.1',
   build: '41',
+  sdk: '54.0.0',
+  cli: '18.0.4',
   status: 'FINISHED',
   lastBuildAt: '2026-07-26T00:00:00.000Z',
 };
@@ -30,6 +32,8 @@ const noBuild = {
   platform: null,
   version: null,
   build: null,
+  sdk: null,
+  cli: null,
   status: null,
   lastBuildAt: null,
 };
@@ -44,6 +48,8 @@ describe('toDisplayRows', () => {
         'ios',
         '3.2.1',
         '41',
+        '54.0.0',
+        '18.0.4',
         'Finished',
         '2026/07/26-00:00:00',
       ],
@@ -52,7 +58,7 @@ describe('toDisplayRows', () => {
 
   it('maps a no-build entry to "-" placeholders', () => {
     expect(toDisplayRows([noBuild])).toEqual([
-      ['myorg', 'Prototype', 'prototype', '-', '-', '-', '-', '-'],
+      ['myorg', 'Prototype', 'prototype', '-', '-', '-', '-', '-', '-', '-'],
     ]);
   });
 
@@ -71,22 +77,32 @@ describe('toDisplayRows', () => {
   });
 
   it('shows the UTC build date by default even with { local: false } omitted', () => {
-    expect(toDisplayRows([withBuild])[0][7]).toBe('2026/07/26-00:00:00');
+    expect(toDisplayRows([withBuild])[0][9]).toBe('2026/07/26-00:00:00');
   });
 
   it('shows the local build date when { local: true } is passed', () => {
     withTz('Asia/Tokyo', () => {
-      expect(toDisplayRows([withBuild], { local: true })[0][7]).toBe('2026/07/26-09:00:00');
+      expect(toDisplayRows([withBuild], { local: true })[0][9]).toBe('2026/07/26-09:00:00');
     });
   });
 
   it('shows Errored/Canceled for the STATUS column', () => {
-    expect(toDisplayRows([{ ...withBuild, status: 'ERRORED' }])[0][6]).toBe('Errored');
-    expect(toDisplayRows([{ ...withBuild, status: 'CANCELED' }])[0][6]).toBe('Canceled');
+    expect(toDisplayRows([{ ...withBuild, status: 'ERRORED' }])[0][8]).toBe('Errored');
+    expect(toDisplayRows([{ ...withBuild, status: 'CANCELED' }])[0][8]).toBe('Canceled');
   });
 
   it('falls back to the raw status lowercased when it is not FINISHED/ERRORED/CANCELED', () => {
-    expect(toDisplayRows([{ ...withBuild, status: 'IN_PROGRESS' }])[0][6]).toBe('in_progress');
+    expect(toDisplayRows([{ ...withBuild, status: 'IN_PROGRESS' }])[0][8]).toBe('in_progress');
+  });
+
+  it('shows SDK/CLI versions when present', () => {
+    expect(toDisplayRows([withBuild])[0][6]).toBe('54.0.0');
+    expect(toDisplayRows([withBuild])[0][7]).toBe('18.0.4');
+  });
+
+  it('shows "-" for SDK/CLI when absent', () => {
+    expect(toDisplayRows([noBuild])[0][6]).toBe('-');
+    expect(toDisplayRows([noBuild])[0][7]).toBe('-');
   });
 });
 

@@ -66,7 +66,7 @@ function buildAliases(platforms, { offset, fields }) {
 function buildsQuery(platforms) {
   return `query RecentBuilds($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ${buildAliases(platforms, { offset: 0, fields: 'platform status appVersion appBuildVersion createdAt' })}
+    ${buildAliases(platforms, { offset: 0, fields: 'platform status appVersion appBuildVersion sdkVersion cliVersion createdAt' })}
   } }
 }`;
 }
