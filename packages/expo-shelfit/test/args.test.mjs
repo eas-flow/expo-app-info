@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEPRECATED_USAGE_WARNING, parseArgs } from '../src/args.mjs';
+import { DEPRECATED_PLAN_WARNING, DEPRECATED_USAGE_WARNING, parseArgs } from '../src/args.mjs';
 import { CliError } from '../src/errors.mjs';
 
 const DEFAULTS = {
@@ -7,7 +7,7 @@ const DEFAULTS = {
   version: false,
   platform: null,
   stats: false,
-  plan: false,
+  members: false,
   history: null,
   month: null,
   account: null,
@@ -34,8 +34,8 @@ describe('parseArgs', () => {
     [['--history', '1'], { history: 1 }], // explicit default
     [['--history', '100'], { history: 100 }], // at MAX_HISTORY
     [['--history', '3', '--platform', 'ios'], { history: 3, platform: 'ios' }],
-    [['--plan'], { plan: true }],
-    [['--plan', '--platform', 'ios'], { plan: true, platform: 'ios' }],
+    [['--members'], { members: true }],
+    [['--members', '--platform', 'ios'], { members: true, platform: 'ios' }],
     [['--stats', '--month', '6'], { stats: true, month: 6 }],
     [['--stats', '--month=12'], { stats: true, month: 12 }], // at MAX_MONTH
     [['--account', 'myorg'], { account: 'myorg' }],
@@ -59,7 +59,7 @@ describe('parseArgs', () => {
       { stats: true, groupBy: 'app', app: 'storefront' },
     ],
     [['--account', 'myorg', '--stats'], { account: 'myorg', stats: true }],
-    [['--account', 'myorg', '--plan'], { account: 'myorg', plan: true }],
+    [['--account', 'myorg', '--members'], { account: 'myorg', members: true }],
     [['--app', 'storefront', '--stats'], { app: 'storefront', stats: true }],
     [['--local'], { local: true }],
     [['--local', '--history', '5'], { local: true, history: 5 }],
@@ -90,10 +90,10 @@ describe('parseArgs', () => {
     [['--history', '2.5'], /Invalid --history value/],
     [['--history', '101'], /Invalid --history value/],
     [['--stats', '--history', '5'], /--history cannot be combined with --stats/],
-    [['--plan', '--stats'], /--plan cannot be combined with --stats/],
-    [['--plan', '--history', '3'], /--plan cannot be combined with --history/],
+    [['--members', '--stats'], /--members cannot be combined with --stats/],
+    [['--members', '--history', '3'], /--members cannot be combined with --history/],
     // 3 exclusive modes at once: reports only the first colliding pair.
-    [['--stats', '--plan', '--history', '3'], /--plan cannot be combined with --history/],
+    [['--stats', '--members', '--history', '3'], /--members cannot be combined with --history/],
     [['--stats', '--month'], /--month requires a value/],
     [['--stats', '--month', 'abc'], /Invalid --month value/],
     [['--stats', '--month', '0'], /Invalid --month value/],
@@ -105,19 +105,19 @@ describe('parseArgs', () => {
     [['--stats', '--group-by', ''], /Invalid --group-by value/],
     // The message must not say "--groupBy": opts keys are camelCase, flags are not.
     [['--group-by', 'app'], /--group-by can only be used with --stats/],
-    [['--plan', '--group-by', 'app'], /--group-by can only be used with --stats/],
+    [['--members', '--group-by', 'app'], /--group-by can only be used with --stats/],
     [['--history', '5', '--group-by', 'app'], /--group-by can only be used with --stats/],
     [['--account'], /--account requires a value/],
     [['--account', ''], /--account requires a non-empty value/],
     [['--account', '   '], /--account requires a non-empty value/],
     [['--app'], /--app requires a value/],
     [['--app', ''], /--app requires a non-empty value/],
-    [['--app', 'storefront', '--plan'], /--app cannot be used with --plan/],
-    [['--plan', '--app', 'storefront'], /--app cannot be used with --plan/],
+    [['--app', 'storefront', '--members'], /--app cannot be used with --members/],
+    [['--members', '--app', 'storefront'], /--app cannot be used with --members/],
     [['--local', '--stats'], /--local cannot be used with --stats/],
     [['--stats', '--local'], /--local cannot be used with --stats/],
-    [['--local', '--plan'], /--local cannot be used with --plan/],
-    [['--plan', '--local'], /--local cannot be used with --plan/],
+    [['--local', '--members'], /--local cannot be used with --members/],
+    [['--members', '--local'], /--local cannot be used with --members/],
   ])('throws on %j', (argv, message) => {
     expect(() => parseArgs(argv)).toThrow(CliError);
     expect(() => parseArgs(argv)).toThrow(message);
@@ -153,7 +153,7 @@ describe('parseArgs — the deprecated --usage alias', () => {
   // Errors echo the flag the user actually typed — reporting --stats to
   // someone who wrote --usage would name a flag absent from their command.
   it.each([
-    [['--usage', '--plan'], /--plan cannot be combined with --usage\./],
+    [['--usage', '--members'], /--members cannot be combined with --usage\./],
     [['--usage', '--history', '5'], /--history cannot be combined with --usage\./],
     [['--usage', '--local'], /--local cannot be used with --usage\./],
   ])('reports --usage, not --stats, on %j', (argv, message) => {
@@ -161,7 +161,7 @@ describe('parseArgs — the deprecated --usage alias', () => {
   });
 
   it.each([
-    [['--stats', '--plan'], /--plan cannot be combined with --stats\./],
+    [['--stats', '--members'], /--members cannot be combined with --stats\./],
     [['--stats', '--history', '5'], /--history cannot be combined with --stats\./],
     [['--stats', '--local'], /--local cannot be used with --stats\./],
   ])('reports --stats on %j', (argv, message) => {
@@ -175,9 +175,64 @@ describe('parseArgs — the deprecated --usage alias', () => {
   });
 
   it('prefers --stats in errors when both flags are passed', () => {
-    expect(() => parseArgs(['--usage', '--stats', '--plan'])).toThrow(
-      '--plan cannot be combined with --stats.'
+    expect(() => parseArgs(['--usage', '--stats', '--members'])).toThrow(
+      '--members cannot be combined with --stats.'
     );
     expect(parseArgs(['--usage', '--stats']).warnings).toEqual([DEPRECATED_USAGE_WARNING]);
+  });
+});
+
+// --plan is the original name for --members. It still parses to exactly the
+// same opts, plus a deprecation warning; it goes away in the next major.
+describe('parseArgs — the deprecated --plan alias', () => {
+  it('parses to the same opts as --members, apart from the warning', () => {
+    const { warnings, ...deprecated } = parseArgs(['--plan', '--platform', 'ios']);
+    const { warnings: none, ...current } = parseArgs(['--members', '--platform', 'ios']);
+    expect(deprecated).toEqual(current);
+    expect(warnings).toEqual([DEPRECATED_PLAN_WARNING]);
+    expect(none).toEqual([]);
+  });
+
+  it('warns once even when --plan is repeated', () => {
+    expect(parseArgs(['--plan', '--plan']).warnings).toEqual([DEPRECATED_PLAN_WARNING]);
+  });
+
+  it('names --members in the warning so the message is actionable', () => {
+    expect(DEPRECATED_PLAN_WARNING).toMatch(/--plan is deprecated/);
+    expect(DEPRECATED_PLAN_WARNING).toMatch(/Use --members instead/);
+  });
+
+  // Errors echo the flag the user actually typed — reporting --members to
+  // someone who wrote --plan would name a flag absent from their command.
+  it.each([
+    [['--plan', '--stats'], /--plan cannot be combined with --stats\./],
+    [['--plan', '--history', '5'], /--plan cannot be combined with --history\./],
+    [['--plan', '--local'], /--local cannot be used with --plan\./],
+  ])('reports --plan, not --members, on %j', (argv, message) => {
+    expect(() => parseArgs(argv)).toThrow(message);
+  });
+
+  it.each([
+    [['--members', '--stats'], /--members cannot be combined with --stats\./],
+    [['--members', '--history', '5'], /--members cannot be combined with --history\./],
+    [['--members', '--local'], /--local cannot be used with --members\./],
+  ])('reports --members on %j', (argv, message) => {
+    expect(() => parseArgs(argv)).toThrow(message);
+  });
+
+  it('prefers --members in errors when both flags are passed', () => {
+    expect(() => parseArgs(['--plan', '--members', '--stats'])).toThrow(
+      '--members cannot be combined with --stats.'
+    );
+    expect(parseArgs(['--plan', '--members']).warnings).toEqual([DEPRECATED_PLAN_WARNING]);
+  });
+
+  // Both deprecated aliases at once still collide as an exclusive-mode
+  // pair — --usage implies --stats, --plan implies --members — and each
+  // error echoes its own typed alias, not the current name.
+  it('echoes both deprecated aliases when --usage and --plan collide', () => {
+    expect(() => parseArgs(['--usage', '--plan'])).toThrow(
+      '--plan cannot be combined with --usage.'
+    );
   });
 });

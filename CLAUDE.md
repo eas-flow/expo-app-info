@@ -112,12 +112,10 @@ between features (e.g. `features/stats/` must not import from
 `features/list/`).
 
 **`command.mjs` is the only place that calls `console.*`.** `service.mjs`
-(list/stats) fetches and aggregates, returning plain data plus a `warnings`
-string array — no console output — so it can be tested directly against a
-fake client instead of a mocked `fetch`. `command.mjs` passes that data to
-`format.mjs`, renders the table, and prints warnings/footers. `plan/` has no
-`service.mjs`, so `command.mjs` does both, but still owns every `console.*`
-call in the feature.
+fetches and aggregates, returning plain data plus a `warnings` string array —
+no console output — so it can be tested directly against a fake client
+instead of a mocked `fetch`. `command.mjs` passes that data to `format.mjs`,
+renders the table, and prints warnings/footers.
 
 **`src/*` never calls `process.exit` or reads `process.argv` directly**, so
 everything stays unit-testable. Only `bin/cli.mjs` is allowed to exit the
@@ -128,29 +126,32 @@ and converts them into a printed message + exit code.
 credential — never read from `argv`, never written to disk. Missing token
 throws `CliError` in `resolveAuthHeaders` (`src/cli.mjs`).
 
-**Display modes are mutually exclusive**: `--stats`, `--plan`, and
+**Display modes are mutually exclusive**: `--stats`, `--members`, and
 `--history` cannot be combined with each other — combining any two is a
 `CliError`.
 
-**`--usage` is a deprecated alias for `--stats`** (removed in the next
-major). `parseArgs` sets the same `opts.stats` for both and appends
-`DEPRECATED_USAGE_WARNING` to `opts.warnings` rather than printing it, so
-`parseArgs` stays I/O-free. Error messages echo whichever name was typed
-(`args.mjs#modeFlag`), so `--usage --plan` must not report `--stats`.
+**`--usage` is a deprecated alias for `--stats`, `--plan` is a deprecated
+alias for `--members`** (both removed in the next major). `parseArgs` sets
+the same `opts.stats`/`opts.members` for each pair and appends
+`DEPRECATED_USAGE_WARNING`/`DEPRECATED_PLAN_WARNING` to `opts.warnings`
+rather than printing it, so `parseArgs` stays I/O-free. Error messages echo
+whichever name was typed (`args.mjs#modeFlag`, keyed by an `aliasFlags`
+object with one entry per mode that has a deprecated alias), so
+`--usage --plan` must not report `--stats --members`.
 
 **`--account`/`--app` narrow client-side** (`src/shared/filter.mjs`), applied
 *before* the expensive per-app build fetch: `--account` right after step 1
 below, `--app` right after step 2. Both match slug or EAS Display name
 (case-insensitive, exact); `--app`'s ambiguity is scoped to one account, so a
 Display name shared across accounts matches in both. `--app` is incompatible
-with `--plan`, which skips step 2 entirely. No match throws `CliError` with
-Levenshtein "Did you mean" suggestions.
+with `--members`, which skips step 2 entirely. No match throws `CliError`
+with Levenshtein "Did you mean" suggestions.
 
 **`--local` switches only the BUILD DATE display timestamp** to local time
 (`src/shared/dates.mjs#formatBuildDate`). Every UTC boundary (`calendarMonths`,
 `inclusiveEnd`, `isoDate`) stays UTC unconditionally, since `--stats`'s month
 bucketing compares them directly against build `createdAt`. Incompatible with
-`--stats`/`--plan`, neither of which has a BUILD DATE column.
+`--stats`/`--members`, neither of which has a BUILD DATE column.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
 concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
@@ -161,11 +162,24 @@ concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
 
 `--stats` reuses steps 1–2 but instead pages through every finished build per
 app and buckets client-side by platform + UTC calendar month
-(`countBuildsByMonth`) — it does not query billing-scoped fields
-(`subscription`/`billingPeriod`/`usageMetrics`), since those are tied to
-EAS's billing cycle and can't be sliced into arbitrary calendar ranges.
-`--plan` skips steps 2–3 and queries only `account.byId(...) { subscription }`
-per account, in parallel.
+(`countBuildsByMonth`), also summing each build's `metrics.buildDuration`
+(EAS queue wait deliberately excluded) into the `BUILD MINUTES` column — it
+does not query billing-scoped fields (`subscription`/`billingPeriod`/
+`usageMetrics`), since those are tied to EAS's billing cycle and can't be
+sliced into arbitrary calendar ranges.
+
+`--members` skips steps 2–3 and queries only `account.byId(...) {
+subscription ownerUserActor memberStats membersPaginated }` per account, in
+parallel — one request per account regardless of member count, paginating
+`membersPaginated` further only when an organization exceeds one page.
+`Account.ownerUserActor` is non-null exactly for personal accounts (confirmed
+against the real API), so `src/features/members/service.mjs` branches on it:
+a personal account becomes one row (`ORG` "-", `MEMBER`/`ROLE` = the owner),
+an organization becomes one row per member. A robot member has no
+`userActor` (only `User` actors get one) and is named via `actor`'s `Robot`
+inline fragment instead — that fragment is only valid on `actor` (typed
+`Actor`, the real interface), not on `ownerUserActor` (typed `UserActor`),
+which errors if a `... on Robot` fragment is added to it.
 
 **`--group-by <account|app>` picks what a `--stats` row counts**
 (`--stats`-only, default `account`). `app` swaps the ACCOUNT column for APP

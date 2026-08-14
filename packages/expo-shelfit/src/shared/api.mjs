@@ -71,15 +71,38 @@ function buildsQuery(platforms) {
 }`;
 }
 
-// Billing-scoped, so a token without billing permission errors per account —
-// the CLI degrades that to "-" rather than failing the run. No price field: not
-// confirmed to exist against a real token. `--stats` deliberately queries none
-// of this, since billing-period metrics can't be sliced into calendar ranges.
-const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
+// Well under whatever cap the API enforces on membersPaginated; kept the
+// same as BUILD_PAGE_SIZE's role for builds — one page covers almost every
+// account, and paging is cheap when it's not.
+const MEMBERS_PAGE_SIZE = 100;
+
+// subscription + membership fields all live on Account, so one query covers
+// --members entirely — no extra request even when an org's members need a
+// second page. Billing-scoped `subscription`, so a token without billing
+// permission errors per account; the CLI degrades that to "-" rather than
+// failing the run. No price field: not confirmed to exist against a real
+// token. `--stats` deliberately queries none of this, since billing-period
+// metrics can't be sliced into calendar ranges.
+//
+// `ownerUserActor` is non-null exactly for personal accounts (confirmed
+// against the real API) — organizations have no single owning user. A
+// member's `userActor` is set only when that member is a human (`User`);
+// a robot member has `userActor: null` and is named via `actor`'s `Robot`
+// fragment instead. This inline fragment is safe on `actor` (typed `Actor`,
+// the real interface) even though the same fragment on `ownerUserActor`
+// (typed `UserActor`, not `Actor`) fails with "can never be of type
+// Robot" — confirmed by probing the real API.
+const Q_ACCOUNT_MEMBERS = `query AccountMembers($accountId: String!, $after: String) {
   account { byId(accountId: $accountId) { id
     subscription {
       id planId name status trialEnd
       concurrencies { total ios android }
+    }
+    ownerUserActor { id username }
+    memberStats { totalCount }
+    membersPaginated(first: ${MEMBERS_PAGE_SIZE}, after: $after) {
+      edges { node { id role userActor { id username } actor { id ... on Robot { firstName } } } }
+      pageInfo { hasNextPage endCursor }
     }
   } }
 }`;
@@ -324,11 +347,49 @@ export function createApiClient({
     return { counts, missingMetricsCount };
   }
 
-  /** Throws like everything else here; src/features/plan/command.mjs treats a missing plan as non-fatal. */
-  async function fetchSubscription(accountId) {
-    const data = await gql(Q_SUBSCRIPTION, { accountId });
-    return data?.account?.byId?.subscription ?? null;
+  /**
+   * Subscription + personal-vs-organization + membership info for one
+   * account, paginating `membersPaginated` when an org exceeds
+   * MEMBERS_PAGE_SIZE. Returns `null` (not a throw) when the account itself
+   * is missing from an otherwise-2xx response — mirrors the old
+   * `fetchSubscription`'s degrade-gracefully behavior, since
+   * src/features/members/service.mjs treats a missing account as non-fatal,
+   * same as a genuinely failed one.
+   *
+   * Throws ApiError for a GraphQL error (via `gql`) or a malformed
+   * mid-pagination response — src/features/members/service.mjs degrades
+   * that account's row rather than failing the run.
+   */
+  async function fetchAccountMembers(accountId) {
+    let after = null;
+    let result = null;
+    const members = [];
+
+    for (;;) {
+      const data = await gql(Q_ACCOUNT_MEMBERS, { accountId, after });
+      const account = data?.account?.byId;
+      if (!account) return null;
+
+      if (!result) {
+        result = {
+          subscription: account.subscription ?? null,
+          ownerUserActor: account.ownerUserActor ?? null,
+          totalMemberCount: account.memberStats?.totalCount ?? null,
+        };
+      }
+
+      const page = account.membersPaginated;
+      if (!page || !Array.isArray(page.edges)) {
+        throw new ApiError(`AccountMembers: unexpected response shape for account ${accountId}`);
+      }
+      members.push(...page.edges.map((e) => e.node));
+
+      if (!page.pageInfo.hasNextPage) break;
+      after = page.pageInfo.endCursor;
+    }
+
+    return { ...result, members };
   }
 
-  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
+  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchAccountMembers, countBuildsByMonth };
 }

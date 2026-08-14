@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { HELP, parseArgs } from './args.mjs';
 import { CliError } from './errors.mjs';
 import { runList } from './features/list/command.mjs';
-import { runPlan } from './features/plan/command.mjs';
+import { runMembers } from './features/members/command.mjs';
 import { runStats } from './features/stats/command.mjs';
 import { createApiClient } from './shared/api.mjs';
 import { resolveAccount } from './shared/filter.mjs';
@@ -71,8 +71,8 @@ export async function run(argv = process.argv.slice(2)) {
     return;
   }
 
-  if (opts.plan) {
-    await runPlan(client, accounts, opts, accountDisplayNames);
+  if (opts.members) {
+    await runMembers(client, accounts, opts, accountDisplayNames);
     return;
   }
 

@@ -77,8 +77,8 @@ npx @my-shelfio/expo-shelfit --history 5
 npx @my-shelfio/expo-shelfit --stats                            
 npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 
-# Subscription plan
-npx @my-shelfio/expo-shelfit --plan
+# Account and member info
+npx @my-shelfio/expo-shelfit --members
 ```
 
 ```
@@ -92,16 +92,28 @@ $ npx @my-shelfio/expo-shelfit --stats
 └──────────┴──────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┴───────────────┘
 ```
 
+```
+$ npx @my-shelfio/expo-shelfit --members
+
+┌──────────┬───────────┬───────────┬──────┬─────────┬────────┬─────────────────────────────┬───────────┐
+│ ORG      │ MEMBER    │ ROLE      │ PLAN │ PLAN ID │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
+├──────────┼───────────┼───────────┼──────┼─────────┼────────┼─────────────────────────────┼───────────┤
+│ itokohei │ it0       │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
+│ itokohei │ kohei-dev │ DEVELOPER │ Free │ free    │ -      │ -                           │ -         │
+│ -        │ it0       │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
+└──────────┴───────────┴───────────┴──────┴─────────┴────────┴─────────────────────────────┴───────────┘
+```
+
 #### Deprecated
 
-`--usage` is a deprecated alias for `--stats`. It still works and prints the identical table, but writes a deprecation warning to stderr and will be removed in the next major version.
+`--usage` is a deprecated alias for `--stats`, and `--plan` is a deprecated alias for `--members`. Both still work and print the identical table, but write a deprecation warning to stderr and will be removed in the next major version.
 
 ## 🚀 Features
 
 - **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account, with its Expo SDK and eas-cli version alongside each build
 - **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest
 - **Track build results and time by month** — `--stats` aggregates success/errored/canceled build counts and total build time (`BUILD MINUTES`, queue wait excluded) per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
-- **Check your Expo subscription** — `--plan` shows the current account subscription: plan, plan ID, status, concurrency, trial end
+- **See your accounts, their members, and your subscription** — `--members` shows one row per organization member (with their `ROLE`) plus the current subscription (plan, plan ID, status, concurrency, trial end); a personal account gets one row with `ORG` as `-`
 
 ## 📚 Documentation
 
@@ -114,6 +126,8 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set), including each build's `sdkVersion`/`cliVersion` for the `SDK`/`CLI` columns; the response is sorted by `createdAt` descending on the client
 
 `--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side, including each build's `metrics.buildDuration` for the `BUILD MINUTES` column (queue wait is deliberately excluded — see the FAQ).
+
+`--members` skips Steps 2–3 and queries only `account.byId(...) { subscription ownerUserActor memberStats membersPaginated }` per account, in parallel — one query per account regardless of member count, paginating further only for an organization with more members than one page holds. `ownerUserActor` is non-null exactly for personal accounts (confirmed against the real API); a personal account contributes one row (`ORG` "-"), an organization contributes one row per member from `membersPaginated`.
 
 ### Learn More
 
@@ -134,9 +148,17 @@ A robot token can only see the account that issued it. Use a personal access tok
 
 `--stats` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
 
-**Why do some accounts show `-` in the `--plan` columns?**
+**Why do some rows show `-` in the `--members` plan columns?**
 
-Plan data is billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan columns and the reason goes to stderr, rather than failing the run.
+Plan data is billing-scoped. If the token lacks billing or membership permission on an account, that account degrades to one row (`ORG` still shows the account name, since a failure happens before this CLI can tell whether it's personal or organizational) with `-` in the remaining columns, and the reason goes to stderr, rather than failing the run.
+
+**Why is `ORG` sometimes `-` under `--members`?**
+
+EAS creates a personal account for every sign-up, and it has no organization — `Account.ownerUserActor` is non-null exactly for these. Rather than filtering personal accounts out (which would leave an empty table for anyone with no organizations), `--members` keeps one row per personal account with `ORG` as `-` and `MEMBER`/`ROLE` set to the owner. The same person can therefore appear twice — once as an organization's member, once as their personal account's owner — since each row's `PLAN` columns describe a different billing subject.
+
+**Why does a robot member show `(robot)` in `MEMBER`?**
+
+A robot (e.g. a CI bot) has no `username` — only human members do — so it's identified by its `firstName` instead, marked `(robot)` so it isn't mistaken for a human name. This avoids a separate `TYPE` column for what's otherwise a rare case.
 
 **What if `STATUS` shows something other than `Finished`/`Errored`/`Canceled`?**
 
