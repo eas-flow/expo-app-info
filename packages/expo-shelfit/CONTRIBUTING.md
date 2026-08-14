@@ -61,12 +61,14 @@ src/shared/
                       slug/Display name match, "Did you mean" suggestions)
   dates.mjs              UTC date helpers (calendar-month boundaries, display
                       formatting) — every date this CLI shows is UTC
-  cells.mjs               cellOrDash, shared by stats/members' format.mjs
+  cells.mjs               cellOrDash/versionCell/labelDateCell, shared by
+                      list/stats/members' format.mjs
   terminal/
     render.mjs              Table rendering and column widths
     progress.mjs            TTY-only progress reporting on stderr
 src/features/
-  list/    command.mjs + service.mjs + format.mjs — default app list (and --history)
+  list/    command.mjs + service.mjs + format.mjs — default app list, one row
+                      per app x platform with BUILD/SUBMIT/UPDATE (and --history)
   stats/   command.mjs + service.mjs + format.mjs — --stats
   members/ command.mjs + service.mjs + format.mjs — --members (personal/org accounts)
 test/                 Vitest tests, mirroring src/ 1:1 (there is no

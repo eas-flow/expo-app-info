@@ -23,6 +23,9 @@ jobs:
         with:
           node-version: 22
 
+      # The default app list's AppOverview query aliases `submissions`/
+      # `updateGroups` alongside `builds` in the same app.byId request, so
+      # this one step already covers all three (BUILD/SUBMIT/UPDATE).
       - name: Run against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs
         env:
@@ -46,26 +49,27 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Q_BUILDS gained a $limit variable for --history; a separate step so
-      # a break in that variable/shape is distinguishable from a break in
-      # the plain (limit: 1) query above.
+      # AppOverview's builds aliases take a $limit variable for --history; a
+      # separate step so a break in that variable/shape is distinguishable
+      # from a break in the plain (limit: 1) query above.
       - name: Run --history against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs --history 5
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --plan queries `subscription` on its own, without
-      # `billingPeriod`/`usageMetrics` — a separate step so a break here is
-      # distinguishable from a break in --stats' larger query above.
-      - name: Run --plan against the live EAS API
-        run: node packages/expo-shelfit/bin/cli.mjs --plan
+      # --members queries `subscription`/`ownerUserActor`/`membersPaginated`
+      # on their own, without `billingPeriod`/`usageMetrics` — a separate
+      # step so a break here is distinguishable from a break in --stats'
+      # larger query above.
+      - name: Run --members against the live EAS API
+        run: node packages/expo-shelfit/bin/cli.mjs --members
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # --platform narrows the RecentBuilds/BuildsPage query to a single
-      # `ios:`/`android:` alias instead of always requesting both — a
-      # separate step so a break in that single-alias query shape is
-      # distinguishable from a break in the always-both queries above.
+      # --platform narrows AppOverview/BuildsPage to a single platform's
+      # aliases instead of always requesting both — a separate step so a
+      # break in that single-platform query shape is distinguishable from a
+      # break in the always-both queries above.
       - name: Run --platform ios against the live EAS API
         run: node packages/expo-shelfit/bin/cli.mjs --platform ios
         env:

@@ -2,7 +2,8 @@
 // no machine-readable output mode; the table is the only supported output
 // and carries no compatibility guarantee.
 
-import { formatBuildDate, localOffset } from '../../shared/dates.mjs';
+import { labelDateCell, versionCell } from '../../shared/cells.mjs';
+import { localOffset } from '../../shared/dates.mjs';
 
 /**
  * `accountDisplayNames` (account slug -> EAS "Display name") is a cosmetic,
@@ -13,14 +14,13 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map(), local 
   return entries.map((e) => [
     accountDisplayNames.get(e.account) ?? e.account,
     e.app,
-    e.slug,
     e.platform ?? '-',
-    e.version ?? '-',
-    e.build ?? '-',
+    versionCell(e.version, e.build),
     e.sdk ?? '-',
     e.cli ?? '-',
-    statusLabel(e.status),
-    formatBuildDate(e.lastBuildAt, { local }),
+    labelDateCell(buildStatusLabel(e.status), e.lastBuildAt, { local }),
+    labelDateCell(submissionStatusLabel(e.submissionStatus), e.submissionCreatedAt, { local }),
+    labelDateCell(e.updateBranch, e.updateCreatedAt, { local }),
   ]);
 }
 
@@ -29,18 +29,28 @@ export function toDisplayRows(entries, { accountDisplayNames = new Map(), local 
 // observed — falls back to the raw value lowercased rather than being
 // guessed at, so an unrecognized status still shows something instead of
 // breaking or disappearing.
-const STATUS_LABELS = { FINISHED: 'Finished', ERRORED: 'Errored', CANCELED: 'Canceled' };
+const BUILD_STATUS_LABELS = { FINISHED: 'Finished', ERRORED: 'Errored', CANCELED: 'Canceled' };
 
-function statusLabel(status) {
-  if (!status) return '-';
-  return STATUS_LABELS[status] ?? status.toLowerCase();
+function buildStatusLabel(status) {
+  if (!status) return null;
+  return BUILD_STATUS_LABELS[status] ?? status.toLowerCase();
+}
+
+// Only these 2 have been confirmed against the real API (see the
+// SubmissionStatus values observed while building the SUBMIT column);
+// anything else falls back the same way BUILD_STATUS_LABELS does.
+const SUBMISSION_STATUS_LABELS = { FINISHED: 'Finished', IN_QUEUE: 'In queue' };
+
+function submissionStatusLabel(status) {
+  if (!status) return null;
+  return SUBMISSION_STATUS_LABELS[status] ?? status.toLowerCase();
 }
 
 /**
- * "BUILD DATE (+09:00)" with --local, so the column is self-describing
- * without a separate legend. See shared/dates.mjs#localOffset for why the
- * offset is "as of now", not per row.
+ * "BUILD (+09:00)" with --local — same suffix on SUBMIT/UPDATE — so each
+ * column is self-describing without a separate legend. See
+ * shared/dates.mjs#localOffset for why the offset is "as of now", not per row.
  */
-export function buildDateHeader(local = false) {
-  return local ? `BUILD DATE (${localOffset()})` : 'BUILD DATE';
+export function dateColumnHeader(name, local = false) {
+  return local ? `${name} (${localOffset()})` : name;
 }

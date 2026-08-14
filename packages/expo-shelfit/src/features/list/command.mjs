@@ -1,5 +1,5 @@
 import { dim, renderTable } from '../../shared/terminal/render.mjs';
-import { buildDateHeader, toDisplayRows } from './format.mjs';
+import { dateColumnHeader, toDisplayRows } from './format.mjs';
 import { fetchListEntries } from './service.mjs';
 
 export async function runList(client, accounts, opts, accountDisplayNames) {
@@ -15,14 +15,13 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
       [
         'ACCOUNT',
         'APP',
-        'SLUG',
         'PLATFORM',
         'VERSION',
-        'BUILD',
         'SDK',
         'CLI',
-        'STATUS',
-        buildDateHeader(opts.local),
+        dateColumnHeader('BUILD', opts.local),
+        dateColumnHeader('SUBMIT', opts.local),
+        dateColumnHeader('UPDATE', opts.local),
       ],
       toDisplayRows(filtered, { accountDisplayNames, local: opts.local })
     )
@@ -30,9 +29,11 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
   // `--history 1` must read identically to passing no flag at all — same
   // query, same rows — so the footer keys off the effective count.
   const effectiveHistory = opts.history ?? 1;
-  const footerNote =
+  const buildNote =
     effectiveHistory > 1
-      ? `VERSION/BUILD/STATUS = latest ${effectiveHistory} EAS build(s) per platform, newest first, regardless of status.`
-      : 'VERSION/BUILD/STATUS = latest EAS build attempt, regardless of status.';
-  console.log(dim(`\n  ${filtered.length} row(s). ${footerNote}`));
+      ? `VERSION/BUILD = latest ${effectiveHistory} EAS build(s) per platform, newest first, regardless of status.`
+      : 'VERSION/BUILD = latest EAS build attempt, regardless of status.';
+  const shipNote =
+    "SUBMIT/UPDATE = that platform's latest submission/update, the same on every row regardless of --history.";
+  console.log(dim(`\n  ${filtered.length} row(s). ${buildNote} ${shipNote}`));
 }
