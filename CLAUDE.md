@@ -163,9 +163,10 @@ concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
 3. `app.byId(...)` (`src/shared/api.mjs#fetchAppOverview`, one request per app) — `builds`, `submissions`, and `updateGroups`, each aliased per platform as `<platform>Builds`/`<platform>Submissions`/`<platform>Updates` in the *same* query, so adding SUBMIT/UPDATE cost no extra request. `builds` also carries each build's `sdkVersion`/`cliVersion` (the `SDK`/`CLI` columns, always shown, no flag gates them). `submissions`/`updateGroups` are always fetched with `limit: 1` — they describe a platform's *current* SUBMIT/UPDATE state, not a specific build attempt, so `--history`'s multiple build rows for one platform all show the same SUBMIT/UPDATE value. `submissions`' `filter` argument is required by the API (unlike `builds`', which is optional) — the per-platform alias satisfies that naturally. `updateGroups` returns `[[Update]]`; with a platform filter each inner array holds at most one entry, so the client flattens one level. Every response is client-sorted by `createdAt` descending since the API's order is undocumented
 
-`--stats` reuses steps 1–2 but instead pages through every finished build per
-app and buckets client-side by platform + UTC calendar month
-(`countBuildsByMonth`), also summing each build's `metrics.buildDuration`
+`--stats` reuses steps 1–2 but instead pages through every build per app and
+buckets client-side by platform + UTC calendar month (`countBuildsByMonth`,
+which counts FINISHED/ERRORED/CANCELED and leaves a build in any other status
+out of every bucket), also summing each build's `metrics.buildDuration`
 (EAS queue wait deliberately excluded) into the `BUILD MINUTES` column — it
 does not query billing-scoped fields (`subscription`/`billingPeriod`/
 `usageMetrics`), since those are tied to EAS's billing cycle and can't be

@@ -61,7 +61,7 @@ See [SECURITY.md](../../.github/SECURITY.md) to report a vulnerability privately
 npx @my-shelfio/expo-shelfit --help
 npx @my-shelfio/expo-shelfit --version
 
-# Filter by 
+# Narrow the list
 npx @my-shelfio/expo-shelfit --platform ios
 npx @my-shelfio/expo-shelfit --account myorg
 npx @my-shelfio/expo-shelfit --app storefront
@@ -73,7 +73,7 @@ npx @my-shelfio/expo-shelfit --local
 npx @my-shelfio/expo-shelfit --history 5
 
 # Monthly stats
-npx @my-shelfio/expo-shelfit --stats                            
+npx @my-shelfio/expo-shelfit --stats
 npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 
 # Account and member info
