@@ -172,7 +172,7 @@ does not query billing-scoped fields (`subscription`/`billingPeriod`/
 sliced into arbitrary calendar ranges.
 
 `--members` skips steps 2–3 and queries only `account.byId(...) {
-subscription ownerUserActor memberStats membersPaginated }` per account, in
+subscription ownerUserActor membersPaginated }` per account, in
 parallel — one request per account regardless of member count, paginating
 `membersPaginated` further only when an organization exceeds one page.
 `Account.ownerUserActor` is non-null exactly for personal accounts (confirmed

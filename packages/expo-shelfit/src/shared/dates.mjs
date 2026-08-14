@@ -33,9 +33,9 @@ export function isoDate(iso) {
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * EAS's `billingPeriod.end` is *exclusive* — the instant the next period
- * starts (a July period ends at 2026-08-01T00:00:00Z). Shown as-is that reads
- * like "runs into August", so the table shows `end` minus one day instead.
+ * `calendarMonths`' `end` is *exclusive* — the instant the next month starts
+ * (July ends at 2026-08-01T00:00:00Z). Shown as-is in --stats' PERIOD that
+ * reads like "runs into August", so the column shows `end` minus one day.
  */
 export function inclusiveEnd(iso) {
   return new Date(new Date(iso).getTime() - ONE_DAY_MS).toISOString();

@@ -32,7 +32,7 @@ function membersConcurrencyCell(entry, platform) {
   const { concurrencyTotal, concurrencyIos, concurrencyAndroid } = entry;
   if (platform === 'ios') return cellOrDash(concurrencyIos);
   if (platform === 'android') return cellOrDash(concurrencyAndroid);
-  if (cellOrDash(concurrencyTotal) === '-') return '-';
+  if (concurrencyTotal === null || concurrencyTotal === undefined) return '-';
   return `${concurrencyTotal} / ${concurrencyIos} / ${concurrencyAndroid}`;
 }
 

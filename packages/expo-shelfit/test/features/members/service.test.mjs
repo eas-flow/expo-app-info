@@ -32,7 +32,6 @@ describe('fetchMembersEntries — personal accounts', () => {
       'acc-1': {
         subscription,
         ownerUserActor: { username: 'it0' },
-        totalMemberCount: 0,
         members: [],
       },
     });
@@ -65,7 +64,6 @@ describe('fetchMembersEntries — organization accounts', () => {
       'acc-1': {
         subscription,
         ownerUserActor: null,
-        totalMemberCount: 2,
         members: [
           { id: 'm1', role: 'OWNER', userActor: { username: 'it0' }, actor: {} },
           { id: 'm2', role: 'DEVELOPER', userActor: { username: 'kohei-dev' }, actor: {} },
@@ -90,7 +88,6 @@ describe('fetchMembersEntries — organization accounts', () => {
       'acc-1': {
         subscription,
         ownerUserActor: null,
-        totalMemberCount: 1,
         members: [{ id: 'm1', role: 'DEVELOPER', userActor: null, actor: { firstName: 'ci-bot' } }],
       },
     });
@@ -103,7 +100,7 @@ describe('fetchMembersEntries — organization accounts', () => {
   it('emits one placeholder row (MEMBER/ROLE null) for an organization with zero members, rather than omitting it', async () => {
     const accounts = [{ id: 'acc-1', name: 'myorg' }];
     const client = makeClient({
-      'acc-1': { subscription, ownerUserActor: null, totalMemberCount: 0, members: [] },
+      'acc-1': { subscription, ownerUserActor: null, members: [] },
     });
 
     const { entries } = await fetchMembersEntries(client, accounts);
