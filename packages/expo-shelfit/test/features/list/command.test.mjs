@@ -9,6 +9,8 @@ const iosBuild = (overrides = {}) => ({
   status: 'FINISHED',
   appVersion: '3.2.1',
   appBuildVersion: '41',
+  sdkVersion: '54.0.0',
+  cliVersion: '18.0.4',
   createdAt: '2026-07-20T00:00:00.000Z',
   ...overrides,
 });
@@ -81,6 +83,10 @@ describe('run', () => {
 
     expect(tableOutput()).toContain('storefront');
     expect(tableOutput()).toContain('3.2.1');
+    expect(tableOutput()).toContain('SDK');
+    expect(tableOutput()).toContain('CLI');
+    expect(tableOutput()).toContain('54.0.0');
+    expect(tableOutput()).toContain('18.0.4');
     expect(tableOutput()).toContain('STATUS');
     expect(tableOutput()).toContain('Finished');
     expect(tableOutput()).toContain('BUILD DATE');

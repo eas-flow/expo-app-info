@@ -157,7 +157,7 @@ concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
 `src/shared/concurrency.mjs`):
 1. `meActor { accounts }` — every account the token can see
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(...)` — most recent build(s) per platform, client-sorted by `createdAt` descending since the API's order is undocumented
+3. `app.byId(...).builds(...)` — most recent build(s) per platform, client-sorted by `createdAt` descending since the API's order is undocumented; the query also fetches each build's `sdkVersion`/`cliVersion`, always shown as the `SDK`/`CLI` table columns (no extra request, always displayed — no flag gates them)
 
 `--stats` reuses steps 1–2 but instead pages through every finished build per
 app and buckets client-side by platform + UTC calendar month
