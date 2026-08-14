@@ -243,38 +243,52 @@ describe('fetchApps', () => {
   });
 });
 
-describe('fetchBuilds', () => {
+// Minimal response builder for AppOverview: `{ ios, android }`, each
+// `{ builds, submissions, updates }` (all default `[]`) — undefined omits
+// that platform's keys entirely, matching what --platform actually requests.
+function overviewResponse({ appId = 'app-1', ios, android } = {}) {
+  const byId = { id: appId };
+  for (const [prefix, data] of [
+    ['ios', ios],
+    ['android', android],
+  ]) {
+    if (data === undefined) continue;
+    byId[`${prefix}Builds`] = data.builds ?? [];
+    byId[`${prefix}Submissions`] = data.submissions ?? [];
+    byId[`${prefix}Updates`] = data.updates ?? [];
+  }
+  return jsonResponse({ data: { app: { byId } } });
+}
+
+describe('fetchAppOverview', () => {
   it('defaults to limit 1 and merges ios/android builds into one array', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              ios: [
-                {
-                  platform: 'IOS',
-                  appVersion: '3.2.1',
-                  appBuildVersion: '41',
-                  createdAt: '2026-07-01T00:00:00.000Z',
-                },
-              ],
-              android: [
-                {
-                  platform: 'ANDROID',
-                  appVersion: '3.2.0',
-                  appBuildVersion: '38',
-                  createdAt: '2026-06-01T00:00:00.000Z',
-                },
-              ],
+      overviewResponse({
+        ios: {
+          builds: [
+            {
+              platform: 'IOS',
+              appVersion: '3.2.1',
+              appBuildVersion: '41',
+              createdAt: '2026-07-01T00:00:00.000Z',
             },
-          },
+          ],
+        },
+        android: {
+          builds: [
+            {
+              platform: 'ANDROID',
+              appVersion: '3.2.0',
+              appBuildVersion: '38',
+              createdAt: '2026-06-01T00:00:00.000Z',
+            },
+          ],
         },
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1');
+    const { builds } = await client.fetchAppOverview('app-1');
 
     expect(builds).toEqual([
       {
@@ -296,115 +310,206 @@ describe('fetchBuilds', () => {
   });
 
   it('passes a custom limit through to the GraphQL variables', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ data: { app: { byId: { id: 'app-1', ios: [], android: [] } } } })
-      );
+    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await client.fetchBuilds('app-1', { limit: 5 });
+    await client.fetchAppOverview('app-1', { limit: 5 });
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.variables).toEqual({ appId: 'app-1', limit: 5 });
   });
 
-  it('returns an empty array when the app has no finished builds on either platform', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ data: { app: { byId: { id: 'app-1', ios: [], android: [] } } } })
-      );
+  it('returns an empty builds array and null submission/update per platform when nothing exists', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchBuilds('app-1')).resolves.toEqual([]);
+    await expect(client.fetchAppOverview('app-1')).resolves.toEqual({
+      builds: [],
+      submissionsByPlatform: { ios: null, android: null },
+      updatesByPlatform: { ios: null, android: null },
+    });
   });
 
-  it('sorts each platform by createdAt descending regardless of the order the API returns them in', async () => {
+  it('sorts each platform’s builds by createdAt descending regardless of the order the API returns them in', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              // Deliberately out of order, to prove the client does not
-              // just trust the API's response order.
-              ios: [
-                {
-                  platform: 'IOS',
-                  appVersion: '1.0.0',
-                  appBuildVersion: '10',
-                  createdAt: '2026-05-01T00:00:00.000Z',
-                },
-                {
-                  platform: 'IOS',
-                  appVersion: '3.0.0',
-                  appBuildVersion: '30',
-                  createdAt: '2026-07-01T00:00:00.000Z',
-                },
-                {
-                  platform: 'IOS',
-                  appVersion: '2.0.0',
-                  appBuildVersion: '20',
-                  createdAt: '2026-06-01T00:00:00.000Z',
-                },
-              ],
-              android: [
-                {
-                  platform: 'ANDROID',
-                  appVersion: '1.0.0',
-                  appBuildVersion: '5',
-                  createdAt: '2026-04-01T00:00:00.000Z',
-                },
-                {
-                  platform: 'ANDROID',
-                  appVersion: '2.0.0',
-                  appBuildVersion: '6',
-                  createdAt: '2026-06-15T00:00:00.000Z',
-                },
-              ],
+      overviewResponse({
+        // Deliberately out of order, to prove the client does not just
+        // trust the API's response order.
+        ios: {
+          builds: [
+            {
+              platform: 'IOS',
+              appVersion: '1.0.0',
+              appBuildVersion: '10',
+              createdAt: '2026-05-01T00:00:00.000Z',
             },
-          },
+            {
+              platform: 'IOS',
+              appVersion: '3.0.0',
+              appBuildVersion: '30',
+              createdAt: '2026-07-01T00:00:00.000Z',
+            },
+            {
+              platform: 'IOS',
+              appVersion: '2.0.0',
+              appBuildVersion: '20',
+              createdAt: '2026-06-01T00:00:00.000Z',
+            },
+          ],
+        },
+        android: {
+          builds: [
+            {
+              platform: 'ANDROID',
+              appVersion: '1.0.0',
+              appBuildVersion: '5',
+              createdAt: '2026-04-01T00:00:00.000Z',
+            },
+            {
+              platform: 'ANDROID',
+              appVersion: '2.0.0',
+              appBuildVersion: '6',
+              createdAt: '2026-06-15T00:00:00.000Z',
+            },
+          ],
         },
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1', { limit: 3 });
+    const { builds } = await client.fetchAppOverview('app-1', { limit: 3 });
 
     expect(builds.map((b) => b.appBuildVersion)).toEqual(['30', '20', '10', '6', '5']);
+  });
+
+  it('picks the latest submission per platform by createdAt, independent of builds', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      overviewResponse({
+        ios: {
+          // Deliberately out of order.
+          submissions: [
+            { status: 'FINISHED', createdAt: '2026-08-01T00:00:00.000Z' },
+            { status: 'IN_QUEUE', createdAt: '2026-08-09T00:00:00.000Z' },
+          ],
+        },
+        android: { submissions: [{ status: 'ERRORED', createdAt: '2026-07-01T00:00:00.000Z' }] },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { submissionsByPlatform } = await client.fetchAppOverview('app-1');
+
+    expect(submissionsByPlatform.ios).toEqual({
+      status: 'IN_QUEUE',
+      createdAt: '2026-08-09T00:00:00.000Z',
+    });
+    expect(submissionsByPlatform.android).toEqual({
+      status: 'ERRORED',
+      createdAt: '2026-07-01T00:00:00.000Z',
+    });
+  });
+
+  it('picks the latest update per platform, flattening the [[Update]] shape and branch.name to a plain string', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      overviewResponse({
+        ios: {
+          // updateGroups is [[Update]]; the platform filter narrows each
+          // inner group to at most one entry, deliberately out of order here.
+          // `branch` is itself an object (UpdateBranch) requiring the `name`
+          // subfield — a bare `branch` is rejected by the real API with
+          // "must have a selection of subfields".
+          updates: [
+            [{ branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00.000Z' }],
+            [{ branch: { name: 'production' }, createdAt: '2026-08-12T00:00:00.000Z' }],
+          ],
+        },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { updatesByPlatform } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(updatesByPlatform.ios).toEqual({
+      branch: 'production',
+      createdAt: '2026-08-12T00:00:00.000Z',
+    });
+  });
+
+  it('returns a null branch when the update group has none', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      overviewResponse({
+        ios: { updates: [[{ branch: null, createdAt: '2026-08-12T00:00:00.000Z' }]] },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { updatesByPlatform } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(updatesByPlatform.ios).toEqual({ branch: null, createdAt: '2026-08-12T00:00:00.000Z' });
+  });
+
+  it('requests branch as `{ name }`, since UpdateBranch is an object and a bare `branch` is rejected by the API', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAppOverview('app-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain(
+      'updateGroups(offset: 0, limit: 1, filter: { platform: IOS }) { branch { name } createdAt }'
+    );
+  });
+
+  it('has no key in submissionsByPlatform/updatesByPlatform for a platform that was never requested', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {} }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { submissionsByPlatform, updatesByPlatform } = await client.fetchAppOverview('app-1', {
+      platform: 'ios',
+    });
+
+    expect('android' in submissionsByPlatform).toBe(false);
+    expect('android' in updatesByPlatform).toBe(false);
   });
 
   it('throws ApiError (not TypeError) when the app is missing from the response', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ data: { app: { byId: null } } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchBuilds('app-1')).rejects.toThrow(ApiError);
+    await expect(client.fetchAppOverview('app-1')).rejects.toThrow(ApiError);
   });
 
-  it('with platform: "ios", queries only the ios alias and returns only ios builds', async () => {
+  it('throws ApiError when a platform’s submissions/updates come back malformed even if builds is fine', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              ios: [
-                {
-                  platform: 'IOS',
-                  appVersion: '3.2.1',
-                  appBuildVersion: '41',
-                  createdAt: '2026-07-01T00:00:00.000Z',
-                },
-              ],
-            },
-          },
+          app: { byId: { id: 'app-1', iosBuilds: [], iosSubmissions: null, iosUpdates: [] } },
         },
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1', { platform: 'ios' });
+    await expect(client.fetchAppOverview('app-1', { platform: 'ios' })).rejects.toThrow(ApiError);
+  });
+
+  it('with platform: "ios", queries only the ios aliases and returns only ios data', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      overviewResponse({
+        ios: {
+          builds: [
+            {
+              platform: 'IOS',
+              appVersion: '3.2.1',
+              appBuildVersion: '41',
+              createdAt: '2026-07-01T00:00:00.000Z',
+            },
+          ],
+        },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
 
     expect(builds).toEqual([
       {
@@ -416,35 +521,44 @@ describe('fetchBuilds', () => {
     ]);
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(query).toContain('ios:');
-    expect(query).not.toContain('android:');
+    expect(query).toContain('iosBuilds:');
+    expect(query).toContain('iosSubmissions:');
+    expect(query).toContain('iosUpdates:');
+    expect(query).not.toContain('android');
   });
 
-  it('requests status and passes it through on each returned build, without filtering on it', async () => {
+  it('requires a filter on submissions (the API rejects a missing one) via the same per-platform alias as builds', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAppOverview('app-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain(
+      'iosSubmissions: submissions(offset: 0, limit: 1, filter: { platform: IOS })'
+    );
+  });
+
+  it('requests build status and passes it through on each returned build, without filtering on it', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              ios: [
-                {
-                  platform: 'IOS',
-                  status: 'ERRORED',
-                  appVersion: '3.2.2',
-                  appBuildVersion: '42',
-                  createdAt: '2026-08-01T00:00:00.000Z',
-                },
-              ],
-              android: [],
+      overviewResponse({
+        ios: {
+          builds: [
+            {
+              platform: 'IOS',
+              status: 'ERRORED',
+              appVersion: '3.2.2',
+              appBuildVersion: '42',
+              createdAt: '2026-08-01T00:00:00.000Z',
             },
-          },
+          ],
         },
+        android: {},
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1');
+    const { builds } = await client.fetchAppOverview('app-1');
 
     expect(builds[0].status).toBe('ERRORED');
 

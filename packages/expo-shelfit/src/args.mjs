@@ -64,10 +64,11 @@ export const HELP = `
     --app <slug|name>       Only this app (matches slug or EAS Display name). Applies to
                              every display mode except --members (--members doesn't
                              fetch apps).
-    --local                 Show BUILD DATE in the local timezone (TZ env var or system
-                             default) instead of UTC. Only affects BUILD DATE — --stats'
-                             PERIOD and --members' TRIAL END stay UTC. Cannot be combined
-                             with --stats or --members (neither has a BUILD DATE column).
+    --local                 Show BUILD/SUBMIT/UPDATE dates in the local timezone (TZ env
+                             var or system default) instead of UTC — affects which
+                             calendar day they fall on. --stats' PERIOD and --members'
+                             TRIAL END stay UTC. Cannot be combined with --stats or
+                             --members (neither has a date column --local affects).
 
   Deprecated
     --usage                 Old name for --stats. Still works, prints a warning on
@@ -245,7 +246,7 @@ export function parseArgs(argv) {
 const EXCLUSIVE_MODES = ['members', 'history', 'stats'];
 const MODE_ONLY_FLAGS = { month: 'stats', groupBy: 'stats' };
 // --app is account-only under --members, which never fetches apps; --local has
-// no BUILD DATE column to affect under --stats/--members.
+// no BUILD/SUBMIT/UPDATE date column to affect under --stats/--members.
 const MODE_INCOMPATIBLE_FLAGS = { app: ['members'], local: ['stats', 'members'] };
 
 // For the flags whose opts key and CLI spelling differ — camelCase can't be

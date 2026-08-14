@@ -140,25 +140,28 @@ object with one entry per mode that has a deprecated alias), so
 `--usage --plan` must not report `--stats --members`.
 
 **`--account`/`--app` narrow client-side** (`src/shared/filter.mjs`), applied
-*before* the expensive per-app build fetch: `--account` right after step 1
+*before* the expensive per-app overview fetch: `--account` right after step 1
 below, `--app` right after step 2. Both match slug or EAS Display name
 (case-insensitive, exact); `--app`'s ambiguity is scoped to one account, so a
 Display name shared across accounts matches in both. `--app` is incompatible
 with `--members`, which skips step 2 entirely. No match throws `CliError`
 with Levenshtein "Did you mean" suggestions.
 
-**`--local` switches only the BUILD DATE display timestamp** to local time
-(`src/shared/dates.mjs#formatBuildDate`). Every UTC boundary (`calendarMonths`,
-`inclusiveEnd`, `isoDate`) stays UTC unconditionally, since `--stats`'s month
-bucketing compares them directly against build `createdAt`. Incompatible with
-`--stats`/`--members`, neither of which has a BUILD DATE column.
+**`--local` switches which calendar day BUILD/SUBMIT/UPDATE fall on**
+(`src/shared/dates.mjs#formatBuildDate`, called with `{ time: false }` for all
+three — the default list no longer shows time-of-day at all). All three
+columns share one date formatter, so `--local` shifts all three together,
+never just one. Every UTC boundary (`calendarMonths`, `inclusiveEnd`,
+`isoDate`) stays UTC unconditionally, since `--stats`'s month bucketing
+compares them directly against build `createdAt`. Incompatible with
+`--stats`/`--members`, neither of which has a date column `--local` affects.
 
 **How data is fetched** (all against `https://api.expo.dev/graphql`,
 concurrency-limited to 8 via `createSemaphore`/`mapWithConcurrency` in
 `src/shared/concurrency.mjs`):
 1. `meActor { accounts }` — every account the token can see
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(...)` — most recent build(s) per platform, client-sorted by `createdAt` descending since the API's order is undocumented; the query also fetches each build's `sdkVersion`/`cliVersion`, always shown as the `SDK`/`CLI` table columns (no extra request, always displayed — no flag gates them)
+3. `app.byId(...)` (`src/shared/api.mjs#fetchAppOverview`, one request per app) — `builds`, `submissions`, and `updateGroups`, each aliased per platform as `<platform>Builds`/`<platform>Submissions`/`<platform>Updates` in the *same* query, so adding SUBMIT/UPDATE cost no extra request. `builds` also carries each build's `sdkVersion`/`cliVersion` (the `SDK`/`CLI` columns, always shown, no flag gates them). `submissions`/`updateGroups` are always fetched with `limit: 1` — they describe a platform's *current* SUBMIT/UPDATE state, not a specific build attempt, so `--history`'s multiple build rows for one platform all show the same SUBMIT/UPDATE value. `submissions`' `filter` argument is required by the API (unlike `builds`', which is optional) — the per-platform alias satisfies that naturally. `updateGroups` returns `[[Update]]`; with a platform filter each inner array holds at most one entry, so the client flattens one level. Every response is client-sorted by `createdAt` descending since the API's order is undocumented
 
 `--stats` reuses steps 1–2 but instead pages through every finished build per
 app and buckets client-side by platform + UTC calendar month

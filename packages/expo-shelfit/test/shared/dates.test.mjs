@@ -32,6 +32,26 @@ describe('formatBuildDate', () => {
   });
 });
 
+describe('formatBuildDate with { time: false }', () => {
+  it('drops the time-of-day, returning YYYY-MM-DD', () => {
+    expect(formatBuildDate('2026-07-26T09:12:34.000Z', { time: false })).toBe('2026-07-26');
+  });
+
+  it('still returns "-" for a missing/invalid date', () => {
+    expect(formatBuildDate(null, { time: false })).toBe('-');
+    expect(formatBuildDate('not-a-date', { time: false })).toBe('-');
+  });
+
+  it('combines with { local: true } to shift the calendar day, not just drop the time', () => {
+    withTz('Asia/Tokyo', () => {
+      // 23:30 UTC + 9h rolls into the next local calendar day.
+      expect(formatBuildDate('2026-07-26T23:30:00.000Z', { local: true, time: false })).toBe(
+        '2026-07-27'
+      );
+    });
+  });
+});
+
 // Sets process.env.TZ for the duration of `fn`, restoring the previous value
 // afterward — Node/V8 reads TZ per-call for Date's local getters, so this is
 // enough to make --local's output deterministic in tests regardless of the

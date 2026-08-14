@@ -35,6 +35,33 @@ export function appsResponse(
   });
 }
 
+/**
+ * BuildsPage's shape (`--stats`, `src/shared/api.mjs#buildsPageQuery`) — a
+ * flat `ios`/`android` alias per platform, unrelated to and unchanged by
+ * AppOverview's `<platform>Builds`/`Submissions`/`Updates` aliases below.
+ */
 export function buildsResponse({ ios = [], android = [], appId = 'app-1' } = {}) {
   return jsonResponse({ data: { app: { byId: { id: appId, ios, android } } } });
+}
+
+/**
+ * AppOverview's shape (default app list, `src/shared/api.mjs#appOverviewQuery`).
+ * `ios`/`android` are `{ builds, submissions, updates }` (all default `[]`)
+ * — an array shorthand is treated as `{ builds: [...] }`, since most tests
+ * only care about builds. Passing `undefined` for a platform omits its keys
+ * entirely, matching what --platform actually requests.
+ */
+export function appOverviewResponse({ ios = [], android = [], appId = 'app-1' } = {}) {
+  const byId = { id: appId };
+  for (const [prefix, value] of [
+    ['ios', ios],
+    ['android', android],
+  ]) {
+    if (value === undefined) continue;
+    const data = Array.isArray(value) ? { builds: value } : value;
+    byId[`${prefix}Builds`] = data.builds ?? [];
+    byId[`${prefix}Submissions`] = data.submissions ?? [];
+    byId[`${prefix}Updates`] = data.updates ?? [];
+  }
+  return jsonResponse({ data: { app: { byId } } });
 }

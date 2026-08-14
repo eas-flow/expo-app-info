@@ -13,14 +13,13 @@ English | [日本語](./README.ja.md)
 ```
 $ npx @my-shelfio/expo-shelfit
 
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬────────┬─────────┬──────────┬─────────────────────┐
-│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ SDK    │ CLI     │ STATUS   │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼────────┼─────────┼──────────┼─────────────────────┤
-│ myorg   │ Storefront │ storefront │ ios      │ 3.2.2   │ 42    │ 54.0.0 │ 18.0.4  │ Errored  │ 2026/08/10-11:02:47 │
-│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ 53.0.0 │ 17.0.0  │ Finished │ 2026/06/30-14:05:02 │
-│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ 52.0.0 │ 16.13.4 │ Finished │ 2026/05/28-18:40:11 │
-│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -      │ -       │ -        │ -                   │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴────────┴─────────┴──────────┴─────────────────────┘
+┌─────────┬────────────┬──────────┬────────────┬────────┬────────┬─────────────────────┬─────────────────────┬───────────────────────┐
+│ ACCOUNT │ APP        │ PLATFORM │ VERSION    │ SDK    │ CLI    │ BUILD               │ SUBMIT              │ UPDATE                │
+├─────────┼────────────┼──────────┼────────────┼────────┼────────┼─────────────────────┼─────────────────────┼───────────────────────┤
+│ myorg   │ storefront │ ios      │ 3.2.2 (42) │ 54.0.0 │ 18.0.4 │ Errored 2026-08-10  │ Finished 2026-08-09 │ production 2026-08-12 │
+│ myorg   │ storefront │ android  │ 3.2.0 (38) │ 53.0.0 │ 17.0.0 │ Finished 2026-06-30 │ In queue 2026-06-30 │ production 2026-08-12 │
+│ myorg   │ prototype  │ -        │ -          │ -      │ -      │ -                   │ -                   │ -                     │
+└─────────┴────────────┴──────────┴────────────┴────────┴────────┴─────────────────────┴─────────────────────┴───────────────────────┘
 ```
 
 ## Install & Authentication
@@ -67,7 +66,7 @@ npx @my-shelfio/expo-shelfit --platform ios
 npx @my-shelfio/expo-shelfit --account myorg
 npx @my-shelfio/expo-shelfit --app storefront
 
-# Local timezone
+# Local calendar day for BUILD/SUBMIT/UPDATE dates
 npx @my-shelfio/expo-shelfit --local
 
 # Build history
@@ -110,8 +109,8 @@ $ npx @my-shelfio/expo-shelfit --members
 
 ## 🚀 Features
 
-- **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account, with its Expo SDK and eas-cli version alongside each build
-- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest
+- **See your shipping status at a glance, from any directory** — the default: every Expo (EAS) app tied to your account, one row per app × platform, with its version, Expo SDK/eas-cli version, latest **BUILD** result, latest **SUBMIT** (store submission) result, and latest **UPDATE** (OTA) — no more tabbing between expo.dev's Builds/Submissions/Updates tabs
+- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest (SUBMIT/UPDATE stay the platform's current values on every row, since they aren't per-build-attempt facts)
 - **Track build results and time by month** — `--stats` aggregates success/errored/canceled build counts and total build time (`BUILD MINUTES`, queue wait excluded) per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
 - **See your accounts, their members, and your subscription** — `--members` shows one row per organization member (with their `ROLE`) plus the current subscription (plan, plan ID, status, concurrency, trial end); a personal account gets one row with `ORG` as `-`
 
@@ -123,7 +122,9 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 
 1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set), including each build's `sdkVersion`/`cliVersion` for the `SDK`/`CLI` columns; the response is sorted by `createdAt` descending on the client
+3. `app.byId(...)`, in one request per app: `builds(offset: 0, limit: $limit, filter: { platform })` for the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set, and includes each build's `sdkVersion`/`cliVersion` for the `SDK`/`CLI` columns), plus `submissions(offset: 0, limit: 1, filter: { platform })` and `updateGroups(offset: 0, limit: 1, filter: { platform })` for that platform's single latest submission and update — all three are aliased per platform in the same query, so this adds no extra request. Every response is sorted by `createdAt` descending on the client, since the API's ordering is undocumented
+
+SUBMIT/UPDATE describe a platform's *current* shipped state, not a specific build attempt — with `--history`, every row for a platform shows the same SUBMIT/UPDATE value, not one per build.
 
 `--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side, including each build's `metrics.buildDuration` for the `BUILD MINUTES` column (queue wait is deliberately excluded — see the FAQ).
 
@@ -160,9 +161,17 @@ EAS creates a personal account for every sign-up, and it has no organization —
 
 A robot (e.g. a CI bot) has no `username` — only human members do — so it's identified by its `firstName` instead, marked `(robot)` so it isn't mistaken for a human name. This avoids a separate `TYPE` column for what's otherwise a rare case.
 
-**What if `STATUS` shows something other than `Finished`/`Errored`/`Canceled`?**
+**What happened to the `SLUG` column?**
 
-Those three are the only EAS build statuses confirmed against the real API so far. A still in-progress or queued build — or any other status this unofficial API introduces later — shows the raw enum value lowercased instead of a friendly label, rather than breaking or hiding the row.
+It was removed and the `APP` column now shows the slug instead of the Display name, to make room for `SUBMIT`/`UPDATE` without widening the table further. `--app` still matches either the slug or the Display name, unchanged.
+
+**What if `BUILD` shows a status other than `Finished`/`Errored`/`Canceled`?**
+
+Those three are the only EAS build statuses confirmed against the real API so far. A still in-progress or queued build — or any other status this unofficial API introduces later — shows the raw enum value lowercased instead of a friendly label, rather than breaking or hiding the row. `SUBMIT` follows the same fallback with its own two confirmed statuses, `Finished`/`In queue`.
+
+**Why does `--local` affect all three of `BUILD`/`SUBMIT`/`UPDATE`?**
+
+All three columns use the same date formatter, so `--local` shifts all three to the local calendar day together rather than just one — `--stats`' `PERIOD` and `--members`' `TRIAL END` are unaffected and stay UTC.
 
 **Why does `BUILD MINUTES` exclude EAS queue wait time?**
 
