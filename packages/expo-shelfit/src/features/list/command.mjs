@@ -34,6 +34,6 @@ export async function runList(client, accounts, opts, accountDisplayNames) {
       ? `VERSION/BUILD = latest ${effectiveHistory} EAS build(s) per platform, newest first, regardless of status.`
       : 'VERSION/BUILD = latest EAS build attempt, regardless of status.';
   const shipNote =
-    "SUBMIT/UPDATE = that platform's latest submission/update, the same on every row regardless of --history.";
+    "SUBMIT = that build's own submission. UPDATE = latest update published to that build's runtime.";
   console.log(dim(`\n  ${filtered.length} row(s). ${buildNote} ${shipNote}`));
 }
