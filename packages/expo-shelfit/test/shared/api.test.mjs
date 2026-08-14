@@ -760,60 +760,121 @@ describe('countBuildsByMonth', () => {
   });
 });
 
-describe('fetchSubscription', () => {
-  const subscriptionResponse = {
-    data: {
-      account: {
-        byId: {
-          id: 'acc-1',
-          subscription: {
-            id: 'sub-1',
-            planId: 'production',
-            name: 'Production',
-            status: 'active',
-            trialEnd: null,
-            concurrencies: { total: 2, ios: 1, android: 1 },
+describe('fetchAccountMembers', () => {
+  const subscription = {
+    id: 'sub-1',
+    planId: 'production',
+    name: 'Production',
+    status: 'active',
+    trialEnd: null,
+    concurrencies: { total: 2, ios: 1, android: 1 },
+  };
+
+  function membersPage(edges, { hasNextPage = false, endCursor = null } = {}) {
+    return { edges, pageInfo: { hasNextPage, endCursor } };
+  }
+
+  function accountResponse({
+    accountId = 'acc-1',
+    ownerUserActor = null,
+    totalCount = 0,
+    page = membersPage([]),
+  } = {}) {
+    return jsonResponse({
+      data: {
+        account: {
+          byId: {
+            id: accountId,
+            subscription,
+            ownerUserActor,
+            memberStats: { totalCount },
+            membersPaginated: page,
           },
         },
       },
-    },
-  };
+    });
+  }
 
-  it('returns the subscription for an account', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    await expect(client.fetchSubscription('acc-1')).resolves.toEqual(
-      subscriptionResponse.data.account.byId.subscription
-    );
-
-    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(body.variables).toEqual({ accountId: 'acc-1' });
+  const humanNode = (id, role, username) => ({
+    id,
+    role,
+    userActor: { id: `user-${id}`, username },
+    actor: { id: `user-${id}` },
+  });
+  const robotNode = (id, role, firstName) => ({
+    id,
+    role,
+    userActor: null,
+    actor: { id: `robot-${id}`, firstName },
   });
 
-  it('does not query billingPeriod or usageMetrics — a minimal, standalone query', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
+  it('returns subscription/ownerUserActor/totalMemberCount/members for a personal account', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        accountResponse({ ownerUserActor: { id: 'user-1', username: 'it0' }, totalCount: 0 })
+      );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await client.fetchSubscription('acc-1');
+    await expect(client.fetchAccountMembers('acc-1')).resolves.toEqual({
+      subscription,
+      ownerUserActor: { id: 'user-1', username: 'it0' },
+      totalMemberCount: 0,
+      members: [],
+    });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ accountId: 'acc-1', after: null });
+  });
+
+  it('returns members and a null ownerUserActor for an organization account', async () => {
+    const members = [humanNode('m1', 'OWNER', 'it0'), robotNode('m2', 'DEVELOPER', 'ci-bot')];
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        accountResponse({ totalCount: 2, page: membersPage(members.map((node) => ({ node }))) })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const result = await client.fetchAccountMembers('acc-1');
+
+    expect(result.ownerUserActor).toBeNull();
+    expect(result.totalMemberCount).toBe(2);
+    expect(result.members).toEqual(members);
+  });
+
+  it('does not query billingPeriod or usageMetrics', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(accountResponse());
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAccountMembers('acc-1');
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.query).not.toContain('billingPeriod');
     expect(body.query).not.toContain('usageMetrics');
   });
 
-  it('returns null when the account has no subscription', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: { account: { byId: { id: 'acc-1', subscription: null } } },
-      })
-    );
+  it('paginates membersPaginated until hasNextPage is false, merging members across pages', async () => {
+    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'it0') }], {
+      hasNextPage: true,
+      endCursor: 'cursor-1',
+    });
+    const page2 = membersPage([{ node: humanNode('m2', 'DEVELOPER', 'kohei') }]);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(accountResponse({ totalCount: 2, page: page1 }))
+      .mockResolvedValueOnce(accountResponse({ totalCount: 2, page: page2 }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
+    const result = await client.fetchAccountMembers('acc-1');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(result.members.map((m) => m.id)).toEqual(['m1', 'm2']);
+    const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    expect(secondBody.variables).toEqual({ accountId: 'acc-1', after: 'cursor-1' });
   });
 
-  it('throws ApiError when the account lacks billing permission', async () => {
+  it('throws ApiError when the account lacks billing/membership permission', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(
@@ -821,7 +882,7 @@ describe('fetchSubscription', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchSubscription('acc-1')).rejects.toThrow(ApiError);
+    await expect(client.fetchAccountMembers('acc-1')).rejects.toThrow(ApiError);
   });
 
   it('returns null (not a TypeError) when the account itself is missing from the response', async () => {
@@ -830,6 +891,36 @@ describe('fetchSubscription', () => {
       .mockResolvedValue(jsonResponse({ data: { account: { byId: null } } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
+    await expect(client.fetchAccountMembers('acc-1')).resolves.toBeNull();
+  });
+
+  it('puts the Robot inline fragment on actor, not on ownerUserActor (which is UserActor, not the Actor interface)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(accountResponse());
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAccountMembers('acc-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('membersPaginated');
+    expect(query).toContain('actor { id ... on Robot { firstName } }');
+    expect(query).not.toContain('ownerUserActor { id username ... on Robot');
+  });
+
+  it('throws ApiError (not a TypeError) when membersPaginated is malformed mid-pagination', async () => {
+    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'it0') }], {
+      hasNextPage: true,
+      endCursor: 'cursor-1',
+    });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(accountResponse({ totalCount: 1, page: page1 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: { account: { byId: { id: 'acc-1', subscription, ownerUserActor: null } } },
+        })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchAccountMembers('acc-1')).rejects.toThrow(ApiError);
   });
 });

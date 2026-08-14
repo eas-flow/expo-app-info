@@ -179,8 +179,8 @@ describe('run --stats', () => {
 
   it('fetches accounts (and their apps/builds) in parallel rather than a strictly sequential loop', async () => {
     // Both accounts' apps/builds fetches can legitimately interleave under
-    // mapWithConcurrency (unlike --plan's single-hop fetchSubscription, this
-    // account task has two internal awaits: fetchApps then
+    // mapWithConcurrency (unlike --members' single-hop fetchAccountMembers,
+    // this account task has two internal awaits: fetchApps then
     // countBuildsByMonth), so the mock routes by query name + variables
     // instead of assuming a fixed call order.
     const twoAccountsResponse = accountsResponse([
