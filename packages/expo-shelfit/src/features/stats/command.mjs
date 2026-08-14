@@ -25,7 +25,7 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
   );
   const metricsNote =
     metricsMissingCount > 0
-      ? ` ${metricsMissingCount} counted build(s) had no build-time metrics and were excluded from BUILD MIN.`
+      ? ` ${metricsMissingCount} counted build(s) had no build-time metrics and were excluded from BUILD MINUTES.`
       : '';
 
   console.log(
@@ -34,7 +34,7 @@ export async function runStats(client, accounts, opts, accountDisplayNames, now 
         'SUCCESS/ERRORED/CANCELED = counted client-side from build history via the API; ' +
         'may differ from EAS billing usage. TOTAL = SUCCESS + ERRORED + CANCELED for that row. ' +
         'A still in-progress/queued build is counted in none of the three (nor in TOTAL). ' +
-        'BUILD MIN = summed actual build time (minutes) for that same TOTAL set, excluding EAS queue wait.' +
+        'BUILD MINUTES = summed actual build time (minutes) for that same TOTAL set, excluding EAS queue wait.' +
         metricsNote +
         ' PERIOD = UTC calendar month.'
     )

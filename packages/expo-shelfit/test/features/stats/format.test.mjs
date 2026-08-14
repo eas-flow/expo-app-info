@@ -48,14 +48,14 @@ describe('toStatsDisplayRows', () => {
     expect(row[1]).toBe('2026-06-01 → 2026-06-30');
   });
 
-  it('shows "-" for every category, TOTAL, and BUILD MIN on both rows when the account is degraded (fetch failure)', () => {
+  it('shows "-" for every category, TOTAL, and BUILD MINUTES on both rows when the account is degraded (fetch failure)', () => {
     expect(toStatsDisplayRows([degradedMonthEntry], { now: NOW })).toEqual([
       ['other', '2026-06-01 → 2026-06-30', 'ios', '-', '-', '-', '-', '-'],
       ['other', '2026-06-01 → 2026-06-30', 'android', '-', '-', '-', '-', '-'],
     ]);
   });
 
-  it('renders a zero build count as "0", not "-", and TOTAL/BUILD MIN as 0/0.0', () => {
+  it('renders a zero build count as "0", not "-", and TOTAL/BUILD MINUTES as 0/0.0', () => {
     const row = toStatsDisplayRows(
       [{ ...pastMonthEntry, ios: { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 } }],
       { now: NOW }
@@ -69,7 +69,7 @@ describe('toStatsDisplayRows', () => {
     expect(androidRow[6]).toBe('17'); // 15 + 2 + 0
   });
 
-  it('computes BUILD MIN as buildDurationMs / 60000, one decimal place', () => {
+  it('computes BUILD MINUTES as buildDurationMs / 60000, one decimal place', () => {
     const [iosRow, androidRow] = toStatsDisplayRows([pastMonthEntry], { now: NOW });
     expect(iosRow[7]).toBe('15.0'); // 900,000ms
     expect(androidRow[7]).toBe('17.0'); // 1,020,000ms
@@ -151,7 +151,7 @@ describe('toStatsDisplayRows', () => {
       ]);
     });
 
-    it('still degrades a failed app to "-" on every cell including TOTAL and BUILD MIN', () => {
+    it('still degrades a failed app to "-" on every cell including TOTAL and BUILD MINUTES', () => {
       const rows = toStatsDisplayRows([{ ...appEntry, ios: null, android: null }], {
         groupBy: 'app',
         now: NOW,
@@ -180,7 +180,13 @@ describe('toStatsDisplayRows', () => {
 });
 
 describe('statsBuildsHeaders', () => {
-  it('always returns SUCCESS, ERRORED, CANCELED, TOTAL, BUILD MIN — PLATFORM is a separate column now', () => {
-    expect(statsBuildsHeaders()).toEqual(['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL', 'BUILD MIN']);
+  it('always returns SUCCESS, ERRORED, CANCELED, TOTAL, BUILD MINUTES — PLATFORM is a separate column now', () => {
+    expect(statsBuildsHeaders()).toEqual([
+      'SUCCESS',
+      'ERRORED',
+      'CANCELED',
+      'TOTAL',
+      'BUILD MINUTES',
+    ]);
   });
 });

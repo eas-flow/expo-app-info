@@ -24,7 +24,7 @@ import { clearProgress, progressCount } from '../../shared/terminal/progress.mjs
  * — `entries` is ready for features/stats/format.mjs#toStatsDisplayRows,
  * `warnings` is a plain string array (no console output here).
  * `metricsMissingCount` is a single run-wide total (not per row) of counted
- * builds that had no `metrics.buildDuration` to add to BUILD MIN.
+ * builds that had no `metrics.buildDuration` to add to BUILD MINUTES.
  */
 export async function fetchStatsEntries(client, accounts, opts, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_STATS_MONTHS, now);

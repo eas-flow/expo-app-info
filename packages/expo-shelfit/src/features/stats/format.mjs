@@ -21,10 +21,10 @@ function statsPlatforms(platform) {
  * display name is missing.
  *
  * `e.ios`/`e.android` are each either `null` — that platform's counts
- * couldn't be fetched, degrading every cell on its row, TOTAL and BUILD MIN
- * included, to "-" — or `{ success, errored, canceled, buildDurationMs }`.
+ * couldn't be fetched, degrading every cell on its row, TOTAL and BUILD
+ * MINUTES included, to "-" — or `{ success, errored, canceled, buildDurationMs }`.
  * TOTAL sums exactly the first three, so a build EAS reports in some
- * non-terminal status is counted nowhere. BUILD MIN is `buildDurationMs`
+ * non-terminal status is counted nowhere. BUILD MINUTES is `buildDurationMs`
  * (summed `Build.metrics.buildDuration` for that same TOTAL set — queue
  * wait is deliberately excluded) converted to minutes, one decimal place.
  */
@@ -76,5 +76,5 @@ function periodCell(entry, now) {
 
 /** Always these 5, since PLATFORM is its own column rather than a per-column suffix. */
 export function statsBuildsHeaders() {
-  return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL', 'BUILD MIN'];
+  return ['SUCCESS', 'ERRORED', 'CANCELED', 'TOTAL', 'BUILD MINUTES'];
 }
