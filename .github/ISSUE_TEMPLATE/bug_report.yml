@@ -33,7 +33,7 @@ body:
     attributes:
       label: expo-shelfit version
       description: Output of `npx @my-shelfio/expo-shelfit --version`
-      placeholder: "1.1.1"
+      placeholder: "1.2.0"
     validations:
       required: true
 

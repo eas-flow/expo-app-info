@@ -73,7 +73,7 @@ describe('run', () => {
 
   it('prints the package version for --version', async () => {
     await run(['--version']);
-    expect(logSpy).toHaveBeenCalledWith('1.1.1');
+    expect(logSpy).toHaveBeenCalledWith('1.2.0');
   });
 
   // One representative test that parseArgs failures propagate out of run()
