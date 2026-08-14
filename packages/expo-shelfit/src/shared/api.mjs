@@ -89,7 +89,7 @@ const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
 function buildsPageQuery(platforms) {
   return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ${buildAliases(platforms, { offset: '$offset', fields: 'status createdAt' })}
+    ${buildAliases(platforms, { offset: '$offset', fields: 'status createdAt metrics { buildDuration }' })}
   } }
 }`;
 }
@@ -124,7 +124,7 @@ function monthIndexForBuild(createdAtMs, bounds) {
 const STATUS_COUNT_KEY = { FINISHED: 'success', ERRORED: 'errored', CANCELED: 'canceled' };
 
 function emptyStatusCounts() {
-  return { success: 0, errored: 0, canceled: 0 };
+  return { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 };
 }
 
 /**
@@ -237,8 +237,12 @@ export function createApiClient({
 
   /**
    * Build counts for one app, bucketed by platform and UTC calendar month:
-   * `months` in, a parallel array of `{ ios, android }` counts out. A build in
-   * a status STATUS_COUNT_KEY doesn't list falls into no bucket at all.
+   * `months` in, `{ counts, missingMetricsCount }` out — `counts` is a
+   * parallel array of `{ ios, android }` counts (each with a summed
+   * `buildDurationMs`), `missingMetricsCount` is how many counted builds
+   * (STATUS_COUNT_KEY only) had no `metrics.buildDuration` to add. A build in
+   * a status STATUS_COUNT_KEY doesn't list falls into no bucket, and isn't
+   * counted as missing metrics either — it was never counted at all.
    *
    * Each platform stops paging independently, once a page comes back short or
    * every build in it predates the oldest requested month — the latter relies
@@ -253,6 +257,7 @@ export function createApiClient({
     const bounds = toMonthBounds(months);
     const counts = months.map(() => ({ ios: emptyStatusCounts(), android: emptyStatusCounts() }));
     const oldestStartMs = bounds[bounds.length - 1].startMs;
+    let missingMetricsCount = 0;
 
     let offset = 0;
     let iosDone = platform === 'android';
@@ -274,24 +279,31 @@ export function createApiClient({
       if (!page || platforms.some((p) => !Array.isArray(page[p]))) {
         throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
       }
-      const iosPage = iosDone
-        ? []
-        : page.ios.map((b) => ({ ms: Date.parse(b.createdAt), status: b.status }));
-      const androidPage = androidDone
-        ? []
-        : page.android.map((b) => ({ ms: Date.parse(b.createdAt), status: b.status }));
+      const toBucketable = (b) => ({
+        ms: Date.parse(b.createdAt),
+        status: b.status,
+        durationMs: typeof b.metrics?.buildDuration === 'number' ? b.metrics.buildDuration : null,
+      });
+      const iosPage = iosDone ? [] : page.ios.map(toBucketable);
+      const androidPage = androidDone ? [] : page.android.map(toBucketable);
 
-      for (const { ms, status } of iosPage) {
+      for (const { ms, status, durationMs } of iosPage) {
         const i = monthIndexForBuild(ms, bounds);
         if (i === -1) continue;
         const key = STATUS_COUNT_KEY[status];
-        if (key) counts[i].ios[key]++;
+        if (!key) continue;
+        counts[i].ios[key]++;
+        if (durationMs === null) missingMetricsCount++;
+        else counts[i].ios.buildDurationMs += durationMs;
       }
-      for (const { ms, status } of androidPage) {
+      for (const { ms, status, durationMs } of androidPage) {
         const i = monthIndexForBuild(ms, bounds);
         if (i === -1) continue;
         const key = STATUS_COUNT_KEY[status];
-        if (key) counts[i].android[key]++;
+        if (!key) continue;
+        counts[i].android[key]++;
+        if (durationMs === null) missingMetricsCount++;
+        else counts[i].android.buildDurationMs += durationMs;
       }
 
       if (!iosDone) {
@@ -309,7 +321,7 @@ export function createApiClient({
       offset += BUILD_PAGE_SIZE;
     }
 
-    return counts;
+    return { counts, missingMetricsCount };
   }
 
   /** Throws like everything else here; src/features/plan/command.mjs treats a missing plan as non-fatal. */

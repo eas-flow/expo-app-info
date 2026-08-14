@@ -81,6 +81,17 @@ npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 npx @my-shelfio/expo-shelfit --plan
 ```
 
+```
+$ npx @my-shelfio/expo-shelfit --stats
+
+┌──────────┬──────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┬───────────────┐
+│ ACCOUNT  │ PERIOD               │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │ BUILD MINUTES │
+├──────────┼──────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┼───────────────┤
+│ itokohei │ 2026-07-01 → (today) │ ios      │ 1       │ 1       │ 0        │ 2     │ 6.9           │
+│ itokohei │ 2026-07-01 → (today) │ android  │ 2       │ 0       │ 0        │ 2     │ 9.4           │
+└──────────┴──────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┴───────────────┘
+```
+
 #### Deprecated
 
 `--usage` is a deprecated alias for `--stats`. It still works and prints the identical table, but writes a deprecation warning to stderr and will be removed in the next major version.
@@ -89,7 +100,7 @@ npx @my-shelfio/expo-shelfit --plan
 
 - **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account, with its Expo SDK and eas-cli version alongside each build
 - **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest
-- **Track build results by month** — `--stats` aggregates success/errored/canceled build counts per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
+- **Track build results and time by month** — `--stats` aggregates success/errored/canceled build counts and total build time (`BUILD MINUTES`, queue wait excluded) per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
 - **Check your Expo subscription** — `--plan` shows the current account subscription: plan, plan ID, status, concurrency, trial end
 
 ## 📚 Documentation
@@ -102,7 +113,7 @@ Three GraphQL queries against `https://api.expo.dev/graphql`:
 2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
 3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set), including each build's `sdkVersion`/`cliVersion` for the `SDK`/`CLI` columns; the response is sorted by `createdAt` descending on the client
 
-`--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side.
+`--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side, including each build's `metrics.buildDuration` for the `BUILD MINUTES` column (queue wait is deliberately excluded — see the FAQ).
 
 ### Learn More
 
@@ -130,6 +141,10 @@ Plan data is billing-scoped. If the token lacks billing permission on an account
 **What if `STATUS` shows something other than `Finished`/`Errored`/`Canceled`?**
 
 Those three are the only EAS build statuses confirmed against the real API so far. A still in-progress or queued build — or any other status this unofficial API introduces later — shows the raw enum value lowercased instead of a friendly label, rather than breaking or hiding the row.
+
+**Why does `BUILD MINUTES` exclude EAS queue wait time?**
+
+Queue wait is driven by EAS's own congestion and your plan's concurrency limit, not by anything in your project — mixing it in would make a month-over-month change in `BUILD MINUTES` impossible to attribute to your own changes versus EAS being busy. `BUILD MINUTES` sums only `Build.metrics.buildDuration` (the actual build time) for the same FINISHED/ERRORED/CANCELED builds `TOTAL` counts; a counted build with no duration metric is excluded and reported as a count in the footer, rather than silently treated as zero minutes.
 
 **Is the `EXPO_TOKEN` ever written to disk or logged?**
 
