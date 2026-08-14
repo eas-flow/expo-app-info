@@ -54,9 +54,13 @@ breaks something if changed (every date boundary staying UTC), a rejected
 alternative, a deliberate omission. Keep those short — a sentence or two, not
 a JSDoc essay.
 
-The same applies to `README.md`/`README.ja.md` and this file: if an example
-or a table already shows it, don't restate it in prose. Both READMEs must
-stay in sync, so a cut in one is a cut in the other.
+A comment naming another file, function, or API field is a promise to keep
+both ends in step, and that promise has already been broken here more than
+once: a helper documented against modules a refactor had deleted, this
+client crediting the wrong file with `process.exit`, a date helper
+explaining a billing field the CLI had stopped querying. Name another file
+only when the reader can't follow without it, and re-read those lines
+whenever you touch either end.
 
 ## Nothing redundant in the code either
 
@@ -69,15 +73,49 @@ itself. Before adding anything, check it isn't already there:
 - **No defensive layers that can't fire.** Don't re-validate what `parseArgs`
   already rejected, don't null-check a value the caller guarantees, don't
   catch an error only to rethrow it unchanged.
-- **No option, flag, parameter, or helper without a caller.** This CLI is
-  small and zero-dependency on purpose; anything that only *might* be needed
-  is not needed. Delete it — git remembers.
+- **No option, flag, parameter, helper, or queried field without a
+  consumer.** This CLI is small and zero-dependency on purpose; anything
+  that only *might* be needed is not needed. A GraphQL field nothing reads
+  is the same mistake as an uncalled helper, and worse in one way: it reads
+  as load-bearing and discourages changing the query. Delete it — git
+  remembers.
 - **No second way to do one thing.** One date formatter, one table renderer,
   one filter path. A near-copy of an existing helper is a sign the original
   needed a parameter, not a sibling.
 
 When a change makes existing code unreachable or pointless, removing it is
 part of that change, not a follow-up.
+
+## Which document says it — and how little it can say
+
+Every fact has one home. A fact in two places drifts, and then the reader
+can't tell which copy is current.
+
+- **`README.md` / `README.ja.md`** — what the tool does and how to run it,
+  written for someone who found it on npm and hasn't decided yet. Not how
+  it's built. The two files are one document in two languages: a cut in one
+  is a cut in the other, and their headings stay in step.
+- **`CONTRIBUTING.md`** — how to work on it: setup, layout, checks, release.
+- **this file** — why the code is the shape it is: query shapes, rejected
+  alternatives, behavior confirmed by probing an undocumented endpoint.
+
+If an example or a table already shows it, don't restate it in prose. If
+this file already explains it, the README links rather than repeats.
+
+Three ways the docs have gone wrong before:
+
+- **A sample output block is real output, or it's a lie.** Generate it by
+  running the CLI (or its `renderTable`) and paste the result; never
+  hand-edit a table to fit the page. A `--stats` example showing one month
+  when the default is three teaches the wrong default to everyone who
+  reads it.
+- **"Always" and "every" are traps for the next flag.** `--local` made
+  "every date this CLI shows is UTC" false the day it landed. Adding an
+  exception to a stated absolute means fixing the statement in the same
+  change, not later.
+- **Sample data is placeholder data.** `myorg`, `storefront`, `alice`,
+  `bob` — never a real account, username, or token, in docs *or* test
+  fixtures. Real names in fixtures get copied into the README next.
 
 ## Commands
 
