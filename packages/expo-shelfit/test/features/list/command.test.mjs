@@ -26,8 +26,10 @@ const iosSubmission = (overrides = {}) => ({
   ...overrides,
 });
 
+// Raw GraphQL response shape: `branch` is an `UpdateBranch` object (`{ name }`),
+// not a plain string — the real API rejects a bare `branch` field.
 const iosUpdateGroup = (overrides = {}) => [
-  { branch: 'production', createdAt: '2026-07-18T00:00:00.000Z', ...overrides },
+  { branch: { name: 'production' }, createdAt: '2026-07-18T00:00:00.000Z', ...overrides },
 ];
 
 describe('run', () => {

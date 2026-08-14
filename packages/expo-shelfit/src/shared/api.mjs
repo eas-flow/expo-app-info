@@ -80,14 +80,17 @@ function buildAliases(platforms, { offset, fields }) {
 // `filter: { platform }` each inner array holds at most one entry, so
 // fetchAppOverview flattens one level. `runtimeVersion` is deprecated in
 // favor of `runtime { version }`, but neither is queried at all since this
-// CLI only ever displays an update's `branch` and `createdAt`.
+// CLI only ever displays an update's `branch` and `createdAt`. `Update.branch`
+// is itself an object (`UpdateBranch!`, not a plain string) — the API rejects
+// a bare `branch` with "must have a selection of subfields" — so `{ name }`
+// is required; fetchAppOverview reads `.branch.name` back out.
 function appOverviewQuery(platforms) {
   const aliases = platforms.flatMap((p) => {
     const filter = `filter: { platform: ${p.toUpperCase()} }`;
     return [
       `${p}Builds: builds(offset: 0, limit: $limit, ${filter}) { platform status appVersion appBuildVersion sdkVersion cliVersion createdAt }`,
       `${p}Submissions: submissions(offset: 0, limit: 1, ${filter}) { status createdAt }`,
-      `${p}Updates: updateGroups(offset: 0, limit: 1, ${filter}) { branch createdAt }`,
+      `${p}Updates: updateGroups(offset: 0, limit: 1, ${filter}) { branch { name } createdAt }`,
     ];
   });
 
@@ -306,7 +309,13 @@ export function createApiClient({
       // updateGroups is [[Update]]; the platform filter already narrows each
       // inner group to at most one entry, so this only ever flattens one level.
       const updates = app[`${p}Updates`].flat().sort(byNewest);
-      updatesByPlatform[p] = updates[0] ?? null;
+      const latestUpdate = updates[0] ?? null;
+      // `branch` is queried as `{ name }` (UpdateBranch is an object, not a
+      // plain string) — flattened back to a string here so downstream code
+      // never has to know that.
+      updatesByPlatform[p] = latestUpdate
+        ? { branch: latestUpdate.branch?.name ?? null, createdAt: latestUpdate.createdAt }
+        : null;
     }
 
     return { builds, submissionsByPlatform, updatesByPlatform };

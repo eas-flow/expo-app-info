@@ -409,15 +409,18 @@ describe('fetchAppOverview', () => {
     });
   });
 
-  it('picks the latest update per platform, flattening the [[Update]] shape', async () => {
+  it('picks the latest update per platform, flattening the [[Update]] shape and branch.name to a plain string', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       overviewResponse({
         ios: {
           // updateGroups is [[Update]]; the platform filter narrows each
           // inner group to at most one entry, deliberately out of order here.
+          // `branch` is itself an object (UpdateBranch) requiring the `name`
+          // subfield — a bare `branch` is rejected by the real API with
+          // "must have a selection of subfields".
           updates: [
-            [{ branch: 'preview', createdAt: '2026-08-01T00:00:00.000Z' }],
-            [{ branch: 'production', createdAt: '2026-08-12T00:00:00.000Z' }],
+            [{ branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00.000Z' }],
+            [{ branch: { name: 'production' }, createdAt: '2026-08-12T00:00:00.000Z' }],
           ],
         },
       })
@@ -430,6 +433,31 @@ describe('fetchAppOverview', () => {
       branch: 'production',
       createdAt: '2026-08-12T00:00:00.000Z',
     });
+  });
+
+  it('returns a null branch when the update group has none', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      overviewResponse({
+        ios: { updates: [[{ branch: null, createdAt: '2026-08-12T00:00:00.000Z' }]] },
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { updatesByPlatform } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(updatesByPlatform.ios).toEqual({ branch: null, createdAt: '2026-08-12T00:00:00.000Z' });
+  });
+
+  it('requests branch as `{ name }`, since UpdateBranch is an object and a bare `branch` is rejected by the API', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAppOverview('app-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain(
+      'updateGroups(offset: 0, limit: 1, filter: { platform: IOS }) { branch { name } createdAt }'
+    );
   });
 
   it('has no key in submissionsByPlatform/updatesByPlatform for a platform that was never requested', async () => {
