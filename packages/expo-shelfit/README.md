@@ -22,33 +22,30 @@ $ npx @my-shelfio/expo-shelfit
 └─────────┴────────────┴──────────┴────────────┴────────┴────────┴─────────────────────┴─────────────────────┴───────────────────────┘
 ```
 
-## Install & Authentication
+## 🔑 Authentication & 📦 Install
 
-### 📦 Install
+First, create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
 
 ```bash
-# using npx
+export EXPO_TOKEN=xxxxxxxx
+```
+
+```bash
+# quick start
 npx @my-shelfio/expo-shelfit
 
-# No install required. If you prefer:
+# global install
 npm install -g @my-shelfio/expo-shelfit
 expo-shelfit
 ```
 
 Requires Node.js **22 or later** (the CLI uses the global `fetch`).
 
-### 🔑 Authentication
-
 A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
 
-```bash
-export EXPO_TOKEN=xxxxxxxx
-npx @my-shelfio/expo-shelfit
-```
-
-Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
-
-This is deliberately the only option. The token is never read from `argv`, never written to disk, and never printed — so it cannot leak through your shell history, the process list, a forgotten config file, or the CLI's own output. It is sent to exactly one destination, the EAS GraphQL endpoint (`https://api.expo.dev/graphql`), over HTTPS, in an `Authorization` header. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+- Used only in an `Authorization` header, sent to the EAS GraphQL endpoint (`https://api.expo.dev/graphql`) over HTTPS
+- Never read from `argv`, never written to disk, and never printed — so it cannot leak through your shell history, the process list, a forgotten config file, or the CLI's own output
+- If it is missing, the CLI exits with a non-zero status
 
 > **`EXPO_API_URL`** can override that endpoint. It exists for local testing, is intentionally undocumented beyond this note, and is not covered by any compatibility guarantee. Do not point it at an untrusted host — doing so sends your token there.
 

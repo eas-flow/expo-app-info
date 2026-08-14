@@ -22,33 +22,30 @@ $ npx @my-shelfio/expo-shelfit
 └─────────┴────────────┴──────────┴────────────┴────────┴────────┴─────────────────────┴─────────────────────┴───────────────────────┘
 ```
 
-## インストール & 認証
+## 🔑 認証 & 📦 インストール
 
-### 📦 インストール
+まず [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens) でトークンを作成します。
 
 ```bash
-# npx を使う場合
+export EXPO_TOKEN=xxxxxxxx
+```
+
+```bash
+# クイックスタート
 npx @my-shelfio/expo-shelfit
 
-# インストール不要。もしくは:
+# グローバルインストール
 npm install -g @my-shelfio/expo-shelfit
 expo-shelfit
 ```
 
 Node.js **22以降**が必要です（この CLI はグローバルの `fetch` を使用します）。
 
-### 🔑 認証
-
 **`EXPO_TOKEN`** 環境変数に設定したパーソナルアクセストークン — これが唯一サポートされる認証情報です。
 
-```bash
-export EXPO_TOKEN=xxxxxxxx
-npx @my-shelfio/expo-shelfit
-```
-
-[expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens) で作成できます。
-
-これは意図的に唯一の選択肢としています。トークンは `argv` から読み取られることも、ディスクに書き込まれることも、出力されることもないため、シェル履歴・プロセス一覧・置き忘れた設定ファイル・CLI自身の出力を経由して漏洩することがありません。送信先はただ1つ、EAS GraphQLエンドポイント（`https://api.expo.dev/graphql`）に、HTTPS経由で `Authorization` ヘッダーとして送信されます。`EXPO_TOKEN` が未設定の場合、CLI は非ゼロのステータスで終了します — プロンプトで待機することはなく、CI 上での実行も安全です。
+- EAS GraphQL エンドポイント（`https://api.expo.dev/graphql`）へ HTTPS で送信する際の `Authorization` ヘッダーにのみ使用されます
+- `argv` から読み取られることも、ディスクに書き込まれることも、出力されることもありません — シェル履歴・プロセス一覧・置き忘れた設定ファイル・CLI 自身の出力を経由して漏洩することがありません
+- 未設定の場合、CLI は非ゼロのステータスで終了します
 
 > **`EXPO_API_URL`** でエンドポイントを上書きできます。これはローカルテスト用に存在するもので、この注記以外に文書化されておらず、互換性の保証対象外です。信頼できないホストを指定しないでください — そうするとトークンがそのホストに送信されてしまいます。
 
