@@ -33,9 +33,9 @@ export function isoDate(iso) {
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * EAS's `billingPeriod.end` is *exclusive* — the instant the next period
- * starts (a July period ends at 2026-08-01T00:00:00Z). Shown as-is that reads
- * like "runs into August", so the table shows `end` minus one day instead.
+ * `calendarMonths`' `end` is *exclusive* — the instant the next month starts
+ * (July ends at 2026-08-01T00:00:00Z). Shown as-is in --stats' PERIOD that
+ * reads like "runs into August", so the column shows `end` minus one day.
  */
 export function inclusiveEnd(iso) {
   return new Date(new Date(iso).getTime() - ONE_DAY_MS).toISOString();
@@ -44,11 +44,12 @@ export function inclusiveEnd(iso) {
 const pad2 = (n) => String(n).padStart(2, '0');
 
 /**
- * ISO 8601 timestamp -> "YYYY/MM/DD-HH:mm:ss" for the BUILD DATE column. UTC
- * by default; `{ local: true }` (--local) is the only non-UTC date this CLI
- * will ever display.
+ * ISO 8601 timestamp -> "YYYY/MM/DD-HH:mm:ss" (or "YYYY-MM-DD" with
+ * `{ time: false }`, used by the BUILD/SUBMIT/UPDATE columns, none of which
+ * show time-of-day) for the human table. UTC by default; `{ local: true }`
+ * (--local) is the only non-UTC date this CLI will ever display.
  */
-export function formatBuildDate(iso, { local = false } = {}) {
+export function formatBuildDate(iso, { local = false, time = true } = {}) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '-';
@@ -62,13 +63,15 @@ export function formatBuildDate(iso, { local = false } = {}) {
         d.getUTCMinutes(),
         d.getUTCSeconds(),
       ];
+  if (!time) return `${year}-${pad2(month)}-${pad2(day)}`;
   return `${year}/${pad2(month)}/${pad2(day)}-${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`;
 }
 
 /**
- * Current local UTC offset as "+HH:MM", for the `BUILD DATE (+09:00)` header
- * --local adds. Computed once as of `now`, not per row: a table spanning a
- * DST transition would need two offsets and the header can only show one — an
+ * Current local UTC offset as "+HH:MM", for the `BUILD (+09:00)` /
+ * `SUBMIT (+09:00)` / `UPDATE (+09:00)` header --local adds to every date
+ * column. Computed once as of `now`, not per row: a table spanning a DST
+ * transition would need two offsets and the header can only show one — an
  * accepted limitation.
  */
 export function localOffset(now = new Date()) {

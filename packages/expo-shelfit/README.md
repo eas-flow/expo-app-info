@@ -13,43 +13,39 @@ English | [日本語](./README.ja.md)
 ```
 $ npx @my-shelfio/expo-shelfit
 
-┌─────────┬────────────┬────────────┬──────────┬─────────┬───────┬──────────┬─────────────────────┐
-│ ACCOUNT │ APP        │ SLUG       │ PLATFORM │ VERSION │ BUILD │ STATUS   │ BUILD DATE          │
-├─────────┼────────────┼────────────┼──────────┼─────────┼───────┼──────────┼─────────────────────┤
-│ myorg   │ Storefront │ storefront │ ios      │ 3.2.2   │ 42    │ Errored  │ 2026/08/10-11:02:47 │
-│ myorg   │ Storefront │ storefront │ android  │ 3.2.0   │ 38    │ Finished │ 2026/06/30-14:05:02 │
-│ myorg   │ Field Ops  │ field-ops  │ ios      │ 1.4.0   │ 12    │ Finished │ 2026/05/28-18:40:11 │
-│ myorg   │ Prototype  │ prototype  │ -        │ -       │ -     │ -        │ -                   │
-└─────────┴────────────┴────────────┴──────────┴─────────┴───────┴──────────┴─────────────────────┘
+┌─────────┬────────────┬──────────┬────────────┬────────┬────────┬─────────────────────┬─────────────────────┬───────────────────────┐
+│ ACCOUNT │ APP        │ PLATFORM │ VERSION    │ SDK    │ CLI    │ BUILD               │ SUBMIT              │ UPDATE                │
+├─────────┼────────────┼──────────┼────────────┼────────┼────────┼─────────────────────┼─────────────────────┼───────────────────────┤
+│ myorg   │ storefront │ ios      │ 3.2.2 (42) │ 54.0.0 │ 18.0.4 │ Errored 2026-08-10  │ Finished 2026-08-09 │ production 2026-08-12 │
+│ myorg   │ storefront │ android  │ 3.2.0 (38) │ 53.0.0 │ 17.0.0 │ Finished 2026-06-30 │ In queue 2026-06-30 │ production 2026-08-12 │
+│ myorg   │ prototype  │ -        │ -          │ -      │ -      │ -                   │ -                   │ -                     │
+└─────────┴────────────┴──────────┴────────────┴────────┴────────┴─────────────────────┴─────────────────────┴───────────────────────┘
 ```
 
-## Install & Authentication
+## 🔑 Authentication & 📦 Install
 
-### 📦 Install
+First, create a personal access token at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
 
 ```bash
-# using npx
+export EXPO_TOKEN=xxxxxxxx
+```
+
+```bash
+# quick start
 npx @my-shelfio/expo-shelfit
 
-# No install required. If you prefer:
+# global install
 npm install -g @my-shelfio/expo-shelfit
 expo-shelfit
 ```
 
 Requires Node.js **22 or later** (the CLI uses the global `fetch`).
 
-### 🔑 Authentication
-
 A personal access token in the **`EXPO_TOKEN`** environment variable — that is the only supported credential.
 
-```bash
-export EXPO_TOKEN=xxxxxxxx
-npx @my-shelfio/expo-shelfit
-```
-
-Create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
-
-This is deliberately the only option. The token is never read from `argv`, never written to disk, and never printed — so it cannot leak through your shell history, the process list, a forgotten config file, or the CLI's own output. It is sent to exactly one destination, the EAS GraphQL endpoint (`https://api.expo.dev/graphql`), over HTTPS, in an `Authorization` header. If `EXPO_TOKEN` is missing the CLI exits with a non-zero status — it never blocks on a prompt, which keeps it safe to run in CI.
+- Used only in an `Authorization` header, sent to the EAS GraphQL endpoint (`https://api.expo.dev/graphql`) over HTTPS
+- Never read from `argv`, never written to disk, and never printed — so it cannot leak through your shell history, the process list, a forgotten config file, or the CLI's own output
+- If it is missing, the CLI exits with a non-zero status
 
 > **`EXPO_API_URL`** can override that endpoint. It exists for local testing, is intentionally undocumented beyond this note, and is not covered by any compatibility guarantee. Do not point it at an untrusted host — doing so sends your token there.
 
@@ -62,78 +58,58 @@ See [SECURITY.md](../../.github/SECURITY.md) to report a vulnerability privately
 npx @my-shelfio/expo-shelfit --help
 npx @my-shelfio/expo-shelfit --version
 
-# Filter by 
+# Narrow the list
 npx @my-shelfio/expo-shelfit --platform ios
 npx @my-shelfio/expo-shelfit --account myorg
 npx @my-shelfio/expo-shelfit --app storefront
 
-# Local timezone
+# Local calendar day for BUILD/SUBMIT/UPDATE dates
 npx @my-shelfio/expo-shelfit --local
 
 # Build history
 npx @my-shelfio/expo-shelfit --history 5
 
 # Monthly stats
-npx @my-shelfio/expo-shelfit --stats                            
+npx @my-shelfio/expo-shelfit --stats
 npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 
-# Subscription plan
-npx @my-shelfio/expo-shelfit --plan
+# Account and member info
+npx @my-shelfio/expo-shelfit --members
 ```
 
-#### Deprecated
+### Deprecated
 
-`--usage` is a deprecated alias for `--stats`. It still works and prints the identical table, but writes a deprecation warning to stderr and will be removed in the next major version.
+`--usage` is a deprecated alias for `--stats`, and `--plan` is a deprecated alias for `--members`. Both still work and print the identical table, but write a deprecation warning to stderr and will be removed in the next major version.
 
 ## 🚀 Features
 
-- **List every app you've shipped, from any directory** — the default: every Expo (EAS) app tied to your account
-- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest
-- **Track build results by month** — `--stats` aggregates success/errored/canceled build counts per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
-- **Check your Expo subscription** — `--plan` shows the current account subscription: plan, plan ID, status, concurrency, trial end
+- **See your shipping status at a glance, from any directory** — the default: every Expo (EAS) app tied to your account, one row per app × platform, with its version, Expo SDK/eas-cli version, latest **BUILD** result, latest **SUBMIT** (store submission) result, and latest **UPDATE** (OTA) — no more tabbing between expo.dev's Builds/Submissions/Updates tabs
+- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest, each row with its own SUBMIT (that build's store submission) and UPDATE (the latest OTA published to that build's runtime); `-` where there is none
+- **Track build results and time by month** — `--stats` aggregates success/errored/canceled build counts and total build time (`BUILD MINUTES`, queue wait excluded) per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
+- **See your accounts, their members, and your subscription** — `--members` shows one row per organization member (with their `ROLE`) plus the current subscription (plan, plan ID, status, concurrency, trial end); a personal account gets one row with `ORG` as `-`
 
-## 📚 Documentation
+## 📚 Learn more
 
-### How it works
-
-Three GraphQL queries against `https://api.expo.dev/graphql`:
-
-1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
-2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...).builds(offset: 0, limit: $limit, filter: { platform })` — the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set); the response is sorted by `createdAt` descending on the client
-
-`--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side.
-
-### Learn More
-
-- [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, test/lint commands, project layout, and the release process
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, project layout, and the release process (and, from there, which GraphQL queries each display mode runs)
 - [SECURITY.md](../../.github/SECURITY.md) — vulnerability reporting policy and how to report an issue privately
 
 ## ❓ FAQ
 
 **Is this an official Expo tool?**
 
-No. The EAS GraphQL API is **not officially documented or versioned**. Field names were derived from Expo's own open-source clients ([`eas-cli`](https://github.com/expo/eas-cli), [`orbit`](https://github.com/expo/orbit)) and may change without notice. This project is not affiliated with or endorsed by Expo.
+No. The EAS GraphQL API is **not officially documented or versioned**. Field names were derived from Expo's own open-source clients ([`eas-cli`](https://github.com/expo/eas-cli), [`orbit`](https://github.com/expo/orbit)) and may change without notice.
 
 **Can I use a robot token instead of a personal access token?**
 
 A robot token can only see the account that issued it. Use a personal access token to list every account you belong to.
 
-**What happens if a token can't read an account's apps or builds?**
+**Why do some cells show `-`?**
 
-`--stats` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
+Either there is nothing to show (an app with no builds, a personal account's `ORG`), or the CLI couldn't read it. A fetch the token isn't allowed to make — the plan columns are billing-scoped, for instance — degrades that row to `-` and prints the reason on stderr; the run itself does not fail.
 
-**Why do some accounts show `-` in the `--plan` columns?**
+**Why don't the `--stats` numbers match my EAS bill?**
 
-Plan data is billing-scoped. If the token lacks billing permission on an account, that row still prints with `-` in the plan columns and the reason goes to stderr, rather than failing the run.
-
-**What if `STATUS` shows something other than `Finished`/`Errored`/`Canceled`?**
-
-Those three are the only EAS build statuses confirmed against the real API so far. A still in-progress or queued build — or any other status this unofficial API introduces later — shows the raw enum value lowercased instead of a friendly label, rather than breaking or hiding the row.
-
-**Is the `EXPO_TOKEN` ever written to disk or logged?**
-
-No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](../../.github/SECURITY.md) for the full policy and how to report a vulnerability privately.
+They aren't billing figures. Counts come from each app's build history, bucketed client-side by UTC calendar month, while EAS bills on its own cycle. `BUILD MINUTES` also excludes EAS queue wait, which is driven by EAS congestion and your concurrency limit rather than by anything in your project.
 
 ## 📄 License
 

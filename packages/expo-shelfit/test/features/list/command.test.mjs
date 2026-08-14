@@ -2,16 +2,42 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HELP } from '../../../src/args.mjs';
 import { run } from '../../../src/cli.mjs';
 import { CliError } from '../../../src/errors.mjs';
-import { accountsResponse, appsResponse, buildsResponse, fetchSequence } from '../../helpers.mjs';
+import {
+  accountsResponse,
+  appOverviewResponse,
+  appsResponse,
+  fetchSequence,
+  runtimeWith,
+} from '../../helpers.mjs';
 
 const iosBuild = (overrides = {}) => ({
   platform: 'IOS',
   status: 'FINISHED',
   appVersion: '3.2.1',
   appBuildVersion: '41',
+  sdkVersion: '54.0.0',
+  cliVersion: '18.0.4',
   createdAt: '2026-07-20T00:00:00.000Z',
   ...overrides,
 });
+
+const iosSubmission = (overrides = {}) => ({
+  status: 'FINISHED',
+  createdAt: '2026-07-19T00:00:00.000Z',
+  ...overrides,
+});
+
+// Raw GraphQL response shape: `branch` is an `UpdateBranch` object (`{ name }`),
+// not a plain string — the real API rejects a bare `branch` field.
+const iosRuntime = (overrides = {}) =>
+  runtimeWith([
+    {
+      platform: 'ios',
+      branch: { name: 'production' },
+      createdAt: '2026-07-18T00:00:00.000Z',
+      ...overrides,
+    },
+  ]);
 
 describe('run', () => {
   let logSpy;
@@ -47,7 +73,7 @@ describe('run', () => {
 
   it('prints the package version for --version', async () => {
     await run(['--version']);
-    expect(logSpy).toHaveBeenCalledWith('1.1.1');
+    expect(logSpy).toHaveBeenCalledWith('1.2.0');
   });
 
   // One representative test that parseArgs failures propagate out of run()
@@ -66,34 +92,48 @@ describe('run', () => {
     await expect(run([])).rejects.toThrow(/No accounts found/);
   });
 
-  it('fetches accounts/apps/builds and prints a table', async () => {
+  it('fetches accounts/apps/app-overview and prints a table with SUBMIT/UPDATE merged in', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
-      buildsResponse({ ios: [iosBuild({ createdAt: new Date().toISOString() })] }),
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            createdAt: new Date().toISOString(),
+            submissions: [iosSubmission()],
+            runtime: iosRuntime(),
+          }),
+        ],
+      }),
     ]);
 
     await run([]);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
-    expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
+    const overviewCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(overviewCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
 
-    expect(tableOutput()).toContain('storefront');
-    expect(tableOutput()).toContain('3.2.1');
-    expect(tableOutput()).toContain('STATUS');
-    expect(tableOutput()).toContain('Finished');
-    expect(tableOutput()).toContain('BUILD DATE');
-    expect(tableOutput()).toContain(
-      'VERSION/BUILD/STATUS = latest EAS build attempt, regardless of status.'
-    );
+    const output = tableOutput();
+    expect(output).toContain('storefront');
+    expect(output).toContain('3.2.1 (41)');
+    expect(output).toContain('SDK');
+    expect(output).toContain('CLI');
+    expect(output).toContain('54.0.0');
+    expect(output).toContain('18.0.4');
+    expect(output).toContain('BUILD');
+    expect(output).toContain('SUBMIT');
+    expect(output).toContain('UPDATE');
+    expect(output).toContain('Finished 2026-07-19');
+    expect(output).toContain('production 2026-07-18');
+    expect(output).toContain('VERSION/BUILD = latest EAS build attempt, regardless of status.');
+    expect(output).toContain("SUBMIT = that build's own submission.");
   });
 
-  it('shows the STATUS column for an errored build instead of hiding it', async () => {
+  it('shows the BUILD column for an errored build instead of hiding it', async () => {
     stubFetch([
       accountsResponse(),
       appsResponse(),
-      buildsResponse({ ios: [iosBuild({ status: 'ERRORED', appBuildVersion: '42' })] }),
+      appOverviewResponse({ ios: [iosBuild({ status: 'ERRORED', appBuildVersion: '42' })] }),
     ]);
 
     await run([]);
@@ -103,11 +143,11 @@ describe('run', () => {
     expect(output).toContain('Errored');
   });
 
-  it('falls back to the raw status lowercased for an unrecognized status', async () => {
+  it('falls back to the raw build status lowercased for an unrecognized status', async () => {
     stubFetch([
       accountsResponse(),
       appsResponse(),
-      buildsResponse({ ios: [iosBuild({ status: 'IN_PROGRESS' })] }),
+      appOverviewResponse({ ios: [iosBuild({ status: 'IN_PROGRESS' })] }),
     ]);
 
     await run([]);
@@ -115,23 +155,43 @@ describe('run', () => {
     expect(tableOutput()).toContain('in_progress');
   });
 
-  it('--history N fetches up to N builds per platform, newest first, and lists them as separate rows', async () => {
+  it('shows "-" in SUBMIT/UPDATE for a build that has neither', async () => {
+    stubFetch([accountsResponse(), appsResponse(), appOverviewResponse({ ios: [iosBuild()] })]);
+
+    await run([]);
+
+    const row = tableOutput()
+      .split('\n')
+      .find((l) => l.includes('storefront'));
+    // Cells are `│`-separated (see shared/terminal/render.mjs); the last
+    // two before the closing border are SUBMIT and UPDATE.
+    const cells = row
+      .split('│')
+      .map((c) => c.trim())
+      .filter((c) => c !== '');
+    expect(cells.at(-1)).toBe('-'); // UPDATE
+    expect(cells.at(-2)).toBe('-'); // SUBMIT
+  });
+
+  it('--history N fetches up to N builds per platform, newest first, each row carrying its own SUBMIT/UPDATE', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
-      // Out of order on purpose — the CLI must not depend on the API
-      // returning builds newest-first.
-      buildsResponse({
+      appOverviewResponse({
         ios: [
+          // Out of order on purpose — the CLI must not depend on the API
+          // returning builds newest-first.
           iosBuild({
             appVersion: '3.2.0',
             appBuildVersion: '40',
             createdAt: '2026-06-20T00:00:00.000Z',
+            submissions: [iosSubmission({ createdAt: '2026-06-21T00:00:00.000Z' })],
           }),
           iosBuild({
             appVersion: '3.2.1',
             appBuildVersion: '41',
             createdAt: '2026-07-20T00:00:00.000Z',
+            submissions: [iosSubmission()],
           }),
         ],
       }),
@@ -139,40 +199,43 @@ describe('run', () => {
 
     await run(['--history', '2']);
 
-    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
-    expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 2 });
+    const overviewCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(overviewCallBody.variables).toEqual({ appId: 'app-1', limit: 2 });
 
     const output = tableOutput();
     expect(output).toContain('2 row(s)');
     // Build 41 (newest) must appear before build 40, confirming client-side sort.
     expect(output.indexOf('41')).toBeLessThan(output.indexOf('40'));
+    // Each row shows its own build's submission date, not one shared value.
+    expect(output).toContain('Finished 2026-07-19');
+    expect(output).toContain('Finished 2026-06-21');
   });
 
   it('--history 1 produces identical output to leaving --history off', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
-      buildsResponse({ ios: [iosBuild()] }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--history', '1']);
 
-    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
-    expect(buildsCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
+    const overviewCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(overviewCallBody.variables).toEqual({ appId: 'app-1', limit: 1 });
 
     expect(tableOutput()).toContain(
-      'VERSION/BUILD/STATUS = latest EAS build attempt, regardless of status.'
+      'VERSION/BUILD = latest EAS build attempt, regardless of status.'
     );
     expect(tableOutput()).not.toContain('newest first');
   });
 
   it('shows the history footer note when --history > 1', async () => {
-    stubFetch([accountsResponse(), appsResponse(), buildsResponse({ ios: [iosBuild()] })]);
+    stubFetch([accountsResponse(), appsResponse(), appOverviewResponse({ ios: [iosBuild()] })]);
 
     await run(['--history', '3']);
 
     expect(tableOutput()).toContain(
-      'VERSION/BUILD/STATUS = latest 3 EAS build(s) per platform, newest first, regardless of status.'
+      'VERSION/BUILD = latest 3 EAS build(s) per platform, newest first, regardless of status.'
     );
   });
 
@@ -180,7 +243,7 @@ describe('run', () => {
     stubFetch([
       accountsResponse([{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }]),
       appsResponse(),
-      buildsResponse({ ios: [iosBuild()] }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run([]);
@@ -192,7 +255,7 @@ describe('run', () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
-      buildsResponse({
+      appOverviewResponse({
         ios: [iosBuild()],
         android: [
           {
@@ -212,15 +275,15 @@ describe('run', () => {
     expect(output).toContain('38'); // the android build number
     // iosBuild() must be fully absent, not just its build number — a real
     // clock (e.g. new Date() for createdAt) can make '41' appear by
-    // coincidence inside the surviving row's BUILD DATE timestamp.
+    // coincidence inside the surviving row's BUILD timestamp.
     expect(output).not.toContain('41'); // the ios build number, filtered out
     expect(output).not.toContain('3.2.1'); // the ios app version, filtered out
 
     // --platform narrows the query itself, not just the client-side
-    // display — the request must never even ask for the other platform's alias.
-    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
-    expect(buildsCallBody.query).toContain('android:');
-    expect(buildsCallBody.query).not.toContain('ios:');
+    // display — the request must never even ask for the other platform's aliases.
+    const overviewCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(overviewCallBody.query).toContain('androidBuilds:');
+    expect(overviewCallBody.query).not.toContain('iosBuilds:');
   });
 
   it('prints "No apps found." when the account has zero apps', async () => {
@@ -230,24 +293,24 @@ describe('run', () => {
     expect(logSpy).toHaveBeenCalledWith('No apps found.');
   });
 
-  it('--app narrows to the matching app only, fetching builds for just that app', async () => {
+  it('--app narrows to the matching app only, fetching the overview for just that app', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse([
         { id: 'app-1', name: 'Storefront', slug: 'storefront' },
         { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
       ]),
-      buildsResponse({ ios: [iosBuild()] }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--app', 'storefront']);
 
-    // accounts + apps + exactly one builds call — the non-matching app's
-    // builds are never fetched — the whole point of --app is to filter
+    // accounts + apps + exactly one overview call — the non-matching app's
+    // overview is never fetched — the whole point of --app is to filter
     // before the expensive step, not after.
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
-    expect(buildsCallBody.variables.appId).toBe('app-1');
+    const overviewCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(overviewCallBody.variables.appId).toBe('app-1');
 
     const output = tableOutput();
     expect(output).toContain('storefront');
@@ -258,7 +321,7 @@ describe('run', () => {
     stubFetch([
       accountsResponse(),
       appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }]),
-      buildsResponse({ ios: [iosBuild()] }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--app', 'STOREFRONT']);
@@ -274,14 +337,14 @@ describe('run', () => {
         { id: 'app-1', name: 'Storefront', slug: 'sf-ios-app' },
         { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
       ]),
-      buildsResponse({ ios: [iosBuild()] }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--app', 'Storefront']);
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);
-    const buildsCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
-    expect(buildsCallBody.variables.appId).toBe('app-1');
+    const overviewCallBody = JSON.parse(fetchImpl.mock.calls[2][1].body);
+    expect(overviewCallBody.variables.appId).toBe('app-1');
 
     const output = tableOutput();
     expect(output).toContain('sf-ios-app');
@@ -339,35 +402,50 @@ describe('run', () => {
     expect(error.message).toContain('No account matched "nope"');
   });
 
-  it('--local shows BUILD DATE in the local timezone with an offset header', async () => {
+  it('--local shifts BUILD/SUBMIT/UPDATE to the local calendar day with an offset header on all three', async () => {
     const originalTz = process.env.TZ;
     process.env.TZ = 'Asia/Tokyo';
     try {
       stubFetch([
         accountsResponse(),
         appsResponse(),
-        buildsResponse({ ios: [iosBuild({ createdAt: '2026-07-26T09:12:34.000Z' })] }),
+        appOverviewResponse({
+          ios: [
+            iosBuild({
+              createdAt: '2026-07-26T23:12:34.000Z',
+              submissions: [iosSubmission({ createdAt: '2026-07-26T23:12:34.000Z' })],
+              runtime: iosRuntime({ createdAt: '2026-07-26T23:12:34.000Z' }),
+            }),
+          ],
+        }),
       ]);
 
       await run(['--local']);
 
       const output = tableOutput();
-      expect(output).toContain('BUILD DATE (+09:00)');
-      expect(output).toContain('2026/07/26-18:12:34');
-      expect(output).not.toContain('09:12:34');
+      expect(output).toContain('BUILD (+09:00)');
+      expect(output).toContain('SUBMIT (+09:00)');
+      expect(output).toContain('UPDATE (+09:00)');
+      // 23:12 UTC + 9h rolls into 2026-07-27 locally.
+      expect(output).toContain('2026-07-27');
+      expect(output).not.toContain('2026-07-26');
     } finally {
       if (originalTz === undefined) delete process.env.TZ;
       else process.env.TZ = originalTz;
     }
   });
 
-  it('shows the plain "BUILD DATE" header (UTC) when --local is not passed', async () => {
-    stubFetch([accountsResponse(), appsResponse(), buildsResponse({ ios: [iosBuild()] })]);
+  it('shows the plain BUILD/SUBMIT/UPDATE headers (UTC) when --local is not passed', async () => {
+    stubFetch([accountsResponse(), appsResponse(), appOverviewResponse({ ios: [iosBuild()] })]);
 
     await run([]);
 
     const output = tableOutput();
-    expect(output).toContain('BUILD DATE');
-    expect(output).not.toContain('BUILD DATE (');
+    expect(output).toContain('BUILD');
+    expect(output).not.toContain('BUILD (');
+    expect(output).toContain('SUBMIT');
+    expect(output).not.toContain('SUBMIT (');
+    expect(output).toContain('UPDATE');
+    expect(output).not.toContain('UPDATE (');
   });
 });

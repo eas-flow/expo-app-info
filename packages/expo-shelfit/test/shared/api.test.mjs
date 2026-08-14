@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../src/errors.mjs';
 import { createApiClient } from '../../src/shared/api.mjs';
+import { appOverviewResponse, runtimeWith } from '../helpers.mjs';
 
 function jsonResponse(body, { status = 200, ok = true } = {}) {
   return { status, ok, json: async () => body };
@@ -243,160 +244,272 @@ describe('fetchApps', () => {
   });
 });
 
-describe('fetchBuilds', () => {
+describe('fetchAppOverview', () => {
+  const iosBuild = (overrides = {}) => ({
+    platform: 'IOS',
+    appVersion: '3.2.1',
+    appBuildVersion: '41',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  // A build carries no SUBMIT/UPDATE unless a test gives it one.
+  const withoutShipping = (build) => ({ ...build, submission: null, update: null });
+
   it('defaults to limit 1 and merges ios/android builds into one array', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              ios: [
-                {
-                  platform: 'IOS',
-                  appVersion: '3.2.1',
-                  appBuildVersion: '41',
-                  createdAt: '2026-07-01T00:00:00.000Z',
-                },
-              ],
-              android: [
-                {
-                  platform: 'ANDROID',
-                  appVersion: '3.2.0',
-                  appBuildVersion: '38',
-                  createdAt: '2026-06-01T00:00:00.000Z',
-                },
-              ],
-            },
-          },
-        },
-      })
-    );
+    const androidBuild = {
+      platform: 'ANDROID',
+      appVersion: '3.2.0',
+      appBuildVersion: '38',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(appOverviewResponse({ ios: [iosBuild()], android: [androidBuild] }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1');
+    const { builds } = await client.fetchAppOverview('app-1');
 
-    expect(builds).toEqual([
-      {
-        platform: 'IOS',
-        appVersion: '3.2.1',
-        appBuildVersion: '41',
-        createdAt: '2026-07-01T00:00:00.000Z',
-      },
-      {
-        platform: 'ANDROID',
-        appVersion: '3.2.0',
-        appBuildVersion: '38',
-        createdAt: '2026-06-01T00:00:00.000Z',
-      },
-    ]);
+    expect(builds).toEqual([withoutShipping(iosBuild()), withoutShipping(androidBuild)]);
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.variables).toEqual({ appId: 'app-1', limit: 1 });
   });
 
   it('passes a custom limit through to the GraphQL variables', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ data: { app: { byId: { id: 'app-1', ios: [], android: [] } } } })
-      );
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await client.fetchBuilds('app-1', { limit: 5 });
+    await client.fetchAppOverview('app-1', { limit: 5 });
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.variables).toEqual({ appId: 'app-1', limit: 5 });
   });
 
-  it('returns an empty array when the app has no finished builds on either platform', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse({ data: { app: { byId: { id: 'app-1', ios: [], android: [] } } } })
-      );
+  it('returns an empty builds array when the app has no builds at all', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchBuilds('app-1')).resolves.toEqual([]);
+    await expect(client.fetchAppOverview('app-1')).resolves.toEqual({ builds: [] });
   });
 
-  it('sorts each platform by createdAt descending regardless of the order the API returns them in', async () => {
+  it('sorts each platform’s builds by createdAt descending regardless of the order the API returns them in', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              // Deliberately out of order, to prove the client does not
-              // just trust the API's response order.
-              ios: [
-                {
-                  platform: 'IOS',
-                  appVersion: '1.0.0',
-                  appBuildVersion: '10',
-                  createdAt: '2026-05-01T00:00:00.000Z',
-                },
-                {
-                  platform: 'IOS',
-                  appVersion: '3.0.0',
-                  appBuildVersion: '30',
-                  createdAt: '2026-07-01T00:00:00.000Z',
-                },
-                {
-                  platform: 'IOS',
-                  appVersion: '2.0.0',
-                  appBuildVersion: '20',
-                  createdAt: '2026-06-01T00:00:00.000Z',
-                },
-              ],
-              android: [
-                {
-                  platform: 'ANDROID',
-                  appVersion: '1.0.0',
-                  appBuildVersion: '5',
-                  createdAt: '2026-04-01T00:00:00.000Z',
-                },
-                {
-                  platform: 'ANDROID',
-                  appVersion: '2.0.0',
-                  appBuildVersion: '6',
-                  createdAt: '2026-06-15T00:00:00.000Z',
-                },
-              ],
-            },
-          },
-        },
+      appOverviewResponse({
+        // Deliberately out of order, to prove the client does not just
+        // trust the API's response order.
+        ios: [
+          iosBuild({ appBuildVersion: '10', createdAt: '2026-05-01T00:00:00.000Z' }),
+          iosBuild({ appBuildVersion: '30', createdAt: '2026-07-01T00:00:00.000Z' }),
+          iosBuild({ appBuildVersion: '20', createdAt: '2026-06-01T00:00:00.000Z' }),
+        ],
+        android: [
+          { platform: 'ANDROID', appBuildVersion: '5', createdAt: '2026-04-01T00:00:00.000Z' },
+          { platform: 'ANDROID', appBuildVersion: '6', createdAt: '2026-06-15T00:00:00.000Z' },
+        ],
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1', { limit: 3 });
+    const { builds } = await client.fetchAppOverview('app-1', { limit: 3 });
 
     expect(builds.map((b) => b.appBuildVersion)).toEqual(['30', '20', '10', '6', '5']);
+  });
+
+  it('attaches each build’s own submission, so two builds do not share one value', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            appBuildVersion: '41',
+            createdAt: '2026-08-01T00:00:00.000Z',
+            submissions: [{ status: 'IN_QUEUE', createdAt: '2026-08-09T00:00:00.000Z' }],
+          }),
+          iosBuild({
+            appBuildVersion: '40',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            submissions: [{ status: 'FINISHED', createdAt: '2026-07-02T00:00:00.000Z' }],
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { limit: 2, platform: 'ios' });
+
+    expect(builds.map((b) => b.submission)).toEqual([
+      { status: 'IN_QUEUE', createdAt: '2026-08-09T00:00:00.000Z' },
+      { status: 'FINISHED', createdAt: '2026-07-02T00:00:00.000Z' },
+    ]);
+  });
+
+  it('picks a re-submitted build’s latest attempt by createdAt', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            // Deliberately out of order.
+            submissions: [
+              { status: 'ERRORED', createdAt: '2026-08-01T00:00:00.000Z' },
+              { status: 'FINISHED', createdAt: '2026-08-09T00:00:00.000Z' },
+            ],
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].submission).toEqual({
+      status: 'FINISHED',
+      createdAt: '2026-08-09T00:00:00.000Z',
+    });
+  });
+
+  it('nulls the submission for a build that was never submitted', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(appOverviewResponse({ ios: [iosBuild({ submissions: [] })] }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].submission).toBeNull();
+  });
+
+  it('picks the latest update on the build’s runtime, ignoring the other platform’s and flattening branch.name to a string', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            // One runtime's page mixes both platforms — Runtime.updates has
+            // no platform filter — and is deliberately out of order here.
+            runtime: runtimeWith([
+              { platform: 'android', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
+              { platform: 'ios', branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00Z' },
+              {
+                platform: 'ios',
+                branch: { name: 'production' },
+                createdAt: '2026-08-12T00:00:00Z',
+              },
+            ]),
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].update).toEqual({ branch: 'production', createdAt: '2026-08-12T00:00:00Z' });
+  });
+
+  it('nulls the update for a build with no runtime, and for a runtime with no update for that platform', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({ appBuildVersion: '41', runtime: null }),
+          iosBuild({
+            appBuildVersion: '40',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            runtime: runtimeWith([
+              { platform: 'android', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
+            ]),
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds.map((b) => b.update)).toEqual([null, null]);
+  });
+
+  it('matches the build’s platform against Update.platform case-insensitively', async () => {
+    // The two ends disagree: `Build.platform` is the AppPlatform enum
+    // ("IOS"), `Update.platform` is a plain String ("ios"). A strict
+    // comparison matched nothing and emptied the UPDATE column for every
+    // row — silently, because "no update yet" is a legitimate result. Both
+    // casings are pinned here so neither end can drift back.
+    for (const platform of ['ios', 'IOS']) {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        appOverviewResponse({
+          ios: [
+            iosBuild({
+              runtime: runtimeWith([
+                { platform, branch: { name: 'preview' }, createdAt: '2026-08-12T00:00:00.000Z' },
+              ]),
+            }),
+          ],
+        })
+      );
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+      expect(builds[0].update).toEqual({
+        branch: 'preview',
+        createdAt: '2026-08-12T00:00:00.000Z',
+      });
+    }
+  });
+
+  it('returns a null branch when the update has none', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            runtime: runtimeWith([
+              { platform: 'ios', branch: null, createdAt: '2026-08-12T00:00:00.000Z' },
+            ]),
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].update).toEqual({ branch: null, createdAt: '2026-08-12T00:00:00.000Z' });
+  });
+
+  it('requests branch as `{ name }`, since UpdateBranch is an object and a bare `branch` is rejected by the API', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAppOverview('app-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('branch { name }');
+  });
+
+  it('asks for more than one update per runtime, since Runtime.updates cannot be filtered by platform', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAppOverview('app-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('runtime { updates(first: 10)');
   });
 
   it('throws ApiError (not TypeError) when the app is missing from the response', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ data: { app: { byId: null } } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchBuilds('app-1')).rejects.toThrow(ApiError);
+    await expect(client.fetchAppOverview('app-1')).rejects.toThrow(ApiError);
   });
 
-  it('with platform: "ios", queries only the ios alias and returns only ios builds', async () => {
+  it('throws ApiError when a build’s submissions come back malformed even if the builds list is fine', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         data: {
           app: {
             byId: {
               id: 'app-1',
-              ios: [
-                {
-                  platform: 'IOS',
-                  appVersion: '3.2.1',
-                  appBuildVersion: '41',
-                  createdAt: '2026-07-01T00:00:00.000Z',
-                },
-              ],
+              iosBuilds: [{ platform: 'IOS', submissions: null, runtime: null }],
             },
           },
         },
@@ -404,47 +517,29 @@ describe('fetchBuilds', () => {
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1', { platform: 'ios' });
+    await expect(client.fetchAppOverview('app-1', { platform: 'ios' })).rejects.toThrow(ApiError);
+  });
 
-    expect(builds).toEqual([
-      {
-        platform: 'IOS',
-        appVersion: '3.2.1',
-        appBuildVersion: '41',
-        createdAt: '2026-07-01T00:00:00.000Z',
-      },
-    ]);
+  it('with platform: "ios", queries only the ios alias and returns only ios data', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse({ ios: [iosBuild()] }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds).toEqual([withoutShipping(iosBuild())]);
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(query).toContain('ios:');
-    expect(query).not.toContain('android:');
+    expect(query).toContain('iosBuilds:');
+    expect(query).not.toContain('android');
   });
 
-  it('requests status and passes it through on each returned build, without filtering on it', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: {
-          app: {
-            byId: {
-              id: 'app-1',
-              ios: [
-                {
-                  platform: 'IOS',
-                  status: 'ERRORED',
-                  appVersion: '3.2.2',
-                  appBuildVersion: '42',
-                  createdAt: '2026-08-01T00:00:00.000Z',
-                },
-              ],
-              android: [],
-            },
-          },
-        },
-      })
-    );
+  it('requests build status and passes it through on each returned build, without filtering on it', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(appOverviewResponse({ ios: [iosBuild({ status: 'ERRORED' })] }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const builds = await client.fetchBuilds('app-1');
+    const { builds } = await client.fetchAppOverview('app-1');
 
     expect(builds[0].status).toBe('ERRORED');
 
@@ -462,12 +557,18 @@ describe('countBuildsByMonth', () => {
     { start: '2026-06-01T00:00:00.000Z', end: '2026-07-01T00:00:00.000Z' },
   ];
 
-  const zero = () => ({ success: 0, errored: 0, canceled: 0 });
+  const zero = () => ({ success: 0, errored: 0, canceled: 0, buildDurationMs: 0 });
 
   // `status` defaults to FINISHED so callers that don't care about status
   // bucketing (most of these tests) don't have to repeat it everywhere.
-  function build(createdAt, status = 'FINISHED') {
-    return { createdAt, status };
+  // `buildDuration` defaults to undefined (no `metrics`), matching a build
+  // whose duration metric hasn't landed yet.
+  function build(createdAt, status = 'FINISHED', buildDuration) {
+    return {
+      createdAt,
+      status,
+      ...(buildDuration === undefined ? {} : { metrics: { buildDuration } }),
+    };
   }
 
   function buildsPage(iosBuilds, androidBuilds) {
@@ -501,13 +602,16 @@ describe('countBuildsByMonth', () => {
     // pagination stops there; no second page should even be requested.
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      {
-        ios: { success: 1, errored: 0, canceled: 0 },
-        android: { success: 1, errored: 0, canceled: 0 },
-      },
-      { ios: { success: 0, errored: 1, canceled: 1 }, android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        {
+          ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 },
+          android: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 },
+        },
+        { ios: { success: 0, errored: 1, canceled: 1, buildDurationMs: 0 }, android: zero() },
+      ],
+      missingMetricsCount: 4,
+    });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
@@ -531,10 +635,13 @@ describe('countBuildsByMonth', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 }, android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
   });
 
   it('ignores builds older than the oldest requested month', async () => {
@@ -545,10 +652,13 @@ describe('countBuildsByMonth', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 }, android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
   });
 
   it('pages again when a platform returns a full page, stopping once a short page arrives', async () => {
@@ -564,7 +674,7 @@ describe('countBuildsByMonth', () => {
       .mockResolvedValueOnce(buildsPage([build('2026-06-01T00:00:00.000Z')], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const counts = await client.countBuildsByMonth('app-1', MONTHS);
+    const { counts } = await client.countBuildsByMonth('app-1', MONTHS);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
 
     const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
@@ -578,10 +688,13 @@ describe('countBuildsByMonth', () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: zero(), android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: zero(), android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 0,
+    });
   });
 
   it('throws ApiError when the build query fails', async () => {
@@ -601,10 +714,13 @@ describe('countBuildsByMonth', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual([
-      { ios: { success: 1, errored: 0, canceled: 0 }, android: zero() },
-      { ios: zero(), android: zero() },
-    ]);
+    await expect(client.countBuildsByMonth('app-1', MONTHS)).resolves.toEqual({
+      counts: [
+        { ios: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 }, android: zero() },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
   });
 
   it('throws ApiError (not TypeError) when the app is missing from a builds page response', async () => {
@@ -631,10 +747,13 @@ describe('countBuildsByMonth', () => {
 
     await expect(
       client.countBuildsByMonth('app-1', MONTHS, { platform: 'android' })
-    ).resolves.toEqual([
-      { ios: zero(), android: { success: 1, errored: 0, canceled: 0 } },
-      { ios: zero(), android: zero() },
-    ]);
+    ).resolves.toEqual({
+      counts: [
+        { ios: zero(), android: { success: 1, errored: 0, canceled: 0, buildDurationMs: 0 } },
+        { ios: zero(), android: zero() },
+      ],
+      missingMetricsCount: 1,
+    });
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(query).not.toContain('ios:');
@@ -667,7 +786,7 @@ describe('countBuildsByMonth', () => {
     expect(secondQuery).not.toContain('android:');
   });
 
-  it('requests status (not appVersion/appBuildVersion) in the paged builds query', async () => {
+  it('requests status and metrics { buildDuration } (not appVersion/appBuildVersion) in the paged builds query', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(buildsPage([], []));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
@@ -677,63 +796,172 @@ describe('countBuildsByMonth', () => {
     expect(query).toContain('status');
     expect(query).not.toContain('status: FINISHED');
     expect(query).not.toContain('appVersion');
+    expect(query).toContain('metrics { buildDuration }');
+  });
+
+  it('sums metrics.buildDuration into buildDurationMs for counted builds, per platform/month', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        buildsPage(
+          [
+            build('2026-07-20T00:00:00.000Z', 'FINISHED', 100_000),
+            build('2026-07-21T00:00:00.000Z', 'ERRORED', 50_000),
+          ],
+          [build('2026-06-05T00:00:00.000Z', 'FINISHED', 30_000)]
+        )
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { counts, missingMetricsCount } = await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(counts[0].ios.buildDurationMs).toBe(150_000);
+    expect(counts[1].android.buildDurationMs).toBe(30_000);
+    expect(missingMetricsCount).toBe(0);
+  });
+
+  it('counts a build with no metrics.buildDuration towards missingMetricsCount, not buildDurationMs, while still counting its status', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(
+      buildsPage(
+        [
+          build('2026-07-20T00:00:00.000Z', 'FINISHED', 100_000),
+          build('2026-07-21T00:00:00.000Z', 'FINISHED'), // no metrics
+        ],
+        []
+      )
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { counts, missingMetricsCount } = await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(counts[0].ios).toEqual({
+      success: 2,
+      errored: 0,
+      canceled: 0,
+      buildDurationMs: 100_000,
+    });
+    expect(missingMetricsCount).toBe(1);
+  });
+
+  it('does not count a build outside every requested month towards missingMetricsCount, since it was never counted at all', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(buildsPage([build('2026-05-15T00:00:00.000Z', 'FINISHED')], []));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { missingMetricsCount } = await client.countBuildsByMonth('app-1', MONTHS);
+
+    expect(missingMetricsCount).toBe(0);
   });
 });
 
-describe('fetchSubscription', () => {
-  const subscriptionResponse = {
-    data: {
-      account: {
-        byId: {
-          id: 'acc-1',
-          subscription: {
-            id: 'sub-1',
-            planId: 'production',
-            name: 'Production',
-            status: 'active',
-            trialEnd: null,
-            concurrencies: { total: 2, ios: 1, android: 1 },
+describe('fetchAccountMembers', () => {
+  const subscription = {
+    id: 'sub-1',
+    planId: 'production',
+    name: 'Production',
+    status: 'active',
+    trialEnd: null,
+    concurrencies: { total: 2, ios: 1, android: 1 },
+  };
+
+  function membersPage(edges, { hasNextPage = false, endCursor = null } = {}) {
+    return { edges, pageInfo: { hasNextPage, endCursor } };
+  }
+
+  function accountResponse({
+    accountId = 'acc-1',
+    ownerUserActor = null,
+    page = membersPage([]),
+  } = {}) {
+    return jsonResponse({
+      data: {
+        account: {
+          byId: {
+            id: accountId,
+            subscription,
+            ownerUserActor,
+            membersPaginated: page,
           },
         },
       },
-    },
-  };
+    });
+  }
 
-  it('returns the subscription for an account', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    await expect(client.fetchSubscription('acc-1')).resolves.toEqual(
-      subscriptionResponse.data.account.byId.subscription
-    );
-
-    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(body.variables).toEqual({ accountId: 'acc-1' });
+  const humanNode = (id, role, username) => ({
+    id,
+    role,
+    userActor: { id: `user-${id}`, username },
+    actor: { id: `user-${id}` },
+  });
+  const robotNode = (id, role, firstName) => ({
+    id,
+    role,
+    userActor: null,
+    actor: { id: `robot-${id}`, firstName },
   });
 
-  it('does not query billingPeriod or usageMetrics — a minimal, standalone query', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(subscriptionResponse));
+  it('returns subscription/ownerUserActor/members for a personal account', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(accountResponse({ ownerUserActor: { id: 'user-1', username: 'alice' } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await client.fetchSubscription('acc-1');
+    await expect(client.fetchAccountMembers('acc-1')).resolves.toEqual({
+      subscription,
+      ownerUserActor: { id: 'user-1', username: 'alice' },
+      members: [],
+    });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ accountId: 'acc-1', after: null });
+  });
+
+  it('returns members and a null ownerUserActor for an organization account', async () => {
+    const members = [humanNode('m1', 'OWNER', 'alice'), robotNode('m2', 'DEVELOPER', 'ci-bot')];
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(accountResponse({ page: membersPage(members.map((node) => ({ node }))) }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const result = await client.fetchAccountMembers('acc-1');
+
+    expect(result.ownerUserActor).toBeNull();
+    expect(result.members).toEqual(members);
+  });
+
+  it('does not query billingPeriod or usageMetrics', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(accountResponse());
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAccountMembers('acc-1');
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.query).not.toContain('billingPeriod');
     expect(body.query).not.toContain('usageMetrics');
   });
 
-  it('returns null when the account has no subscription', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      jsonResponse({
-        data: { account: { byId: { id: 'acc-1', subscription: null } } },
-      })
-    );
+  it('paginates membersPaginated until hasNextPage is false, merging members across pages', async () => {
+    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'alice') }], {
+      hasNextPage: true,
+      endCursor: 'cursor-1',
+    });
+    const page2 = membersPage([{ node: humanNode('m2', 'DEVELOPER', 'bob') }]);
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(accountResponse({ page: page1 }))
+      .mockResolvedValueOnce(accountResponse({ page: page2 }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
+    const result = await client.fetchAccountMembers('acc-1');
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(result.members.map((m) => m.id)).toEqual(['m1', 'm2']);
+    const secondBody = JSON.parse(fetchImpl.mock.calls[1][1].body);
+    expect(secondBody.variables).toEqual({ accountId: 'acc-1', after: 'cursor-1' });
   });
 
-  it('throws ApiError when the account lacks billing permission', async () => {
+  it('throws ApiError when the account lacks billing/membership permission', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(
@@ -741,7 +969,7 @@ describe('fetchSubscription', () => {
       );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchSubscription('acc-1')).rejects.toThrow(ApiError);
+    await expect(client.fetchAccountMembers('acc-1')).rejects.toThrow(ApiError);
   });
 
   it('returns null (not a TypeError) when the account itself is missing from the response', async () => {
@@ -750,6 +978,36 @@ describe('fetchSubscription', () => {
       .mockResolvedValue(jsonResponse({ data: { account: { byId: null } } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchSubscription('acc-1')).resolves.toBeNull();
+    await expect(client.fetchAccountMembers('acc-1')).resolves.toBeNull();
+  });
+
+  it('puts the Robot inline fragment on actor, not on ownerUserActor (which is UserActor, not the Actor interface)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(accountResponse());
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await client.fetchAccountMembers('acc-1');
+
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('membersPaginated');
+    expect(query).toContain('actor { id ... on Robot { firstName } }');
+    expect(query).not.toContain('ownerUserActor { id username ... on Robot');
+  });
+
+  it('throws ApiError (not a TypeError) when membersPaginated is malformed mid-pagination', async () => {
+    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'alice') }], {
+      hasNextPage: true,
+      endCursor: 'cursor-1',
+    });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(accountResponse({ page: page1 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: { account: { byId: { id: 'acc-1', subscription, ownerUserActor: null } } },
+        })
+      );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    await expect(client.fetchAccountMembers('acc-1')).rejects.toThrow(ApiError);
   });
 });

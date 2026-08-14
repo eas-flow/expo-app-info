@@ -35,6 +35,45 @@ export function appsResponse(
   });
 }
 
+/**
+ * BuildsPage's shape (`--stats`, `src/shared/api.mjs#buildsPageQuery`) — a
+ * flat `ios`/`android` alias per platform, unrelated to and unchanged by
+ * AppOverview's `<platform>Builds` alias below.
+ */
 export function buildsResponse({ ios = [], android = [], appId = 'app-1' } = {}) {
   return jsonResponse({ data: { app: { byId: { id: appId, ios, android } } } });
+}
+
+/**
+ * AppOverview's shape (default app list, `src/shared/api.mjs#appOverviewQuery`):
+ * a `<platform>Builds` alias holding builds that each carry their own
+ * `submissions` and `runtime`. Both default per build, so a fixture that
+ * doesn't care about SUBMIT/UPDATE can leave them out. Passing `undefined`
+ * for a platform omits its alias entirely, matching what --platform requests.
+ */
+export function appOverviewResponse({ ios = [], android = [], appId = 'app-1' } = {}) {
+  const byId = { id: appId };
+  for (const [prefix, builds] of [
+    ['ios', ios],
+    ['android', android],
+  ]) {
+    if (builds === undefined) continue;
+    byId[`${prefix}Builds`] = builds.map(({ submissions = [], runtime = null, ...build }) => ({
+      ...build,
+      submissions,
+      runtime,
+    }));
+  }
+  return jsonResponse({ data: { app: { byId } } });
+}
+
+/**
+ * Raw `Build.runtime` shape: a Relay connection whose nodes carry `platform`
+ * (one runtime's page mixes both) and a `branch` that is an `UpdateBranch`
+ * object, not a plain string. `Update.platform` is a lowercase `String!`,
+ * unlike `Build.platform`'s uppercase `AppPlatform` enum — callers pass
+ * `'ios'`/`'android'` here, matching what the real API returns.
+ */
+export function runtimeWith(updates) {
+  return { updates: { edges: updates.map((node) => ({ node })) } };
 }

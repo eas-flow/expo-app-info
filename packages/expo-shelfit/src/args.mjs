@@ -10,8 +10,7 @@ const PLATFORMS = ['ios', 'android'];
 // output; "app" swaps the ACCOUNT column for an APP column.
 const GROUP_BY_AXES = ['account', 'app'];
 // Sanity cap on --history (no documented API max) — keeps a typo like
-// --history 99999 from hammering the API. Confirmed accepted at 100 via
-// scripts/probe-history.mjs.
+// --history 99999 from hammering the API. Confirmed accepted at 100.
 const MAX_HISTORY = 100;
 
 // --stats defaults to the last 3 UTC calendar months; --month widens it, capped
@@ -26,6 +25,13 @@ const MAX_MONTH = 12;
 export const DEPRECATED_USAGE_WARNING =
   '--usage is deprecated and will be removed in the next major version. Use --stats instead.';
 
+// `--plan` was this mode's original name, back when it only showed
+// subscription info. It now also lists each organization's members and
+// their role, so `--plan` no longer fits and it is `--members`. The old
+// flag still works but warns; it goes away in the next major.
+export const DEPRECATED_PLAN_WARNING =
+  '--plan is deprecated and will be removed in the next major version. Use --members instead.';
+
 export const HELP = `
   expo-shelfit — List every Expo (EAS) app with its latest build version per platform.
 
@@ -39,28 +45,35 @@ export const HELP = `
     --platform <platform>   Only show "ios" or "android" builds
     --stats                 Show success/errored/canceled/total build counts per UTC
                              calendar month and platform (last 3 months by default)
-                             instead of the app list. Cannot be combined with --plan or
-                             --history.
+                             instead of the app list. Cannot be combined with --members
+                             or --history.
     --month <n>             Widen --stats to the last <n> calendar months (1-12, default
                              3). Only valid together with --stats.
     --group-by <axis>       Count --stats rows per "account" (default) or per "app".
                              "app" replaces the ACCOUNT column with an APP column. Only
                              valid together with --stats.
-    --plan                  Show current account subscription (plan/concurrency) instead
-                             of the app list. Cannot be combined with --stats or --history.
+    --members               Show account and member information instead of the app
+                             list: current subscription (plan/concurrency), and for each
+                             organization, its members and their role. Cannot be
+                             combined with --stats or --history.
     --history <N>           Show the N most recent builds per platform instead of just
-                             the latest (1-100). Cannot be combined with --stats or --plan.
+                             the latest (1-100). Cannot be combined with --stats or
+                             --members.
     --account <slug|name>   Only this account (matches slug or EAS Display name). Applies
                              to every display mode.
     --app <slug|name>       Only this app (matches slug or EAS Display name). Applies to
-                             every display mode except --plan (--plan doesn't fetch apps).
-    --local                 Show BUILD DATE in the local timezone (TZ env var or system
-                             default) instead of UTC. Only affects BUILD DATE — --stats'
-                             PERIOD and --plan's TRIAL END stay UTC. Cannot be combined
-                             with --stats or --plan (neither has a BUILD DATE column).
+                             every display mode except --members (--members doesn't
+                             fetch apps).
+    --local                 Show BUILD/SUBMIT/UPDATE dates in the local timezone (TZ env
+                             var or system default) instead of UTC — affects which
+                             calendar day they fall on. --stats' PERIOD and --members'
+                             TRIAL END stay UTC. Cannot be combined with --stats or
+                             --members (neither has a date column --local affects).
 
   Deprecated
     --usage                 Old name for --stats. Still works, prints a warning on
+                             stderr, and will be removed in the next major version.
+    --plan                  Old name for --members. Still works, prints a warning on
                              stderr, and will be removed in the next major version.
 
   Authentication
@@ -77,7 +90,7 @@ export function parseArgs(argv) {
     version: false,
     platform: null,
     stats: false,
-    plan: false,
+    members: false,
     history: null,
     month: null,
     account: null,
@@ -90,9 +103,11 @@ export function parseArgs(argv) {
   };
 
   // Tracked separately so error messages can echo the flag the user actually
-  // typed: `--usage --plan` must not report `--stats`, which they never wrote.
+  // typed: `--usage --members` must not report `--stats`, which they never wrote.
   let sawStats = false;
   let sawDeprecatedUsage = false;
+  let sawMembers = false;
+  let sawDeprecatedPlan = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -105,8 +120,10 @@ export function parseArgs(argv) {
       sawStats = true;
     } else if (arg === '--usage') {
       sawDeprecatedUsage = true;
+    } else if (arg === '--members') {
+      sawMembers = true;
     } else if (arg === '--plan') {
-      opts.plan = true;
+      sawDeprecatedPlan = true;
     } else if (arg === '--platform') {
       opts.platform = requireValue(argv, ++i, '--platform');
     } else if (arg.startsWith('--platform=')) {
@@ -139,8 +156,13 @@ export function parseArgs(argv) {
   }
 
   opts.stats = sawStats || sawDeprecatedUsage;
-  const statsFlag = sawStats ? '--stats' : '--usage';
+  opts.members = sawMembers || sawDeprecatedPlan;
+  const aliasFlags = {
+    stats: sawStats ? '--stats' : '--usage',
+    members: sawMembers ? '--members' : '--plan',
+  };
   if (sawDeprecatedUsage) opts.warnings.push(DEPRECATED_USAGE_WARNING);
+  if (sawDeprecatedPlan) opts.warnings.push(DEPRECATED_PLAN_WARNING);
 
   if (opts.platform !== null) {
     const normalized = opts.platform.toLowerCase();
@@ -195,7 +217,7 @@ export function parseArgs(argv) {
   if (activeModes.length >= 2) {
     const [subject, other] = activeModes;
     throw new CliError(
-      `${modeFlag(subject, statsFlag)} cannot be combined with ${modeFlag(other, statsFlag)}.`
+      `${modeFlag(subject, aliasFlags)} cannot be combined with ${modeFlag(other, aliasFlags)}.`
     );
   }
 
@@ -213,7 +235,7 @@ export function parseArgs(argv) {
     if (!opts[flag]) continue;
     for (const mode of incompatibleModes) {
       if (opts[mode]) {
-        throw new CliError(`--${flag} cannot be used with ${modeFlag(mode, statsFlag)}.`);
+        throw new CliError(`--${flag} cannot be used with ${modeFlag(mode, aliasFlags)}.`);
       }
     }
   }
@@ -221,11 +243,11 @@ export function parseArgs(argv) {
   return opts;
 }
 
-const EXCLUSIVE_MODES = ['plan', 'history', 'stats'];
+const EXCLUSIVE_MODES = ['members', 'history', 'stats'];
 const MODE_ONLY_FLAGS = { month: 'stats', groupBy: 'stats' };
-// --app is account-only under --plan, which never fetches apps; --local has no
-// BUILD DATE column to affect under --stats/--plan.
-const MODE_INCOMPATIBLE_FLAGS = { app: ['plan'], local: ['stats', 'plan'] };
+// --app is account-only under --members, which never fetches apps; --local has
+// no BUILD/SUBMIT/UPDATE date column to affect under --stats/--members.
+const MODE_INCOMPATIBLE_FLAGS = { app: ['members'], local: ['stats', 'members'] };
 
 // For the flags whose opts key and CLI spelling differ — camelCase can't be
 // turned into `--group-by` by prefixing alone.
@@ -235,10 +257,10 @@ function flagName(key) {
   return FLAG_NAMES[key] ?? `--${key}`;
 }
 
-// stats is the only mode with an alias, so it's the only one whose flag name
-// depends on what this run was invoked with.
-function modeFlag(mode, statsFlag) {
-  return mode === 'stats' ? statsFlag : `--${mode}`;
+// stats and members are the only modes with a deprecated alias, so they're
+// the only ones whose flag name depends on what this run was invoked with.
+function modeFlag(mode, aliasFlags) {
+  return aliasFlags[mode] ?? `--${mode}`;
 }
 
 function isModeActive(opts, mode) {

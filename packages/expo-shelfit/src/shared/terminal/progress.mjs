@@ -9,7 +9,6 @@ export function progress(msg) {
   process.stderr.write(`\r\x1b[2K${dim(msg)}`);
 }
 
-/** Shared "X: n/total unit…" phrasing for plan.mjs / stats.mjs's aggregate progress. */
 export function progressCount(label, done, total, unit) {
   progress(`${label}: ${done}/${total} ${unit}…`);
 }

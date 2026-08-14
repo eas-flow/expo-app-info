@@ -55,28 +55,36 @@ src/cli.mjs           The top-level run() flow: resolve auth, fetch accounts,
 src/args.mjs          Argument parsing, validation limits, help text
 src/errors.mjs        CliError / ApiError
 src/shared/
-  api.mjs               EAS GraphQL client (throws, never exits/prints)
-  concurrency.mjs        createSemaphore / mapWithConcurrency / CONCURRENCY
-  filter.mjs             Client-side --account / --app resolution (exact
+  api.mjs             EAS GraphQL client (throws, never exits/prints)
+  concurrency.mjs     createSemaphore / mapWithConcurrency / CONCURRENCY
+  filter.mjs          Client-side --account / --app resolution (exact
                       slug/Display name match, "Did you mean" suggestions)
-  dates.mjs              UTC date helpers (calendar-month boundaries, display
-                      formatting) — every date this CLI shows is UTC
-  cells.mjs               cellOrDash, shared by stats/plan's format.mjs
+  dates.mjs           Date helpers. Every boundary the CLI computes stays UTC
+                      (calendar months, inclusive end, date-only display);
+                      only formatBuildDate's output moves, and only with --local
+  cells.mjs           cellOrDash/versionCell/labelDateCell, shared by
+                      list/stats/members' format.mjs
   terminal/
-    render.mjs              Table rendering and column widths
-    progress.mjs            TTY-only progress reporting on stderr
+    render.mjs        Table rendering and column widths
+    progress.mjs      TTY-only progress reporting on stderr
 src/features/
-  list/  command.mjs + service.mjs + format.mjs — default app list (and --history)
-  stats/ command.mjs + service.mjs + format.mjs — --stats
-  plan/  command.mjs + format.mjs — --plan (no service.mjs; too small to need one)
+  list/    command.mjs + service.mjs + format.mjs — default app list, one row
+           per app x platform with BUILD/SUBMIT/UPDATE (and --history)
+  stats/   command.mjs + service.mjs + format.mjs — --stats
+  members/ command.mjs + service.mjs + format.mjs — --members (personal/org accounts)
 test/                 Vitest tests, mirroring src/ 1:1 (there is no
                       machine-readable output mode; the table is the only
                       supported output). test/features/*/command.test.mjs are
                       the per-feature integration tests for run() with a
-                      mocked fetch; test/features/{list,stats}/service.test.mjs
-                      test fetching/aggregation against a fake client instead;
+                      mocked fetch; test/features/*/service.test.mjs test
+                      fetching/aggregation against a fake client instead;
                       shared bits live in helpers.mjs
 ```
+
+Which GraphQL queries each display mode runs, and why each is shaped the
+way it is, are in
+[.claude/rules/expo-shelfit-architecture.md](../../.claude/rules/expo-shelfit-architecture.md)
+— that is the single source for it, so it isn't repeated here.
 
 Imports flow one way — `bin → cli → args / features/* → shared/*`, with
 `errors.mjs` importable by anything and importing nothing itself — and never
@@ -87,7 +95,8 @@ never sideways between features (`features/stats/` must not import from
 `src/*` files never call `process.exit` or read directly from `process.argv`
 so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the
 process. Within a feature, `command.mjs` is the only file that calls
-`console.*`; `service.mjs` (list/stats) returns plain data instead.
+`console.*`; every `service.mjs` returns plain data — and, where a
+per-account failure is survivable, a `warnings` string array — instead.
 
 ## Branch strategy
 
@@ -102,9 +111,10 @@ No enforced commit message format. Keep commits focused and PRs small. Use
 the PR template's Verification checklist.
 
 **Never write an issue or PR number into a file in this repo, and comments
-explain why, never what** — see the repo-root
-[CLAUDE.md](../../CLAUDE.md#never-write-issue-or-pr-numbers-into-the-repo)
-for the full rule and reasoning (commit messages, branch names, PR
+explain why, never what** — see
+[.claude/rules/doc-conventions.md](../../.claude/rules/doc-conventions.md)
+and [.claude/rules/code-conventions.md](../../.claude/rules/code-conventions.md)
+for the full rules and reasoning (commit messages, branch names, PR
 titles/bodies, and Release notes are outside the issue-number rule; issue
 linkage there is fine and expected). Before opening a PR, run from the repo
 root:
@@ -151,7 +161,8 @@ you and guard those footguns: `/shelfit-release-draft <package>@<version>`
 covers steps 1–3 (bump + lockfile, release PR, **draft** Release — nothing
 is published yet), and `/shelfit-publish` covers step 4 after the PR is
 merged (local lint/test, a dry check that some version actually differs
-from npm, then publishing the draft Release). See the repo-root `CLAUDE.md`.
+from npm, then publishing the draft Release). See the repo-root `CLAUDE.md`
+for how the two split at the human gate.
 The manual steps above remain the source of truth — the skills just follow
 them.
 

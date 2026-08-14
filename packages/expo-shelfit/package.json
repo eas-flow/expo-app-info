@@ -1,6 +1,6 @@
 {
   "name": "@my-shelfio/expo-shelfit",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "List every Expo (EAS) app in your account with its latest build version per platform — from any directory.",
   "keywords": [
     "expo",
@@ -9,14 +9,7 @@
     "react-native",
     "cli",
     "npx",
-    "version",
-    "app-version",
-    "build",
-    "build-number",
-    "monorepo",
-    "devtools",
-    "shelf",
-    "portfolio"
+    "devtools"
   ],
   "license": "MIT",
   "author": "it0 (https://github.com/my-shelfio/shelfit)",

@@ -20,9 +20,11 @@ import { clearProgress, progressCount } from '../../shared/terminal/progress.mjs
  * costs no extra API call — per-app counts were always being fetched and
  * merely summed.
  *
- * Returns `{ entries, groupCount, months, byApp, warnings }` — `entries` is
- * ready for features/stats/format.mjs#toStatsDisplayRows, `warnings` is a
- * plain string array (no console output here).
+ * Returns `{ entries, groupCount, months, byApp, warnings, metricsMissingCount }`
+ * — `entries` is ready for features/stats/format.mjs#toStatsDisplayRows,
+ * `warnings` is a plain string array (no console output here).
+ * `metricsMissingCount` is a single run-wide total (not per row) of counted
+ * builds that had no `metrics.buildDuration` to add to BUILD MINUTES.
  */
 export async function fetchStatsEntries(client, accounts, opts, now = new Date()) {
   const months = calendarMonths(opts.month ?? DEFAULT_STATS_MONTHS, now);
@@ -53,17 +55,21 @@ export async function fetchStatsEntries(client, accounts, opts, now = new Date()
   let pairsDone = 0;
   const pairResults = await mapWithConcurrency(pairs, async ({ accountIndex, app }) => {
     try {
-      const counts = await client.countBuildsByMonth(app.id, months, { platform: opts.platform });
-      return { accountIndex, app, counts, error: null };
+      const { counts, missingMetricsCount } = await client.countBuildsByMonth(app.id, months, {
+        platform: opts.platform,
+      });
+      return { accountIndex, app, counts, missingMetricsCount, error: null };
     } catch (err) {
       if (!(err instanceof ApiError)) throw err;
-      return { accountIndex, app, counts: null, error: err };
+      return { accountIndex, app, counts: null, missingMetricsCount: 0, error: err };
     } finally {
       progressCount('Fetching stats', ++pairsDone, pairs.length, 'app(s)');
     }
   });
 
   clearProgress();
+
+  const metricsMissingCount = pairResults.reduce((sum, r) => sum + r.missingMetricsCount, 0);
 
   const byApp = (opts.groupBy ?? 'account') === 'app';
   const groups = byApp
@@ -85,7 +91,7 @@ export async function fetchStatsEntries(client, accounts, opts, now = new Date()
     });
   }
 
-  return { entries, groupCount: groups.length, months, byApp, warnings };
+  return { entries, groupCount: groups.length, months, byApp, warnings, metricsMissingCount };
 }
 
 /**
@@ -138,8 +144,8 @@ function appGroups(accounts, appsByAccount, pairResults, months, warnings) {
 
 function emptyTotals(months) {
   return months.map(() => ({
-    ios: { success: 0, errored: 0, canceled: 0 },
-    android: { success: 0, errored: 0, canceled: 0 },
+    ios: { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 },
+    android: { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 },
   }));
 }
 
@@ -154,4 +160,5 @@ function addCounts(target, source) {
   target.success += source.success;
   target.errored += source.errored;
   target.canceled += source.canceled;
+  target.buildDurationMs += source.buildDurationMs;
 }

@@ -1,5 +1,5 @@
 // EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
-// src/cli.mjs is the only place that turns errors into exit codes and messages.
+// bin/cli.mjs is the only place that turns errors into exit codes and messages.
 
 import { ApiError } from '../errors.mjs';
 import { progress } from './terminal/progress.mjs';
@@ -45,16 +45,16 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
+const ALL_PLATFORMS = ['ios', 'android'];
+
 // One `ios:`/`android:` aliased `builds(...)` field per requested platform, so
 // a caller that only wants one doesn't pay for fetching and discarding the
 // other. `--platform` is the caller-facing switch.
-const ALL_PLATFORMS = ['ios', 'android'];
-
+//
 // `status` is deliberately omitted from `filter` — confirmed against the real
-// API (scripts/probe-build-status.mjs) that leaving it out returns builds in
-// every status, not just FINISHED, and that the field isn't required.
-// Filtering client-side afterwards would throw away exactly what the STATUS
-// column exists to show.
+// API that leaving it out returns builds in every status, not just FINISHED,
+// and that the field isn't required. Filtering client-side afterwards would
+// throw away exactly what the STATUS column exists to show.
 function buildAliases(platforms, { offset, fields }) {
   return platforms
     .map(
@@ -64,39 +64,122 @@ function buildAliases(platforms, { offset, fields }) {
     .join('\n    ');
 }
 
-function buildsQuery(platforms) {
-  return `query RecentBuilds($appId: String!, $limit: Int!) {
+// `RuntimeUpdatesFilterInput` carries only `channel` — there is no platform
+// filter — so one runtime's page mixes iOS and Android updates and
+// latestRuntimeUpdate picks its own out. Asking for 1 would therefore return
+// the other platform's update half the time; 10 covers several publishes to
+// both platforms.
+const RUNTIME_UPDATE_PAGE_SIZE = 10;
+
+// SUBMIT and UPDATE are sub-selections of `builds` rather than aliases of
+// `app.submissions`/`app.updateGroups`, so each build row carries its own —
+// still one request per app.
+//
+// `Build.submissions` is the reverse of `Submission.submittedBuild`: exactly
+// the submissions of *that* build attempt, so the association needs no
+// matching on the client. `completedAt` is deliberately not queried — it
+// stays null even for a FINISHED submission (confirmed against the real
+// API), so the SUBMIT column's date comes from `createdAt`, the same field
+// builds and updates use.
+//
+// An OTA update has no build to belong to — it targets a *runtime version* —
+// so `Build.runtime`'s updates are the closest true association: what has
+// been published to the runtime this build shipped. A build with no runtime
+// (`runtime` is nullable) simply has no UPDATE. `Update.branch` is itself an
+// object (`UpdateBranch!`, not a plain string) — the API rejects a bare
+// `branch` with "must have a selection of subfields" — so `{ name }` is
+// required; latestRuntimeUpdate reads `.branch.name` back out.
+function appOverviewQuery(platforms) {
+  const aliases = platforms.map(
+    (p) =>
+      `${p}Builds: builds(offset: 0, limit: $limit, filter: { platform: ${p.toUpperCase()} }) {
+      platform status appVersion appBuildVersion sdkVersion cliVersion createdAt
+      submissions { status createdAt }
+      runtime { updates(first: ${RUNTIME_UPDATE_PAGE_SIZE}) { edges { node { platform branch { name } createdAt } } } }
+    }`
+  );
+
+  return `query AppOverview($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ${buildAliases(platforms, { offset: 0, fields: 'platform status appVersion appBuildVersion createdAt' })}
+    ${aliases.join('\n    ')}
   } }
 }`;
 }
 
-// Billing-scoped, so a token without billing permission errors per account —
-// the CLI degrades that to "-" rather than failing the run. No price field: not
-// confirmed to exist against a real token. `--stats` deliberately queries none
-// of this, since billing-period metrics can't be sliced into calendar ranges.
-const Q_SUBSCRIPTION = `query AccountSubscription($accountId: String!) {
+const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+/** The most recent attempt, so a build re-submitted after a failure reads as its retry. */
+function latestSubmission(submissions) {
+  const [latest] = [...submissions].sort(byNewest);
+  return latest ? { status: latest.status, createdAt: latest.createdAt } : null;
+}
+
+/**
+ * The runtime's page holds both platforms' updates (see
+ * RUNTIME_UPDATE_PAGE_SIZE), so the build's own platform is matched here
+ * rather than assumed.
+ */
+function latestRuntimeUpdate(runtime, platform) {
+  // Case-folded because the two ends disagree: `Build.platform` is the
+  // `AppPlatform` enum ("IOS"), `Update.platform` is a plain `String!`
+  // ("ios"). Comparing them directly matches nothing and empties the UPDATE
+  // column for every row — silently, since "no update yet" is a legitimate
+  // result. Folding also survives EAS changing the string's case.
+  const wanted = platform?.toUpperCase();
+  const [latest] = (runtime?.updates?.edges ?? [])
+    .map((edge) => edge.node)
+    .filter((update) => update.platform?.toUpperCase() === wanted)
+    .sort(byNewest);
+  return latest ? { branch: latest.branch?.name ?? null, createdAt: latest.createdAt } : null;
+}
+
+// Well under whatever cap the API enforces on membersPaginated; kept the
+// same as BUILD_PAGE_SIZE's role for builds — one page covers almost every
+// account, and paging is cheap when it's not.
+const MEMBERS_PAGE_SIZE = 100;
+
+// subscription + membership fields all live on Account, so one query covers
+// --members entirely — no extra request even when an org's members need a
+// second page. Billing-scoped `subscription`, so a token without billing
+// permission errors per account; the CLI degrades that to "-" rather than
+// failing the run. No price field: not confirmed to exist against a real
+// token. `--stats` deliberately queries none of this, since billing-period
+// metrics can't be sliced into calendar ranges.
+//
+// `ownerUserActor` is non-null exactly for personal accounts (confirmed
+// against the real API) — organizations have no single owning user. A
+// member's `userActor` is set only when that member is a human (`User`);
+// a robot member has `userActor: null` and is named via `actor`'s `Robot`
+// fragment instead. This inline fragment is safe on `actor` (typed `Actor`,
+// the real interface) even though the same fragment on `ownerUserActor`
+// (typed `UserActor`, not `Actor`) fails with "can never be of type
+// Robot" — confirmed by probing the real API.
+const Q_ACCOUNT_MEMBERS = `query AccountMembers($accountId: String!, $after: String) {
   account { byId(accountId: $accountId) { id
     subscription {
       id planId name status trialEnd
       concurrencies { total ios android }
     }
+    ownerUserActor { id username }
+    membersPaginated(first: ${MEMBERS_PAGE_SIZE}, after: $after) {
+      edges { node { id role userActor { id username } actor { id ... on Robot { firstName } } } }
+      pageInfo { hasNextPage endCursor }
+    }
   } }
 }`;
 
-// buildsQuery's shape, paginated by `offset` so --stats can walk arbitrarily
-// far back, and without the version fields --stats never displays.
+// The old buildsQuery's shape (now appOverviewQuery's `<platform>Builds`
+// alias), paginated by `offset` so --stats can walk arbitrarily far back, and
+// without the version fields --stats never displays.
 function buildsPageQuery(platforms) {
   return `query BuildsPage($appId: String!, $offset: Int!, $limit: Int!) {
   app { byId(appId: $appId) { id
-    ${buildAliases(platforms, { offset: '$offset', fields: 'status createdAt' })}
+    ${buildAliases(platforms, { offset: '$offset', fields: 'status createdAt metrics { buildDuration }' })}
   } }
 }`;
 }
 
-// Well under the `limit: 100` confirmed accepted by the API
-// (scripts/probe-history.mjs).
+// Well under the `limit: 100` confirmed accepted by the API.
 const BUILD_PAGE_SIZE = 50;
 
 // Hard stop in case the API's undocumented offset behavior stops holding (e.g.
@@ -119,14 +202,14 @@ function monthIndexForBuild(createdAtMs, bounds) {
   return -1;
 }
 
-// Only these 3 have been confirmed against the real API
-// (scripts/probe-build-status.mjs). Anything else — a queued build, or a status
-// this unofficial API adds later — is counted in no bucket rather than guessed
-// at, since it hasn't reached a terminal outcome.
+// Only these 3 have been confirmed against the real API. Anything else — a
+// queued build, or a status this unofficial API adds later — is counted in
+// no bucket rather than guessed at, since it hasn't reached a terminal
+// outcome.
 const STATUS_COUNT_KEY = { FINISHED: 'success', ERRORED: 'errored', CANCELED: 'canceled' };
 
 function emptyStatusCounts() {
-  return { success: 0, errored: 0, canceled: 0 };
+  return { success: 0, errored: 0, canceled: 0, buildDurationMs: 0 };
 }
 
 /**
@@ -215,110 +298,168 @@ export function createApiClient({
   }
 
   /**
-   * The `limit` most recent builds per platform *regardless of status*, so a
-   * platform whose latest attempt errored or was canceled surfaces that build
-   * instead of falling back to an older successful one.
+   * Builds, each with the submission that shipped it and the latest update
+   * published to its runtime — one app.byId query, same request count as the
+   * old builds-only fetch.
    *
-   * `platform` narrows which alias is even requested, rather than fetching
-   * both and discarding one.
+   * `builds` is the `limit` most recent build *attempts* per platform
+   * *regardless of status*, so a platform whose latest attempt errored or
+   * was canceled surfaces that build instead of falling back to an older
+   * successful one — same contract the old fetchBuilds had. `platform`
+   * narrows which aliases are even requested, rather than fetching both and
+   * discarding one.
    *
-   * The API's ordering for `builds(offset, limit)` is undocumented, so each
-   * slice is sorted here rather than trusted — with `limit: 1` a wrong order
-   * never showed up, but it would with `limit > 1`.
+   * Each build's `submission`/`update` is null when it has none, so an
+   * unsubmitted build reads as "-" rather than borrowing a newer build's
+   * value. The raw `submissions`/`runtime` sub-selections are folded away
+   * here — nothing downstream has to know an update lives under a runtime,
+   * or that `branch` is an object rather than a string.
+   *
+   * The API's ordering is undocumented everywhere, so every slice is sorted
+   * here rather than trusted.
    */
-  async function fetchBuilds(appId, { limit = 1, platform } = {}) {
+  async function fetchAppOverview(appId, { limit = 1, platform } = {}) {
     const platforms = platform ? [platform] : ALL_PLATFORMS;
-    const data = await gql(buildsQuery(platforms), { appId, limit });
+    const data = await gql(appOverviewQuery(platforms), { appId, limit });
     const app = data?.app?.byId;
-    if (!app || platforms.some((p) => !Array.isArray(app[p]))) {
-      throw new ApiError(`RecentBuilds: unexpected response shape for app ${appId}`);
+    if (!app || !platforms.every((p) => Array.isArray(app[`${p}Builds`]))) {
+      throw new ApiError(`AppOverview: unexpected response shape for app ${appId}`);
     }
-    const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    return platforms.flatMap((p) => [...app[p]].sort(byNewest));
+
+    const builds = platforms.flatMap((p) => [...app[`${p}Builds`]].sort(byNewest));
+    if (builds.some((b) => !Array.isArray(b.submissions))) {
+      throw new ApiError(`AppOverview: unexpected response shape for app ${appId}`);
+    }
+
+    return {
+      builds: builds.map(({ submissions, runtime, ...build }) => ({
+        ...build,
+        submission: latestSubmission(submissions),
+        update: latestRuntimeUpdate(runtime, build.platform),
+      })),
+    };
   }
 
   /**
    * Build counts for one app, bucketed by platform and UTC calendar month:
-   * `months` in, a parallel array of `{ ios, android }` counts out. A build in
-   * a status STATUS_COUNT_KEY doesn't list falls into no bucket at all.
+   * `months` in, `{ counts, missingMetricsCount }` out — `counts` is a
+   * parallel array of `{ ios, android }` counts (each with a summed
+   * `buildDurationMs`), `missingMetricsCount` is how many counted builds
+   * (STATUS_COUNT_KEY only) had no `metrics.buildDuration` to add. A build in
+   * a status STATUS_COUNT_KEY doesn't list falls into no bucket, and isn't
+   * counted as missing metrics either — it was never counted at all.
    *
    * Each platform stops paging independently, once a page comes back short or
    * every build in it predates the oldest requested month — the latter relies
-   * on the API's undocumented order holding newest-first, as observed in
-   * scripts/probe-history.mjs. A finished platform's alias is dropped from
-   * subsequent queries rather than skipped client-side.
+   * on the API's undocumented order holding newest-first, as observed by
+   * probing. A finished platform's alias is dropped from subsequent queries
+   * rather than skipped client-side.
    *
-   * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries decides
-   * that degrades that account's rows rather than failing the run.
+   * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries degrades
+   * that account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
     const counts = months.map(() => ({ ios: emptyStatusCounts(), android: emptyStatusCounts() }));
     const oldestStartMs = bounds[bounds.length - 1].startMs;
+    let missingMetricsCount = 0;
 
     let offset = 0;
-    let iosDone = platform === 'android';
-    let androidDone = platform === 'ios';
     let pageCount = 0;
+    let pending = ALL_PLATFORMS.filter((p) => !platform || p === platform);
 
-    while (!iosDone || !androidDone) {
+    while (pending.length > 0) {
       if (++pageCount > MAX_BUILD_PAGES) {
         throw new ApiError(
           `BuildsPage: exceeded ${MAX_BUILD_PAGES} pages for app ${appId} without pagination ending as expected`
         );
       }
-      const platforms = [];
-      if (!iosDone) platforms.push('ios');
-      if (!androidDone) platforms.push('android');
 
-      const data = await gql(buildsPageQuery(platforms), { appId, offset, limit: BUILD_PAGE_SIZE });
+      const data = await gql(buildsPageQuery(pending), { appId, offset, limit: BUILD_PAGE_SIZE });
       const page = data?.app?.byId;
-      if (!page || platforms.some((p) => !Array.isArray(page[p]))) {
+      if (!page || pending.some((p) => !Array.isArray(page[p]))) {
         throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
       }
-      const iosPage = iosDone
-        ? []
-        : page.ios.map((b) => ({ ms: Date.parse(b.createdAt), status: b.status }));
-      const androidPage = androidDone
-        ? []
-        : page.android.map((b) => ({ ms: Date.parse(b.createdAt), status: b.status }));
 
-      for (const { ms, status } of iosPage) {
-        const i = monthIndexForBuild(ms, bounds);
-        if (i === -1) continue;
-        const key = STATUS_COUNT_KEY[status];
-        if (key) counts[i].ios[key]++;
-      }
-      for (const { ms, status } of androidPage) {
-        const i = monthIndexForBuild(ms, bounds);
-        if (i === -1) continue;
-        const key = STATUS_COUNT_KEY[status];
-        if (key) counts[i].android[key]++;
-      }
+      const stillPending = [];
+      for (const p of pending) {
+        const builds = page[p].map((b) => ({
+          ms: Date.parse(b.createdAt),
+          status: b.status,
+          durationMs: typeof b.metrics?.buildDuration === 'number' ? b.metrics.buildDuration : null,
+        }));
 
-      if (!iosDone) {
-        const exhausted = iosPage.length < BUILD_PAGE_SIZE;
-        const pastOldest = iosPage.length > 0 && iosPage.every(({ ms }) => ms < oldestStartMs);
-        if (exhausted || pastOldest) iosDone = true;
+        for (const { ms, status, durationMs } of builds) {
+          const i = monthIndexForBuild(ms, bounds);
+          if (i === -1) continue;
+          const key = STATUS_COUNT_KEY[status];
+          if (!key) continue;
+          counts[i][p][key]++;
+          if (durationMs === null) missingMetricsCount++;
+          else counts[i][p].buildDurationMs += durationMs;
+        }
+
+        const exhausted = builds.length < BUILD_PAGE_SIZE;
+        const pastOldest = builds.length > 0 && builds.every(({ ms }) => ms < oldestStartMs);
+        if (!exhausted && !pastOldest) stillPending.push(p);
       }
-      if (!androidDone) {
-        const exhausted = androidPage.length < BUILD_PAGE_SIZE;
-        const pastOldest =
-          androidPage.length > 0 && androidPage.every(({ ms }) => ms < oldestStartMs);
-        if (exhausted || pastOldest) androidDone = true;
-      }
+      pending = stillPending;
 
       offset += BUILD_PAGE_SIZE;
     }
 
-    return counts;
+    return { counts, missingMetricsCount };
   }
 
-  /** Throws like everything else here; src/features/plan/command.mjs treats a missing plan as non-fatal. */
-  async function fetchSubscription(accountId) {
-    const data = await gql(Q_SUBSCRIPTION, { accountId });
-    return data?.account?.byId?.subscription ?? null;
+  /**
+   * Subscription + personal-vs-organization + membership info for one
+   * account, paginating `membersPaginated` when an org exceeds
+   * MEMBERS_PAGE_SIZE. Returns `null` (not a throw) when the account itself
+   * is missing from an otherwise-2xx response — mirrors the old
+   * `fetchSubscription`'s degrade-gracefully behavior, since
+   * src/features/members/service.mjs treats a missing account as non-fatal,
+   * same as a genuinely failed one.
+   *
+   * Throws ApiError for a GraphQL error (via `gql`) or a malformed
+   * mid-pagination response — src/features/members/service.mjs degrades
+   * that account's row rather than failing the run.
+   */
+  async function fetchAccountMembers(accountId) {
+    let after = null;
+    let result = null;
+    const members = [];
+
+    for (;;) {
+      const data = await gql(Q_ACCOUNT_MEMBERS, { accountId, after });
+      const account = data?.account?.byId;
+      if (!account) return null;
+
+      if (!result) {
+        result = {
+          subscription: account.subscription ?? null,
+          ownerUserActor: account.ownerUserActor ?? null,
+        };
+      }
+
+      const page = account.membersPaginated;
+      if (!page || !Array.isArray(page.edges)) {
+        throw new ApiError(`AccountMembers: unexpected response shape for account ${accountId}`);
+      }
+      members.push(...page.edges.map((e) => e.node));
+
+      if (!page.pageInfo.hasNextPage) break;
+      after = page.pageInfo.endCursor;
+    }
+
+    return { ...result, members };
   }
 
-  return { gql, fetchAccounts, fetchApps, fetchBuilds, fetchSubscription, countBuildsByMonth };
+  return {
+    gql,
+    fetchAccounts,
+    fetchApps,
+    fetchAppOverview,
+    fetchAccountMembers,
+    countBuildsByMonth,
+  };
 }
