@@ -923,12 +923,12 @@ describe('fetchAccountMembers', () => {
   it('returns subscription/ownerUserActor/members for a personal account', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(accountResponse({ ownerUserActor: { id: 'user-1', username: 'it0' } }));
+      .mockResolvedValue(accountResponse({ ownerUserActor: { id: 'user-1', username: 'alice' } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.fetchAccountMembers('acc-1')).resolves.toEqual({
       subscription,
-      ownerUserActor: { id: 'user-1', username: 'it0' },
+      ownerUserActor: { id: 'user-1', username: 'alice' },
       members: [],
     });
 
@@ -937,7 +937,7 @@ describe('fetchAccountMembers', () => {
   });
 
   it('returns members and a null ownerUserActor for an organization account', async () => {
-    const members = [humanNode('m1', 'OWNER', 'it0'), robotNode('m2', 'DEVELOPER', 'ci-bot')];
+    const members = [humanNode('m1', 'OWNER', 'alice'), robotNode('m2', 'DEVELOPER', 'ci-bot')];
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(accountResponse({ page: membersPage(members.map((node) => ({ node }))) }));
@@ -961,11 +961,11 @@ describe('fetchAccountMembers', () => {
   });
 
   it('paginates membersPaginated until hasNextPage is false, merging members across pages', async () => {
-    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'it0') }], {
+    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'alice') }], {
       hasNextPage: true,
       endCursor: 'cursor-1',
     });
-    const page2 = membersPage([{ node: humanNode('m2', 'DEVELOPER', 'kohei') }]);
+    const page2 = membersPage([{ node: humanNode('m2', 'DEVELOPER', 'bob') }]);
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(accountResponse({ page: page1 }))
@@ -1013,7 +1013,7 @@ describe('fetchAccountMembers', () => {
   });
 
   it('throws ApiError (not a TypeError) when membersPaginated is malformed mid-pagination', async () => {
-    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'it0') }], {
+    const page1 = membersPage([{ node: humanNode('m1', 'OWNER', 'alice') }], {
       hasNextPage: true,
       endCursor: 'cursor-1',
     });

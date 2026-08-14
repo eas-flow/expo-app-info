@@ -27,11 +27,11 @@ function makeClient(byAccountId) {
 
 describe('fetchMembersEntries — personal accounts', () => {
   it('emits one OWNER row with ORG "-" for a personal account', async () => {
-    const accounts = [{ id: 'acc-1', name: 'it0' }];
+    const accounts = [{ id: 'acc-1', name: 'alice' }];
     const client = makeClient({
       'acc-1': {
         subscription,
-        ownerUserActor: { username: 'it0' },
+        ownerUserActor: { username: 'alice' },
         members: [],
       },
     });
@@ -41,9 +41,9 @@ describe('fetchMembersEntries — personal accounts', () => {
     expect(warnings).toEqual([]);
     expect(entries).toEqual([
       {
-        account: 'it0',
+        account: 'alice',
         isPersonal: true,
-        member: 'it0',
+        member: 'alice',
         role: 'OWNER',
         plan: 'Production',
         planId: 'production',
@@ -65,8 +65,8 @@ describe('fetchMembersEntries — organization accounts', () => {
         subscription,
         ownerUserActor: null,
         members: [
-          { id: 'm1', role: 'OWNER', userActor: { username: 'it0' }, actor: {} },
-          { id: 'm2', role: 'DEVELOPER', userActor: { username: 'kohei-dev' }, actor: {} },
+          { id: 'm1', role: 'OWNER', userActor: { username: 'alice' }, actor: {} },
+          { id: 'm2', role: 'DEVELOPER', userActor: { username: 'bob' }, actor: {} },
         ],
       },
     });
@@ -75,8 +75,8 @@ describe('fetchMembersEntries — organization accounts', () => {
 
     expect(entries).toHaveLength(2);
     expect(entries.map((e) => [e.member, e.role])).toEqual([
-      ['it0', 'OWNER'],
-      ['kohei-dev', 'DEVELOPER'],
+      ['alice', 'OWNER'],
+      ['bob', 'DEVELOPER'],
     ]);
     expect(entries.every((e) => e.isPersonal === false)).toBe(true);
     expect(entries.every((e) => e.plan === 'Production')).toBe(true);

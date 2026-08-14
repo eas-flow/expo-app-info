@@ -24,7 +24,7 @@ $ npx @my-shelfio/expo-shelfit
 
 ## 🔑 Authentication & 📦 Install
 
-First, create one at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
+First, create a personal access token at [expo.dev/settings/access-tokens](https://expo.dev/settings/access-tokens).
 
 ```bash
 export EXPO_TOKEN=xxxxxxxx
@@ -77,30 +77,7 @@ npx @my-shelfio/expo-shelfit --stats --group-by app --month 1
 npx @my-shelfio/expo-shelfit --members
 ```
 
-```
-$ npx @my-shelfio/expo-shelfit --stats
-
-┌──────────┬──────────────────────┬──────────┬─────────┬─────────┬──────────┬───────┬───────────────┐
-│ ACCOUNT  │ PERIOD               │ PLATFORM │ SUCCESS │ ERRORED │ CANCELED │ TOTAL │ BUILD MINUTES │
-├──────────┼──────────────────────┼──────────┼─────────┼─────────┼──────────┼───────┼───────────────┤
-│ itokohei │ 2026-07-01 → (today) │ ios      │ 1       │ 1       │ 0        │ 2     │ 6.9           │
-│ itokohei │ 2026-07-01 → (today) │ android  │ 2       │ 0       │ 0        │ 2     │ 9.4           │
-└──────────┴──────────────────────┴──────────┴─────────┴─────────┴──────────┴───────┴───────────────┘
-```
-
-```
-$ npx @my-shelfio/expo-shelfit --members
-
-┌──────────┬───────────┬───────────┬──────┬─────────┬────────┬─────────────────────────────┬───────────┐
-│ ORG      │ MEMBER    │ ROLE      │ PLAN │ PLAN ID │ STATUS │ CONCURRENCY (TOTAL/IOS/AND) │ TRIAL END │
-├──────────┼───────────┼───────────┼──────┼─────────┼────────┼─────────────────────────────┼───────────┤
-│ itokohei │ it0       │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
-│ itokohei │ kohei-dev │ DEVELOPER │ Free │ free    │ -      │ -                           │ -         │
-│ -        │ it0       │ OWNER     │ Free │ free    │ -      │ -                           │ -         │
-└──────────┴───────────┴───────────┴──────┴─────────┴────────┴─────────────────────────────┴───────────┘
-```
-
-#### Deprecated
+### Deprecated
 
 `--usage` is a deprecated alias for `--stats`, and `--plan` is a deprecated alias for `--members`. Both still work and print the identical table, but write a deprecation warning to stderr and will be removed in the next major version.
 
@@ -111,72 +88,28 @@ $ npx @my-shelfio/expo-shelfit --members
 - **Track build results and time by month** — `--stats` aggregates success/errored/canceled build counts and total build time (`BUILD MINUTES`, queue wait excluded) per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
 - **See your accounts, their members, and your subscription** — `--members` shows one row per organization member (with their `ROLE`) plus the current subscription (plan, plan ID, status, concurrency, trial end); a personal account gets one row with `ORG` as `-`
 
-## 📚 Documentation
+## 📚 Learn more
 
-### How it works
-
-Three GraphQL queries against `https://api.expo.dev/graphql`:
-
-1. `meActor { accounts }` — every account the token can see (including each account's `displayName`, used only for the table's `ACCOUNT` column)
-2. `account.byId(...).appsPaginated(first: 100)` — apps per account, cursor-paginated
-3. `app.byId(...)`, in one request per app: `builds(offset: 0, limit: $limit, filter: { platform })` for the `N` most recent build attempts per platform, whatever their status (`limit` is 1 unless `--history` is set, and includes each build's `sdkVersion`/`cliVersion` for the `SDK`/`CLI` columns), plus `submissions(offset: 0, limit: 1, filter: { platform })` and `updateGroups(offset: 0, limit: 1, filter: { platform })` for that platform's single latest submission and update — all three are aliased per platform in the same query, so this adds no extra request. Every response is sorted by `createdAt` descending on the client, since the API's ordering is undocumented
-
-SUBMIT/UPDATE describe a platform's *current* shipped state, not a specific build attempt — with `--history`, every row for a platform shows the same SUBMIT/UPDATE value, not one per build.
-
-`--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side, including each build's `metrics.buildDuration` for the `BUILD MINUTES` column (queue wait is deliberately excluded — see the FAQ).
-
-`--members` skips Steps 2–3 and queries only `account.byId(...) { subscription ownerUserActor membersPaginated }` per account, in parallel — one query per account regardless of member count, paginating further only for an organization with more members than one page holds. `ownerUserActor` is non-null exactly for personal accounts (confirmed against the real API); a personal account contributes one row (`ORG` "-"), an organization contributes one row per member from `membersPaginated`.
-
-### Learn More
-
-- [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, test/lint commands, project layout, and the release process
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — dev setup, project layout, and the release process (and, from there, which GraphQL queries each display mode runs)
 - [SECURITY.md](../../.github/SECURITY.md) — vulnerability reporting policy and how to report an issue privately
 
 ## ❓ FAQ
 
 **Is this an official Expo tool?**
 
-No. The EAS GraphQL API is **not officially documented or versioned**. Field names were derived from Expo's own open-source clients ([`eas-cli`](https://github.com/expo/eas-cli), [`orbit`](https://github.com/expo/orbit)) and may change without notice. This project is not affiliated with or endorsed by Expo.
+No. The EAS GraphQL API is **not officially documented or versioned**. Field names were derived from Expo's own open-source clients ([`eas-cli`](https://github.com/expo/eas-cli), [`orbit`](https://github.com/expo/orbit)) and may change without notice.
 
 **Can I use a robot token instead of a personal access token?**
 
 A robot token can only see the account that issued it. Use a personal access token to list every account you belong to.
 
-**What happens if a token can't read an account's apps or builds?**
+**Why do some cells show `-`?**
 
-`--stats` no longer queries billing-scoped fields at all — build counts are computed client-side from each app's build history. If fetching an account's apps or builds fails for any reason, that account's rows still print with `-` and the reason goes to stderr — the run does not fail.
+Either there is nothing to show (an app with no builds, a personal account's `ORG`), or the CLI couldn't read it. A fetch the token isn't allowed to make — the plan columns are billing-scoped, for instance — degrades that row to `-` and prints the reason on stderr; the run itself does not fail.
 
-**Why do some rows show `-` in the `--members` plan columns?**
+**Why don't the `--stats` numbers match my EAS bill?**
 
-Plan data is billing-scoped. If the token lacks billing or membership permission on an account, that account degrades to one row (`ORG` still shows the account name, since a failure happens before this CLI can tell whether it's personal or organizational) with `-` in the remaining columns, and the reason goes to stderr, rather than failing the run.
-
-**Why is `ORG` sometimes `-` under `--members`?**
-
-EAS creates a personal account for every sign-up, and it has no organization — `Account.ownerUserActor` is non-null exactly for these. Rather than filtering personal accounts out (which would leave an empty table for anyone with no organizations), `--members` keeps one row per personal account with `ORG` as `-` and `MEMBER`/`ROLE` set to the owner. The same person can therefore appear twice — once as an organization's member, once as their personal account's owner — since each row's `PLAN` columns describe a different billing subject.
-
-**Why does a robot member show `(robot)` in `MEMBER`?**
-
-A robot (e.g. a CI bot) has no `username` — only human members do — so it's identified by its `firstName` instead, marked `(robot)` so it isn't mistaken for a human name. This avoids a separate `TYPE` column for what's otherwise a rare case.
-
-**What happened to the `SLUG` column?**
-
-It was removed and the `APP` column now shows the slug instead of the Display name, to make room for `SUBMIT`/`UPDATE` without widening the table further. `--app` still matches either the slug or the Display name, unchanged.
-
-**What if `BUILD` shows a status other than `Finished`/`Errored`/`Canceled`?**
-
-Those three are the only EAS build statuses confirmed against the real API so far. A still in-progress or queued build — or any other status this unofficial API introduces later — shows the raw enum value lowercased instead of a friendly label, rather than breaking or hiding the row. `SUBMIT` follows the same fallback with its own two confirmed statuses, `Finished`/`In queue`.
-
-**Why does `--local` affect all three of `BUILD`/`SUBMIT`/`UPDATE`?**
-
-All three columns use the same date formatter, so `--local` shifts all three to the local calendar day together rather than just one — `--stats`' `PERIOD` and `--members`' `TRIAL END` are unaffected and stay UTC.
-
-**Why does `BUILD MINUTES` exclude EAS queue wait time?**
-
-Queue wait is driven by EAS's own congestion and your plan's concurrency limit, not by anything in your project — mixing it in would make a month-over-month change in `BUILD MINUTES` impossible to attribute to your own changes versus EAS being busy. `BUILD MINUTES` sums only `Build.metrics.buildDuration` (the actual build time) for the same FINISHED/ERRORED/CANCELED builds `TOTAL` counts; a counted build with no duration metric is excluded and reported as a count in the footer, rather than silently treated as zero minutes.
-
-**Is the `EXPO_TOKEN` ever written to disk or logged?**
-
-No. It is never read from `argv`, never written to disk, and never printed. See [SECURITY.md](../../.github/SECURITY.md) for the full policy and how to report a vulnerability privately.
+They aren't billing figures. Counts come from each app's build history, bucketed client-side by UTC calendar month, while EAS bills on its own cycle. `BUILD MINUTES` also excludes EAS queue wait, which is driven by EAS congestion and your concurrency limit rather than by anything in your project.
 
 ## 📄 License
 
