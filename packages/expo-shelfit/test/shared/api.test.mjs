@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../src/errors.mjs';
 import { createApiClient } from '../../src/shared/api.mjs';
+import { appOverviewResponse, runtimeWith } from '../helpers.mjs';
 
 function jsonResponse(body, { status = 200, ok = true } = {}) {
   return { status, ok, json: async () => body };
@@ -243,74 +244,40 @@ describe('fetchApps', () => {
   });
 });
 
-// Minimal response builder for AppOverview: `{ ios, android }`, each
-// `{ builds, submissions, updates }` (all default `[]`) — undefined omits
-// that platform's keys entirely, matching what --platform actually requests.
-function overviewResponse({ appId = 'app-1', ios, android } = {}) {
-  const byId = { id: appId };
-  for (const [prefix, data] of [
-    ['ios', ios],
-    ['android', android],
-  ]) {
-    if (data === undefined) continue;
-    byId[`${prefix}Builds`] = data.builds ?? [];
-    byId[`${prefix}Submissions`] = data.submissions ?? [];
-    byId[`${prefix}Updates`] = data.updates ?? [];
-  }
-  return jsonResponse({ data: { app: { byId } } });
-}
-
 describe('fetchAppOverview', () => {
+  const iosBuild = (overrides = {}) => ({
+    platform: 'IOS',
+    appVersion: '3.2.1',
+    appBuildVersion: '41',
+    createdAt: '2026-07-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  // A build carries no SUBMIT/UPDATE unless a test gives it one.
+  const withoutShipping = (build) => ({ ...build, submission: null, update: null });
+
   it('defaults to limit 1 and merges ios/android builds into one array', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
-        ios: {
-          builds: [
-            {
-              platform: 'IOS',
-              appVersion: '3.2.1',
-              appBuildVersion: '41',
-              createdAt: '2026-07-01T00:00:00.000Z',
-            },
-          ],
-        },
-        android: {
-          builds: [
-            {
-              platform: 'ANDROID',
-              appVersion: '3.2.0',
-              appBuildVersion: '38',
-              createdAt: '2026-06-01T00:00:00.000Z',
-            },
-          ],
-        },
-      })
-    );
+    const androidBuild = {
+      platform: 'ANDROID',
+      appVersion: '3.2.0',
+      appBuildVersion: '38',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(appOverviewResponse({ ios: [iosBuild()], android: [androidBuild] }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     const { builds } = await client.fetchAppOverview('app-1');
 
-    expect(builds).toEqual([
-      {
-        platform: 'IOS',
-        appVersion: '3.2.1',
-        appBuildVersion: '41',
-        createdAt: '2026-07-01T00:00:00.000Z',
-      },
-      {
-        platform: 'ANDROID',
-        appVersion: '3.2.0',
-        appBuildVersion: '38',
-        createdAt: '2026-06-01T00:00:00.000Z',
-      },
-    ]);
+    expect(builds).toEqual([withoutShipping(iosBuild()), withoutShipping(androidBuild)]);
 
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.variables).toEqual({ appId: 'app-1', limit: 1 });
   });
 
   it('passes a custom limit through to the GraphQL variables', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await client.fetchAppOverview('app-1', { limit: 5 });
@@ -319,60 +286,27 @@ describe('fetchAppOverview', () => {
     expect(body.variables).toEqual({ appId: 'app-1', limit: 5 });
   });
 
-  it('returns an empty builds array and null submission/update per platform when nothing exists', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
+  it('returns an empty builds array when the app has no builds at all', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    await expect(client.fetchAppOverview('app-1')).resolves.toEqual({
-      builds: [],
-      submissionsByPlatform: { ios: null, android: null },
-      updatesByPlatform: { ios: null, android: null },
-    });
+    await expect(client.fetchAppOverview('app-1')).resolves.toEqual({ builds: [] });
   });
 
   it('sorts each platform’s builds by createdAt descending regardless of the order the API returns them in', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
+      appOverviewResponse({
         // Deliberately out of order, to prove the client does not just
         // trust the API's response order.
-        ios: {
-          builds: [
-            {
-              platform: 'IOS',
-              appVersion: '1.0.0',
-              appBuildVersion: '10',
-              createdAt: '2026-05-01T00:00:00.000Z',
-            },
-            {
-              platform: 'IOS',
-              appVersion: '3.0.0',
-              appBuildVersion: '30',
-              createdAt: '2026-07-01T00:00:00.000Z',
-            },
-            {
-              platform: 'IOS',
-              appVersion: '2.0.0',
-              appBuildVersion: '20',
-              createdAt: '2026-06-01T00:00:00.000Z',
-            },
-          ],
-        },
-        android: {
-          builds: [
-            {
-              platform: 'ANDROID',
-              appVersion: '1.0.0',
-              appBuildVersion: '5',
-              createdAt: '2026-04-01T00:00:00.000Z',
-            },
-            {
-              platform: 'ANDROID',
-              appVersion: '2.0.0',
-              appBuildVersion: '6',
-              createdAt: '2026-06-15T00:00:00.000Z',
-            },
-          ],
-        },
+        ios: [
+          iosBuild({ appBuildVersion: '10', createdAt: '2026-05-01T00:00:00.000Z' }),
+          iosBuild({ appBuildVersion: '30', createdAt: '2026-07-01T00:00:00.000Z' }),
+          iosBuild({ appBuildVersion: '20', createdAt: '2026-06-01T00:00:00.000Z' }),
+        ],
+        android: [
+          { platform: 'ANDROID', appBuildVersion: '5', createdAt: '2026-04-01T00:00:00.000Z' },
+          { platform: 'ANDROID', appBuildVersion: '6', createdAt: '2026-06-15T00:00:00.000Z' },
+        ],
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
@@ -382,94 +316,154 @@ describe('fetchAppOverview', () => {
     expect(builds.map((b) => b.appBuildVersion)).toEqual(['30', '20', '10', '6', '5']);
   });
 
-  it('picks the latest submission per platform by createdAt, independent of builds', async () => {
+  it('attaches each build’s own submission, so two builds do not share one value', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
-        ios: {
-          // Deliberately out of order.
-          submissions: [
-            { status: 'FINISHED', createdAt: '2026-08-01T00:00:00.000Z' },
-            { status: 'IN_QUEUE', createdAt: '2026-08-09T00:00:00.000Z' },
-          ],
-        },
-        android: { submissions: [{ status: 'ERRORED', createdAt: '2026-07-01T00:00:00.000Z' }] },
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            appBuildVersion: '41',
+            createdAt: '2026-08-01T00:00:00.000Z',
+            submissions: [{ status: 'IN_QUEUE', createdAt: '2026-08-09T00:00:00.000Z' }],
+          }),
+          iosBuild({
+            appBuildVersion: '40',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            submissions: [{ status: 'FINISHED', createdAt: '2026-07-02T00:00:00.000Z' }],
+          }),
+        ],
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const { submissionsByPlatform } = await client.fetchAppOverview('app-1');
+    const { builds } = await client.fetchAppOverview('app-1', { limit: 2, platform: 'ios' });
 
-    expect(submissionsByPlatform.ios).toEqual({
-      status: 'IN_QUEUE',
+    expect(builds.map((b) => b.submission)).toEqual([
+      { status: 'IN_QUEUE', createdAt: '2026-08-09T00:00:00.000Z' },
+      { status: 'FINISHED', createdAt: '2026-07-02T00:00:00.000Z' },
+    ]);
+  });
+
+  it('picks a re-submitted build’s latest attempt by createdAt', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            // Deliberately out of order.
+            submissions: [
+              { status: 'ERRORED', createdAt: '2026-08-01T00:00:00.000Z' },
+              { status: 'FINISHED', createdAt: '2026-08-09T00:00:00.000Z' },
+            ],
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].submission).toEqual({
+      status: 'FINISHED',
       createdAt: '2026-08-09T00:00:00.000Z',
     });
-    expect(submissionsByPlatform.android).toEqual({
-      status: 'ERRORED',
-      createdAt: '2026-07-01T00:00:00.000Z',
-    });
   });
 
-  it('picks the latest update per platform, flattening the [[Update]] shape and branch.name to a plain string', async () => {
+  it('nulls the submission for a build that was never submitted', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(appOverviewResponse({ ios: [iosBuild({ submissions: [] })] }));
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].submission).toBeNull();
+  });
+
+  it('picks the latest update on the build’s runtime, ignoring the other platform’s and flattening branch.name to a string', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
-        ios: {
-          // updateGroups is [[Update]]; the platform filter narrows each
-          // inner group to at most one entry, deliberately out of order here.
-          // `branch` is itself an object (UpdateBranch) requiring the `name`
-          // subfield — a bare `branch` is rejected by the real API with
-          // "must have a selection of subfields".
-          updates: [
-            [{ branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00.000Z' }],
-            [{ branch: { name: 'production' }, createdAt: '2026-08-12T00:00:00.000Z' }],
-          ],
-        },
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            // One runtime's page mixes both platforms — Runtime.updates has
+            // no platform filter — and is deliberately out of order here.
+            runtime: runtimeWith([
+              { platform: 'ANDROID', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
+              { platform: 'IOS', branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00Z' },
+              {
+                platform: 'IOS',
+                branch: { name: 'production' },
+                createdAt: '2026-08-12T00:00:00Z',
+              },
+            ]),
+          }),
+        ],
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const { updatesByPlatform } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
 
-    expect(updatesByPlatform.ios).toEqual({
-      branch: 'production',
-      createdAt: '2026-08-12T00:00:00.000Z',
-    });
+    expect(builds[0].update).toEqual({ branch: 'production', createdAt: '2026-08-12T00:00:00Z' });
   });
 
-  it('returns a null branch when the update group has none', async () => {
+  it('nulls the update for a build with no runtime, and for a runtime with no update for that platform', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
-        ios: { updates: [[{ branch: null, createdAt: '2026-08-12T00:00:00.000Z' }]] },
+      appOverviewResponse({
+        ios: [
+          iosBuild({ appBuildVersion: '41', runtime: null }),
+          iosBuild({
+            appBuildVersion: '40',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            runtime: runtimeWith([
+              { platform: 'ANDROID', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
+            ]),
+          }),
+        ],
       })
     );
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const { updatesByPlatform } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
 
-    expect(updatesByPlatform.ios).toEqual({ branch: null, createdAt: '2026-08-12T00:00:00.000Z' });
+    expect(builds.map((b) => b.update)).toEqual([null, null]);
+  });
+
+  it('returns a null branch when the update has none', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      appOverviewResponse({
+        ios: [
+          iosBuild({
+            runtime: runtimeWith([
+              { platform: 'IOS', branch: null, createdAt: '2026-08-12T00:00:00.000Z' },
+            ]),
+          }),
+        ],
+      })
+    );
+    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+    const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+    expect(builds[0].update).toEqual({ branch: null, createdAt: '2026-08-12T00:00:00.000Z' });
   });
 
   it('requests branch as `{ name }`, since UpdateBranch is an object and a bare `branch` is rejected by the API', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await client.fetchAppOverview('app-1');
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(query).toContain(
-      'updateGroups(offset: 0, limit: 1, filter: { platform: IOS }) { branch { name } createdAt }'
-    );
+    expect(query).toContain('branch { name }');
   });
 
-  it('has no key in submissionsByPlatform/updatesByPlatform for a platform that was never requested', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {} }));
+  it('asks for more than one update per runtime, since Runtime.updates cannot be filtered by platform', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse());
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
-    const { submissionsByPlatform, updatesByPlatform } = await client.fetchAppOverview('app-1', {
-      platform: 'ios',
-    });
+    await client.fetchAppOverview('app-1');
 
-    expect('android' in submissionsByPlatform).toBe(false);
-    expect('android' in updatesByPlatform).toBe(false);
+    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(query).toContain('runtime { updates(first: 10)');
   });
 
   it('throws ApiError (not TypeError) when the app is missing from the response', async () => {
@@ -479,11 +473,16 @@ describe('fetchAppOverview', () => {
     await expect(client.fetchAppOverview('app-1')).rejects.toThrow(ApiError);
   });
 
-  it('throws ApiError when a platform’s submissions/updates come back malformed even if builds is fine', async () => {
+  it('throws ApiError when a build’s submissions come back malformed even if the builds list is fine', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         data: {
-          app: { byId: { id: 'app-1', iosBuilds: [], iosSubmissions: null, iosUpdates: [] } },
+          app: {
+            byId: {
+              id: 'app-1',
+              iosBuilds: [{ platform: 'IOS', submissions: null, runtime: null }],
+            },
+          },
         },
       })
     );
@@ -492,70 +491,23 @@ describe('fetchAppOverview', () => {
     await expect(client.fetchAppOverview('app-1', { platform: 'ios' })).rejects.toThrow(ApiError);
   });
 
-  it('with platform: "ios", queries only the ios aliases and returns only ios data', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
-        ios: {
-          builds: [
-            {
-              platform: 'IOS',
-              appVersion: '3.2.1',
-              appBuildVersion: '41',
-              createdAt: '2026-07-01T00:00:00.000Z',
-            },
-          ],
-        },
-      })
-    );
+  it('with platform: "ios", queries only the ios alias and returns only ios data', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(appOverviewResponse({ ios: [iosBuild()] }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
 
-    expect(builds).toEqual([
-      {
-        platform: 'IOS',
-        appVersion: '3.2.1',
-        appBuildVersion: '41',
-        createdAt: '2026-07-01T00:00:00.000Z',
-      },
-    ]);
+    expect(builds).toEqual([withoutShipping(iosBuild())]);
 
     const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(query).toContain('iosBuilds:');
-    expect(query).toContain('iosSubmissions:');
-    expect(query).toContain('iosUpdates:');
     expect(query).not.toContain('android');
   });
 
-  it('requires a filter on submissions (the API rejects a missing one) via the same per-platform alias as builds', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(overviewResponse({ ios: {}, android: {} }));
-    const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
-
-    await client.fetchAppOverview('app-1');
-
-    const { query } = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(query).toContain(
-      'iosSubmissions: submissions(offset: 0, limit: 1, filter: { platform: IOS })'
-    );
-  });
-
   it('requests build status and passes it through on each returned build, without filtering on it', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      overviewResponse({
-        ios: {
-          builds: [
-            {
-              platform: 'IOS',
-              status: 'ERRORED',
-              appVersion: '3.2.2',
-              appBuildVersion: '42',
-              createdAt: '2026-08-01T00:00:00.000Z',
-            },
-          ],
-        },
-        android: {},
-      })
-    );
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(appOverviewResponse({ ios: [iosBuild({ status: 'ERRORED' })] }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     const { builds } = await client.fetchAppOverview('app-1');
