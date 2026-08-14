@@ -32,7 +32,7 @@ const iosSubmission = (overrides = {}) => ({
 const iosRuntime = (overrides = {}) =>
   runtimeWith([
     {
-      platform: 'IOS',
+      platform: 'ios',
       branch: { name: 'production' },
       createdAt: '2026-07-18T00:00:00.000Z',
       ...overrides,

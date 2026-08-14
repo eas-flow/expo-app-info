@@ -120,9 +120,15 @@ function latestSubmission(submissions) {
  * rather than assumed.
  */
 function latestRuntimeUpdate(runtime, platform) {
+  // Case-folded because the two ends disagree: `Build.platform` is the
+  // `AppPlatform` enum ("IOS"), `Update.platform` is a plain `String!`
+  // ("ios"). Comparing them directly matches nothing and empties the UPDATE
+  // column for every row — silently, since "no update yet" is a legitimate
+  // result. Folding also survives EAS changing the string's case.
+  const wanted = platform?.toUpperCase();
   const [latest] = (runtime?.updates?.edges ?? [])
     .map((edge) => edge.node)
-    .filter((update) => update.platform === platform)
+    .filter((update) => update.platform?.toUpperCase() === wanted)
     .sort(byNewest);
   return latest ? { branch: latest.branch?.name ?? null, createdAt: latest.createdAt } : null;
 }

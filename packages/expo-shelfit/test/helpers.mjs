@@ -70,7 +70,9 @@ export function appOverviewResponse({ ios = [], android = [], appId = 'app-1' } 
 /**
  * Raw `Build.runtime` shape: a Relay connection whose nodes carry `platform`
  * (one runtime's page mixes both) and a `branch` that is an `UpdateBranch`
- * object, not a plain string.
+ * object, not a plain string. `Update.platform` is a lowercase `String!`,
+ * unlike `Build.platform`'s uppercase `AppPlatform` enum — callers pass
+ * `'ios'`/`'android'` here, matching what the real API returns.
  */
 export function runtimeWith(updates) {
   return { updates: { edges: updates.map((node) => ({ node })) } };

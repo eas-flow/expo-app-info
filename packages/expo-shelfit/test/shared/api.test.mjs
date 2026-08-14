@@ -386,10 +386,10 @@ describe('fetchAppOverview', () => {
             // One runtime's page mixes both platforms — Runtime.updates has
             // no platform filter — and is deliberately out of order here.
             runtime: runtimeWith([
-              { platform: 'ANDROID', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
-              { platform: 'IOS', branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00Z' },
+              { platform: 'android', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
+              { platform: 'ios', branch: { name: 'preview' }, createdAt: '2026-08-01T00:00:00Z' },
               {
-                platform: 'IOS',
+                platform: 'ios',
                 branch: { name: 'production' },
                 createdAt: '2026-08-12T00:00:00Z',
               },
@@ -414,7 +414,7 @@ describe('fetchAppOverview', () => {
             appBuildVersion: '40',
             createdAt: '2026-06-01T00:00:00.000Z',
             runtime: runtimeWith([
-              { platform: 'ANDROID', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
+              { platform: 'android', branch: { name: 'main' }, createdAt: '2026-08-20T00:00:00Z' },
             ]),
           }),
         ],
@@ -427,13 +427,42 @@ describe('fetchAppOverview', () => {
     expect(builds.map((b) => b.update)).toEqual([null, null]);
   });
 
+  it('matches the build’s platform against Update.platform case-insensitively', async () => {
+    // The two ends disagree: `Build.platform` is the AppPlatform enum
+    // ("IOS"), `Update.platform` is a plain String ("ios"). A strict
+    // comparison matched nothing and emptied the UPDATE column for every
+    // row — silently, because "no update yet" is a legitimate result. Both
+    // casings are pinned here so neither end can drift back.
+    for (const platform of ['ios', 'IOS']) {
+      const fetchImpl = vi.fn().mockResolvedValue(
+        appOverviewResponse({
+          ios: [
+            iosBuild({
+              runtime: runtimeWith([
+                { platform, branch: { name: 'preview' }, createdAt: '2026-08-12T00:00:00.000Z' },
+              ]),
+            }),
+          ],
+        })
+      );
+      const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
+
+      const { builds } = await client.fetchAppOverview('app-1', { platform: 'ios' });
+
+      expect(builds[0].update).toEqual({
+        branch: 'preview',
+        createdAt: '2026-08-12T00:00:00.000Z',
+      });
+    }
+  });
+
   it('returns a null branch when the update has none', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       appOverviewResponse({
         ios: [
           iosBuild({
             runtime: runtimeWith([
-              { platform: 'IOS', branch: null, createdAt: '2026-08-12T00:00:00.000Z' },
+              { platform: 'ios', branch: null, createdAt: '2026-08-12T00:00:00.000Z' },
             ]),
           }),
         ],
