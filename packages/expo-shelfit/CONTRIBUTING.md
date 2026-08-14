@@ -81,6 +81,10 @@ test/                 Vitest tests, mirroring src/ 1:1 (there is no
                       shared bits live in helpers.mjs
 ```
 
+Which GraphQL queries each display mode runs, and why each is shaped the
+way it is, are in the repo-root [CLAUDE.md](../../CLAUDE.md) under
+Architecture — that is the single source for it, so it isn't repeated here.
+
 Imports flow one way — `bin → cli → args / features/* → shared/*`, with
 `errors.mjs` importable by anything and importing nothing itself — and never
 in reverse (e.g. `shared/api.mjs` must not import from `features/`), and
