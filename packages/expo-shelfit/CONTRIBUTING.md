@@ -55,20 +55,21 @@ src/cli.mjs           The top-level run() flow: resolve auth, fetch accounts,
 src/args.mjs          Argument parsing, validation limits, help text
 src/errors.mjs        CliError / ApiError
 src/shared/
-  api.mjs               EAS GraphQL client (throws, never exits/prints)
-  concurrency.mjs        createSemaphore / mapWithConcurrency / CONCURRENCY
-  filter.mjs             Client-side --account / --app resolution (exact
+  api.mjs             EAS GraphQL client (throws, never exits/prints)
+  concurrency.mjs     createSemaphore / mapWithConcurrency / CONCURRENCY
+  filter.mjs          Client-side --account / --app resolution (exact
                       slug/Display name match, "Did you mean" suggestions)
-  dates.mjs              UTC date helpers (calendar-month boundaries, display
-                      formatting) — every date this CLI shows is UTC
-  cells.mjs               cellOrDash/versionCell/labelDateCell, shared by
+  dates.mjs           Date helpers. Every boundary the CLI computes stays UTC
+                      (calendar months, inclusive end, date-only display);
+                      only formatBuildDate's output moves, and only with --local
+  cells.mjs           cellOrDash/versionCell/labelDateCell, shared by
                       list/stats/members' format.mjs
   terminal/
-    render.mjs              Table rendering and column widths
-    progress.mjs            TTY-only progress reporting on stderr
+    render.mjs        Table rendering and column widths
+    progress.mjs      TTY-only progress reporting on stderr
 src/features/
   list/    command.mjs + service.mjs + format.mjs — default app list, one row
-                      per app x platform with BUILD/SUBMIT/UPDATE (and --history)
+           per app x platform with BUILD/SUBMIT/UPDATE (and --history)
   stats/   command.mjs + service.mjs + format.mjs — --stats
   members/ command.mjs + service.mjs + format.mjs — --members (personal/org accounts)
 test/                 Vitest tests, mirroring src/ 1:1 (there is no
@@ -89,7 +90,8 @@ never sideways between features (`features/stats/` must not import from
 `src/*` files never call `process.exit` or read directly from `process.argv`
 so they stay unit-testable. Only `bin/cli.mjs` is allowed to exit the
 process. Within a feature, `command.mjs` is the only file that calls
-`console.*`; `service.mjs` (list/stats) returns plain data instead.
+`console.*`; every `service.mjs` returns plain data — and, where a
+per-account failure is survivable, a `warnings` string array — instead.
 
 ## Branch strategy
 
