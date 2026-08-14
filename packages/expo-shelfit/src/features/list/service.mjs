@@ -5,11 +5,9 @@ import { clearProgress, progress } from '../../shared/terminal/progress.mjs';
 /**
  * The latest build *attempt* per platform regardless of status, so an app
  * whose most recent attempt errored or was canceled shows that rather than
- * silently falling back to an older successful build — plus that platform's
- * current SUBMIT/UPDATE state, repeated on every --history row for that
- * platform since submission/update aren't per-build-attempt facts. Returns
- * entries already narrowed by --app and (if set) --platform; no console
- * output.
+ * silently falling back to an older successful build — each carrying its own
+ * SUBMIT/UPDATE, so --history rows differ from one another. Returns entries
+ * already narrowed by --app and (if set) --platform; no console output.
  */
 export async function fetchListEntries(client, accounts, opts) {
   const appFilter = createAppFilter(opts.app);
@@ -30,23 +28,13 @@ export async function fetchListEntries(client, accounts, opts) {
     });
 
     apps.forEach((app, i) => {
-      const { builds, submissionsByPlatform, updatesByPlatform } = overviewPerApp[i];
+      const { builds } = overviewPerApp[i];
       if (builds.length === 0) {
         entries.push(emptyEntry(account, app));
         return;
       }
       for (const b of builds) {
-        const platform = b.platform.toLowerCase();
-        entries.push(
-          buildEntry(
-            account,
-            app,
-            b,
-            platform,
-            submissionsByPlatform[platform],
-            updatesByPlatform[platform]
-          )
-        );
+        entries.push(buildEntry(account, app, b));
       }
     });
   }
@@ -80,20 +68,20 @@ function emptyEntry(account, app) {
   };
 }
 
-function buildEntry(account, app, b, platform, submission, update) {
+function buildEntry(account, app, b) {
   return {
     account: account.name,
     app: app.slug,
-    platform,
+    platform: b.platform.toLowerCase(),
     version: b.appVersion ?? null,
     build: b.appBuildVersion ?? null,
     sdk: b.sdkVersion ?? null,
     cli: b.cliVersion ?? null,
     status: b.status ?? null,
     lastBuildAt: b.createdAt ?? null,
-    submissionStatus: submission?.status ?? null,
-    submissionCreatedAt: submission?.createdAt ?? null,
-    updateBranch: update?.branch ?? null,
-    updateCreatedAt: update?.createdAt ?? null,
+    submissionStatus: b.submission?.status ?? null,
+    submissionCreatedAt: b.submission?.createdAt ?? null,
+    updateBranch: b.update?.branch ?? null,
+    updateCreatedAt: b.update?.createdAt ?? null,
   };
 }

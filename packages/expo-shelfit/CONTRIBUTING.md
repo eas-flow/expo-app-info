@@ -82,8 +82,9 @@ test/                 Vitest tests, mirroring src/ 1:1 (there is no
 ```
 
 Which GraphQL queries each display mode runs, and why each is shaped the
-way it is, are in the repo-root [CLAUDE.md](../../CLAUDE.md) under
-Architecture — that is the single source for it, so it isn't repeated here.
+way it is, are in
+[.claude/rules/expo-shelfit-architecture.md](../../.claude/rules/expo-shelfit-architecture.md)
+— that is the single source for it, so it isn't repeated here.
 
 Imports flow one way — `bin → cli → args / features/* → shared/*`, with
 `errors.mjs` importable by anything and importing nothing itself — and never
@@ -110,9 +111,10 @@ No enforced commit message format. Keep commits focused and PRs small. Use
 the PR template's Verification checklist.
 
 **Never write an issue or PR number into a file in this repo, and comments
-explain why, never what** — see the repo-root
-[CLAUDE.md](../../CLAUDE.md#never-write-issue-or-pr-numbers-into-the-repo)
-for the full rule and reasoning (commit messages, branch names, PR
+explain why, never what** — see
+[.claude/rules/doc-conventions.md](../../.claude/rules/doc-conventions.md)
+and [.claude/rules/code-conventions.md](../../.claude/rules/code-conventions.md)
+for the full rules and reasoning (commit messages, branch names, PR
 titles/bodies, and Release notes are outside the issue-number rule; issue
 linkage there is fine and expected). Before opening a PR, run from the repo
 root:
@@ -159,7 +161,8 @@ you and guard those footguns: `/shelfit-release-draft <package>@<version>`
 covers steps 1–3 (bump + lockfile, release PR, **draft** Release — nothing
 is published yet), and `/shelfit-publish` covers step 4 after the PR is
 merged (local lint/test, a dry check that some version actually differs
-from npm, then publishing the draft Release). See the repo-root `CLAUDE.md`.
+from npm, then publishing the draft Release). See the repo-root `CLAUDE.md`
+for how the two split at the human gate.
 The manual steps above remain the source of truth — the skills just follow
 them.
 

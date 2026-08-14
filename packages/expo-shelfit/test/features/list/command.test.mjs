@@ -7,6 +7,7 @@ import {
   appOverviewResponse,
   appsResponse,
   fetchSequence,
+  runtimeWith,
 } from '../../helpers.mjs';
 
 const iosBuild = (overrides = {}) => ({
@@ -28,9 +29,15 @@ const iosSubmission = (overrides = {}) => ({
 
 // Raw GraphQL response shape: `branch` is an `UpdateBranch` object (`{ name }`),
 // not a plain string — the real API rejects a bare `branch` field.
-const iosUpdateGroup = (overrides = {}) => [
-  { branch: { name: 'production' }, createdAt: '2026-07-18T00:00:00.000Z', ...overrides },
-];
+const iosRuntime = (overrides = {}) =>
+  runtimeWith([
+    {
+      platform: 'ios',
+      branch: { name: 'production' },
+      createdAt: '2026-07-18T00:00:00.000Z',
+      ...overrides,
+    },
+  ]);
 
 describe('run', () => {
   let logSpy;
@@ -90,11 +97,13 @@ describe('run', () => {
       accountsResponse(),
       appsResponse(),
       appOverviewResponse({
-        ios: {
-          builds: [iosBuild({ createdAt: new Date().toISOString() })],
-          submissions: [iosSubmission()],
-          updates: [iosUpdateGroup()],
-        },
+        ios: [
+          iosBuild({
+            createdAt: new Date().toISOString(),
+            submissions: [iosSubmission()],
+            runtime: iosRuntime(),
+          }),
+        ],
       }),
     ]);
 
@@ -117,16 +126,14 @@ describe('run', () => {
     expect(output).toContain('Finished 2026-07-19');
     expect(output).toContain('production 2026-07-18');
     expect(output).toContain('VERSION/BUILD = latest EAS build attempt, regardless of status.');
-    expect(output).toContain('SUBMIT/UPDATE = ');
+    expect(output).toContain("SUBMIT = that build's own submission.");
   });
 
   it('shows the BUILD column for an errored build instead of hiding it', async () => {
     stubFetch([
       accountsResponse(),
       appsResponse(),
-      appOverviewResponse({
-        ios: { builds: [iosBuild({ status: 'ERRORED', appBuildVersion: '42' })] },
-      }),
+      appOverviewResponse({ ios: [iosBuild({ status: 'ERRORED', appBuildVersion: '42' })] }),
     ]);
 
     await run([]);
@@ -140,7 +147,7 @@ describe('run', () => {
     stubFetch([
       accountsResponse(),
       appsResponse(),
-      appOverviewResponse({ ios: { builds: [iosBuild({ status: 'IN_PROGRESS' })] } }),
+      appOverviewResponse({ ios: [iosBuild({ status: 'IN_PROGRESS' })] }),
     ]);
 
     await run([]);
@@ -148,12 +155,8 @@ describe('run', () => {
     expect(tableOutput()).toContain('in_progress');
   });
 
-  it('shows "-" in SUBMIT/UPDATE when a platform has builds but no submission/update yet', async () => {
-    stubFetch([
-      accountsResponse(),
-      appsResponse(),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
-    ]);
+  it('shows "-" in SUBMIT/UPDATE for a build that has neither', async () => {
+    stubFetch([accountsResponse(), appsResponse(), appOverviewResponse({ ios: [iosBuild()] })]);
 
     await run([]);
 
@@ -170,28 +173,27 @@ describe('run', () => {
     expect(cells.at(-2)).toBe('-'); // SUBMIT
   });
 
-  it('--history N fetches up to N builds per platform, newest first, and lists them as separate rows sharing the same SUBMIT/UPDATE', async () => {
+  it('--history N fetches up to N builds per platform, newest first, each row carrying its own SUBMIT/UPDATE', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
       appOverviewResponse({
-        ios: {
+        ios: [
           // Out of order on purpose — the CLI must not depend on the API
           // returning builds newest-first.
-          builds: [
-            iosBuild({
-              appVersion: '3.2.0',
-              appBuildVersion: '40',
-              createdAt: '2026-06-20T00:00:00.000Z',
-            }),
-            iosBuild({
-              appVersion: '3.2.1',
-              appBuildVersion: '41',
-              createdAt: '2026-07-20T00:00:00.000Z',
-            }),
-          ],
-          submissions: [iosSubmission()],
-        },
+          iosBuild({
+            appVersion: '3.2.0',
+            appBuildVersion: '40',
+            createdAt: '2026-06-20T00:00:00.000Z',
+            submissions: [iosSubmission({ createdAt: '2026-06-21T00:00:00.000Z' })],
+          }),
+          iosBuild({
+            appVersion: '3.2.1',
+            appBuildVersion: '41',
+            createdAt: '2026-07-20T00:00:00.000Z',
+            submissions: [iosSubmission()],
+          }),
+        ],
       }),
     ]);
 
@@ -204,15 +206,16 @@ describe('run', () => {
     expect(output).toContain('2 row(s)');
     // Build 41 (newest) must appear before build 40, confirming client-side sort.
     expect(output.indexOf('41')).toBeLessThan(output.indexOf('40'));
-    // Both rows carry the same SUBMIT value.
-    expect(output.match(/Finished 2026-07-19/g)).toHaveLength(2);
+    // Each row shows its own build's submission date, not one shared value.
+    expect(output).toContain('Finished 2026-07-19');
+    expect(output).toContain('Finished 2026-06-21');
   });
 
   it('--history 1 produces identical output to leaving --history off', async () => {
     const fetchImpl = stubFetch([
       accountsResponse(),
       appsResponse(),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--history', '1']);
@@ -227,11 +230,7 @@ describe('run', () => {
   });
 
   it('shows the history footer note when --history > 1', async () => {
-    stubFetch([
-      accountsResponse(),
-      appsResponse(),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
-    ]);
+    stubFetch([accountsResponse(), appsResponse(), appOverviewResponse({ ios: [iosBuild()] })]);
 
     await run(['--history', '3']);
 
@@ -244,7 +243,7 @@ describe('run', () => {
     stubFetch([
       accountsResponse([{ id: 'acc-1', name: 'myorg', displayName: 'My Organization' }]),
       appsResponse(),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run([]);
@@ -257,17 +256,15 @@ describe('run', () => {
       accountsResponse(),
       appsResponse(),
       appOverviewResponse({
-        ios: { builds: [iosBuild()] },
-        android: {
-          builds: [
-            {
-              platform: 'ANDROID',
-              appVersion: '3.2.0',
-              appBuildVersion: '38',
-              createdAt: '2026-07-20T00:00:00.000Z',
-            },
-          ],
-        },
+        ios: [iosBuild()],
+        android: [
+          {
+            platform: 'ANDROID',
+            appVersion: '3.2.0',
+            appBuildVersion: '38',
+            createdAt: '2026-07-20T00:00:00.000Z',
+          },
+        ],
       }),
     ]);
 
@@ -303,7 +300,7 @@ describe('run', () => {
         { id: 'app-1', name: 'Storefront', slug: 'storefront' },
         { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
       ]),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--app', 'storefront']);
@@ -324,7 +321,7 @@ describe('run', () => {
     stubFetch([
       accountsResponse(),
       appsResponse([{ id: 'app-1', name: 'Storefront', slug: 'storefront' }]),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--app', 'STOREFRONT']);
@@ -340,7 +337,7 @@ describe('run', () => {
         { id: 'app-1', name: 'Storefront', slug: 'sf-ios-app' },
         { id: 'app-2', name: 'Field Ops', slug: 'field-ops' },
       ]),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
+      appOverviewResponse({ ios: [iosBuild()] }),
     ]);
 
     await run(['--app', 'Storefront']);
@@ -413,11 +410,13 @@ describe('run', () => {
         accountsResponse(),
         appsResponse(),
         appOverviewResponse({
-          ios: {
-            builds: [iosBuild({ createdAt: '2026-07-26T23:12:34.000Z' })],
-            submissions: [iosSubmission({ createdAt: '2026-07-26T23:12:34.000Z' })],
-            updates: [iosUpdateGroup({ createdAt: '2026-07-26T23:12:34.000Z' })],
-          },
+          ios: [
+            iosBuild({
+              createdAt: '2026-07-26T23:12:34.000Z',
+              submissions: [iosSubmission({ createdAt: '2026-07-26T23:12:34.000Z' })],
+              runtime: iosRuntime({ createdAt: '2026-07-26T23:12:34.000Z' }),
+            }),
+          ],
         }),
       ]);
 
@@ -437,11 +436,7 @@ describe('run', () => {
   });
 
   it('shows the plain BUILD/SUBMIT/UPDATE headers (UTC) when --local is not passed', async () => {
-    stubFetch([
-      accountsResponse(),
-      appsResponse(),
-      appOverviewResponse({ ios: { builds: [iosBuild()] } }),
-    ]);
+    stubFetch([accountsResponse(), appsResponse(), appOverviewResponse({ ios: [iosBuild()] })]);
 
     await run([]);
 

@@ -84,7 +84,7 @@ npx @my-shelfio/expo-shelfit --members
 ## 🚀 Features
 
 - **See your shipping status at a glance, from any directory** — the default: every Expo (EAS) app tied to your account, one row per app × platform, with its version, Expo SDK/eas-cli version, latest **BUILD** result, latest **SUBMIT** (store submission) result, and latest **UPDATE** (OTA) — no more tabbing between expo.dev's Builds/Submissions/Updates tabs
-- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest (SUBMIT/UPDATE stay the platform's current values on every row, since they aren't per-build-attempt facts)
+- **Check past build results** — `--history <N>` shows the `N` most recent build attempts per platform, not just the latest, each row with its own SUBMIT (that build's store submission) and UPDATE (the latest OTA published to that build's runtime); `-` where there is none
 - **Track build results and time by month** — `--stats` aggregates success/errored/canceled build counts and total build time (`BUILD MINUTES`, queue wait excluded) per UTC calendar month (`--group-by app` to count per app, `--month <n>` to widen the window)
 - **See your accounts, their members, and your subscription** — `--members` shows one row per organization member (with their `ROLE`) plus the current subscription (plan, plan ID, status, concurrency, trial end); a personal account gets one row with `ORG` as `-`
 

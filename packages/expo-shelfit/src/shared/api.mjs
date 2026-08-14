@@ -64,42 +64,73 @@ function buildAliases(platforms, { offset, fields }) {
     .join('\n    ');
 }
 
-// `submissions`/`updateGroups` live on the same `app.byId` node as `builds`,
-// so they're fetched as extra aliases in the *same* query — no extra request
-// per app. Each gets its own `<platform><Kind>:` alias (rather than reusing
-// buildAliases, which only ever aliases one field name) since three
-// different top-level fields are aliased per platform here.
+// `RuntimeUpdatesFilterInput` carries only `channel` — there is no platform
+// filter — so one runtime's page mixes iOS and Android updates and
+// latestRuntimeUpdate picks its own out. Asking for 1 would therefore return
+// the other platform's update half the time; 10 covers several publishes to
+// both platforms.
+const RUNTIME_UPDATE_PAGE_SIZE = 10;
+
+// SUBMIT and UPDATE are sub-selections of `builds` rather than aliases of
+// `app.submissions`/`app.updateGroups`, so each build row carries its own —
+// still one request per app.
 //
-// `submissions`' `filter` argument is required by the API (confirmed:
-// omitting it is a validation error, unlike `builds`' optional filter) —
-// the per-platform alias satisfies that naturally. `completedAt` is
-// deliberately not queried: it stays null even for a FINISHED submission
-// (confirmed against the real API), so the SUBMIT column's date comes from
-// `createdAt` instead, same field builds and updates use.
+// `Build.submissions` is the reverse of `Submission.submittedBuild`: exactly
+// the submissions of *that* build attempt, so the association needs no
+// matching on the client. `completedAt` is deliberately not queried — it
+// stays null even for a FINISHED submission (confirmed against the real
+// API), so the SUBMIT column's date comes from `createdAt`, the same field
+// builds and updates use.
 //
-// `updateGroups` returns `[[Update]]` (a group's Update per platform); with
-// `filter: { platform }` each inner array holds at most one entry, so
-// fetchAppOverview flattens one level. `runtimeVersion` is deprecated in
-// favor of `runtime { version }`, but neither is queried at all since this
-// CLI only ever displays an update's `branch` and `createdAt`. `Update.branch`
-// is itself an object (`UpdateBranch!`, not a plain string) — the API rejects
-// a bare `branch` with "must have a selection of subfields" — so `{ name }`
-// is required; fetchAppOverview reads `.branch.name` back out.
+// An OTA update has no build to belong to — it targets a *runtime version* —
+// so `Build.runtime`'s updates are the closest true association: what has
+// been published to the runtime this build shipped. A build with no runtime
+// (`runtime` is nullable) simply has no UPDATE. `Update.branch` is itself an
+// object (`UpdateBranch!`, not a plain string) — the API rejects a bare
+// `branch` with "must have a selection of subfields" — so `{ name }` is
+// required; latestRuntimeUpdate reads `.branch.name` back out.
 function appOverviewQuery(platforms) {
-  const aliases = platforms.flatMap((p) => {
-    const filter = `filter: { platform: ${p.toUpperCase()} }`;
-    return [
-      `${p}Builds: builds(offset: 0, limit: $limit, ${filter}) { platform status appVersion appBuildVersion sdkVersion cliVersion createdAt }`,
-      `${p}Submissions: submissions(offset: 0, limit: 1, ${filter}) { status createdAt }`,
-      `${p}Updates: updateGroups(offset: 0, limit: 1, ${filter}) { branch { name } createdAt }`,
-    ];
-  });
+  const aliases = platforms.map(
+    (p) =>
+      `${p}Builds: builds(offset: 0, limit: $limit, filter: { platform: ${p.toUpperCase()} }) {
+      platform status appVersion appBuildVersion sdkVersion cliVersion createdAt
+      submissions { status createdAt }
+      runtime { updates(first: ${RUNTIME_UPDATE_PAGE_SIZE}) { edges { node { platform branch { name } createdAt } } } }
+    }`
+  );
 
   return `query AppOverview($appId: String!, $limit: Int!) {
   app { byId(appId: $appId) { id
     ${aliases.join('\n    ')}
   } }
 }`;
+}
+
+const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+
+/** The most recent attempt, so a build re-submitted after a failure reads as its retry. */
+function latestSubmission(submissions) {
+  const [latest] = [...submissions].sort(byNewest);
+  return latest ? { status: latest.status, createdAt: latest.createdAt } : null;
+}
+
+/**
+ * The runtime's page holds both platforms' updates (see
+ * RUNTIME_UPDATE_PAGE_SIZE), so the build's own platform is matched here
+ * rather than assumed.
+ */
+function latestRuntimeUpdate(runtime, platform) {
+  // Case-folded because the two ends disagree: `Build.platform` is the
+  // `AppPlatform` enum ("IOS"), `Update.platform` is a plain `String!`
+  // ("ios"). Comparing them directly matches nothing and empties the UPDATE
+  // column for every row — silently, since "no update yet" is a legitimate
+  // result. Folding also survives EAS changing the string's case.
+  const wanted = platform?.toUpperCase();
+  const [latest] = (runtime?.updates?.edges ?? [])
+    .map((edge) => edge.node)
+    .filter((update) => update.platform?.toUpperCase() === wanted)
+    .sort(byNewest);
+  return latest ? { branch: latest.branch?.name ?? null, createdAt: latest.createdAt } : null;
 }
 
 // Well under whatever cap the API enforces on membersPaginated; kept the
@@ -267,8 +298,9 @@ export function createApiClient({
   }
 
   /**
-   * Builds, the latest submission, and the latest update per platform — one
-   * app.byId query, same request count as the old builds-only fetch.
+   * Builds, each with the submission that shipped it and the latest update
+   * published to its runtime — one app.byId query, same request count as the
+   * old builds-only fetch.
    *
    * `builds` is the `limit` most recent build *attempts* per platform
    * *regardless of status*, so a platform whose latest attempt errored or
@@ -277,48 +309,35 @@ export function createApiClient({
    * narrows which aliases are even requested, rather than fetching both and
    * discarding one.
    *
-   * `submissionsByPlatform`/`updatesByPlatform` hold only the single latest
-   * entry per platform (not affected by `limit`/`--history`): SUBMIT/UPDATE
-   * describe a platform's current shipped state, not a specific build
-   * attempt, so every row for that platform — including older --history
-   * rows — shows the same value. A platform absent from `platforms` (when
-   * `--platform` narrows to the other one) has no key in either map.
+   * Each build's `submission`/`update` is null when it has none, so an
+   * unsubmitted build reads as "-" rather than borrowing a newer build's
+   * value. The raw `submissions`/`runtime` sub-selections are folded away
+   * here — nothing downstream has to know an update lives under a runtime,
+   * or that `branch` is an object rather than a string.
    *
-   * The API's ordering for `builds`/`submissions`/`updateGroups` is
-   * undocumented, so each slice is sorted here rather than trusted — with
-   * `limit: 1` (submissions, updateGroups) a wrong order never showed up,
-   * but it would with `limit > 1` (builds' `--history`).
+   * The API's ordering is undocumented everywhere, so every slice is sorted
+   * here rather than trusted.
    */
   async function fetchAppOverview(appId, { limit = 1, platform } = {}) {
     const platforms = platform ? [platform] : ALL_PLATFORMS;
     const data = await gql(appOverviewQuery(platforms), { appId, limit });
     const app = data?.app?.byId;
-    const hasShape = (key) => platforms.every((p) => Array.isArray(app?.[`${p}${key}`]));
-    if (!app || !hasShape('Builds') || !hasShape('Submissions') || !hasShape('Updates')) {
+    if (!app || !platforms.every((p) => Array.isArray(app[`${p}Builds`]))) {
       throw new ApiError(`AppOverview: unexpected response shape for app ${appId}`);
     }
 
-    const byNewest = (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     const builds = platforms.flatMap((p) => [...app[`${p}Builds`]].sort(byNewest));
-
-    const submissionsByPlatform = {};
-    const updatesByPlatform = {};
-    for (const p of platforms) {
-      const submissions = [...app[`${p}Submissions`]].sort(byNewest);
-      submissionsByPlatform[p] = submissions[0] ?? null;
-      // updateGroups is [[Update]]; the platform filter already narrows each
-      // inner group to at most one entry, so this only ever flattens one level.
-      const updates = app[`${p}Updates`].flat().sort(byNewest);
-      const latestUpdate = updates[0] ?? null;
-      // `branch` is queried as `{ name }` (UpdateBranch is an object, not a
-      // plain string) — flattened back to a string here so downstream code
-      // never has to know that.
-      updatesByPlatform[p] = latestUpdate
-        ? { branch: latestUpdate.branch?.name ?? null, createdAt: latestUpdate.createdAt }
-        : null;
+    if (builds.some((b) => !Array.isArray(b.submissions))) {
+      throw new ApiError(`AppOverview: unexpected response shape for app ${appId}`);
     }
 
-    return { builds, submissionsByPlatform, updatesByPlatform };
+    return {
+      builds: builds.map(({ submissions, runtime, ...build }) => ({
+        ...build,
+        submission: latestSubmission(submissions),
+        update: latestRuntimeUpdate(runtime, build.platform),
+      })),
+    };
   }
 
   /**

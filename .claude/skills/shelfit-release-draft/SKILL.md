@@ -168,10 +168,10 @@ git log origin/main..develop --name-only --pretty=format:"---%h %s"
 #### 4-0. PR 番号は「マージコミット」からのみ取得する（必須）
 
 **コミット件名中の `(#NN)` を PR 番号として使ってはいけない。** このリポジトリでは feature ブランチを
-`feat/<issue番号>` のように issue 番号で命名する慣習があり、`feat(#85): ...` のようなコミット件名の
+`feat/<issue番号>` のように issue 番号で命名する慣習があり、`feat(#NN): ...` のようなコミット件名の
 `#NN` は**そのコミットが属する issue の番号**であって、そのコミット群を実際に `develop` へマージした
-PR の番号ではないことが多い（例: `feat(#85): --local で...` を含む一連のコミットは issue #85 に対応す
-るが、実際にマージした PR は別番号）。取り違えるとリリースノートのリンクが無関係な issue/PR を指す。
+PR の番号ではないことが多い（例: `feat(#NN): --local で...` を含む一連のコミットが対応する issue の
+番号と、実際にマージした PR の番号は別物）。取り違えるとリリースノートのリンクが無関係な issue/PR を指す。
 
 実際の PR 番号は `git log origin/main..develop --oneline --merges` に出てくる
 `Merge pull request #NN from my-shelfio/<branch>` の行からのみ取得する。手順:
