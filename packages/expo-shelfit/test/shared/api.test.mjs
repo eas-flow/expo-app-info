@@ -891,7 +891,6 @@ describe('fetchAccountMembers', () => {
   function accountResponse({
     accountId = 'acc-1',
     ownerUserActor = null,
-    totalCount = 0,
     page = membersPage([]),
   } = {}) {
     return jsonResponse({
@@ -901,7 +900,6 @@ describe('fetchAccountMembers', () => {
             id: accountId,
             subscription,
             ownerUserActor,
-            memberStats: { totalCount },
             membersPaginated: page,
           },
         },
@@ -922,18 +920,15 @@ describe('fetchAccountMembers', () => {
     actor: { id: `robot-${id}`, firstName },
   });
 
-  it('returns subscription/ownerUserActor/totalMemberCount/members for a personal account', async () => {
+  it('returns subscription/ownerUserActor/members for a personal account', async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(
-        accountResponse({ ownerUserActor: { id: 'user-1', username: 'it0' }, totalCount: 0 })
-      );
+      .mockResolvedValue(accountResponse({ ownerUserActor: { id: 'user-1', username: 'it0' } }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     await expect(client.fetchAccountMembers('acc-1')).resolves.toEqual({
       subscription,
       ownerUserActor: { id: 'user-1', username: 'it0' },
-      totalMemberCount: 0,
       members: [],
     });
 
@@ -945,15 +940,12 @@ describe('fetchAccountMembers', () => {
     const members = [humanNode('m1', 'OWNER', 'it0'), robotNode('m2', 'DEVELOPER', 'ci-bot')];
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(
-        accountResponse({ totalCount: 2, page: membersPage(members.map((node) => ({ node }))) })
-      );
+      .mockResolvedValue(accountResponse({ page: membersPage(members.map((node) => ({ node }))) }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     const result = await client.fetchAccountMembers('acc-1');
 
     expect(result.ownerUserActor).toBeNull();
-    expect(result.totalMemberCount).toBe(2);
     expect(result.members).toEqual(members);
   });
 
@@ -976,8 +968,8 @@ describe('fetchAccountMembers', () => {
     const page2 = membersPage([{ node: humanNode('m2', 'DEVELOPER', 'kohei') }]);
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(accountResponse({ totalCount: 2, page: page1 }))
-      .mockResolvedValueOnce(accountResponse({ totalCount: 2, page: page2 }));
+      .mockResolvedValueOnce(accountResponse({ page: page1 }))
+      .mockResolvedValueOnce(accountResponse({ page: page2 }));
     const client = createApiClient({ apiUrl: 'https://example.test', fetchImpl });
 
     const result = await client.fetchAccountMembers('acc-1');
@@ -1027,7 +1019,7 @@ describe('fetchAccountMembers', () => {
     });
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(accountResponse({ totalCount: 1, page: page1 }))
+      .mockResolvedValueOnce(accountResponse({ page: page1 }))
       .mockResolvedValueOnce(
         jsonResponse({
           data: { account: { byId: { id: 'acc-1', subscription, ownerUserActor: null } } },

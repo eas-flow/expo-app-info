@@ -128,7 +128,7 @@ SUBMIT/UPDATE はビルド試行ごとの事実ではなく、そのプラット
 
 `--stats` はステップ1〜2を再利用し、ステップ3の代わりに各アプリのビルドをページングしてクライアント側で集計します。`BUILD MINUTES` 列のために各ビルドの `metrics.buildDuration` も含みます（キュー待ちを意図的に除外する理由は FAQ を参照）。
 
-`--members` はステップ2〜3をスキップし、アカウントごとに `account.byId(...) { subscription ownerUserActor memberStats membersPaginated }` のみを並列でクエリします — メンバー数に関わらずアカウントあたり1クエリで、1ページに収まらない組織のみさらにページングします。`ownerUserActor` は個人アカウントのときのみ非 null（実 API で確認済み）で、個人アカウントは1行（`ORG` が `-`）、組織アカウントは `membersPaginated` のメンバーごとに1行を出力します。
+`--members` はステップ2〜3をスキップし、アカウントごとに `account.byId(...) { subscription ownerUserActor membersPaginated }` のみを並列でクエリします — メンバー数に関わらずアカウントあたり1クエリで、1ページに収まらない組織のみさらにページングします。`ownerUserActor` は個人アカウントのときのみ非 null（実 API で確認済み）で、個人アカウントは1行（`ORG` が `-`）、組織アカウントは `membersPaginated` のメンバーごとに1行を出力します。
 
 ### さらに詳しく
 

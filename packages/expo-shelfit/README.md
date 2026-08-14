@@ -128,7 +128,7 @@ SUBMIT/UPDATE describe a platform's *current* shipped state, not a specific buil
 
 `--stats` reuses Steps 1–2 and, instead of Step 3, paginates the builds for each app and aggregates the data on the client side, including each build's `metrics.buildDuration` for the `BUILD MINUTES` column (queue wait is deliberately excluded — see the FAQ).
 
-`--members` skips Steps 2–3 and queries only `account.byId(...) { subscription ownerUserActor memberStats membersPaginated }` per account, in parallel — one query per account regardless of member count, paginating further only for an organization with more members than one page holds. `ownerUserActor` is non-null exactly for personal accounts (confirmed against the real API); a personal account contributes one row (`ORG` "-"), an organization contributes one row per member from `membersPaginated`.
+`--members` skips Steps 2–3 and queries only `account.byId(...) { subscription ownerUserActor membersPaginated }` per account, in parallel — one query per account regardless of member count, paginating further only for an organization with more members than one page holds. `ownerUserActor` is non-null exactly for personal accounts (confirmed against the real API); a personal account contributes one row (`ORG` "-"), an organization contributes one row per member from `membersPaginated`.
 
 ### Learn More
 

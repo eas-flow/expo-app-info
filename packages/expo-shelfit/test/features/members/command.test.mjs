@@ -27,7 +27,6 @@ describe('run --members', () => {
             id: accountId,
             subscription,
             ownerUserActor: { id: `user-${accountId}`, username: accountId },
-            memberStats: { totalCount: 0 },
             membersPaginated: { edges: [], pageInfo: { hasNextPage: false, endCursor: null } },
             ...overrides,
           },
@@ -93,7 +92,6 @@ describe('run --members', () => {
       accountsResponse([{ id: 'acc-1', name: 'myorg' }]),
       accountMembersResponseFor('acc-1', {
         ownerUserActor: null,
-        memberStats: { totalCount: 2 },
         membersPaginated: {
           edges: orgMembersEdges([
             { id: 'm1', role: 'OWNER', username: 'it0' },
@@ -121,7 +119,6 @@ describe('run --members', () => {
       accountsResponse([{ id: 'acc-1', name: 'myorg' }]),
       accountMembersResponseFor('acc-1', {
         ownerUserActor: null,
-        memberStats: { totalCount: 1 },
         membersPaginated: {
           edges: orgMembersEdges([{ id: 'm1', role: 'DEVELOPER', robotFirstName: 'ci-bot' }]),
           pageInfo: { hasNextPage: false, endCursor: null },
@@ -207,7 +204,6 @@ describe('run --members', () => {
   const orgResponseFor = (accountId, orgOwnerUsername) =>
     accountMembersResponseFor(accountId, {
       ownerUserActor: null,
-      memberStats: { totalCount: 1 },
       membersPaginated: {
         edges: orgMembersEdges([
           { id: `${accountId}-owner`, role: 'OWNER', username: orgOwnerUsername },

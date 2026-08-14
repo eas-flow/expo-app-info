@@ -1,5 +1,5 @@
 // EAS GraphQL client. No process.exit/console here — every failure throws ApiError;
-// src/cli.mjs is the only place that turns errors into exit codes and messages.
+// bin/cli.mjs is the only place that turns errors into exit codes and messages.
 
 import { ApiError } from '../errors.mjs';
 import { progress } from './terminal/progress.mjs';
@@ -45,11 +45,12 @@ const Q_APPS = `query AccountApps($accountId: String!, $after: String) {
   } }
 }`;
 
+const ALL_PLATFORMS = ['ios', 'android'];
+
 // One `ios:`/`android:` aliased `builds(...)` field per requested platform, so
 // a caller that only wants one doesn't pay for fetching and discarding the
 // other. `--platform` is the caller-facing switch.
-const ALL_PLATFORMS = ['ios', 'android'];
-
+//
 // `status` is deliberately omitted from `filter` — confirmed against the real
 // API that leaving it out returns builds in every status, not just FINISHED,
 // and that the field isn't required. Filtering client-side afterwards would
@@ -129,7 +130,6 @@ const Q_ACCOUNT_MEMBERS = `query AccountMembers($accountId: String!, $after: Str
       concurrencies { total ios android }
     }
     ownerUserActor { id username }
-    memberStats { totalCount }
     membersPaginated(first: ${MEMBERS_PAGE_SIZE}, after: $after) {
       edges { node { id role userActor { id username } actor { id ... on Robot { firstName } } } }
       pageInfo { hasNextPage endCursor }
@@ -336,8 +336,8 @@ export function createApiClient({
    * probing. A finished platform's alias is dropped from subsequent queries
    * rather than skipped client-side.
    *
-   * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries decides
-   * that degrades that account's rows rather than failing the run.
+   * Throws ApiError; src/features/stats/service.mjs#fetchStatsEntries degrades
+   * that account's rows rather than failing the run.
    */
   async function countBuildsByMonth(appId, months, { platform } = {}) {
     const bounds = toMonthBounds(months);
@@ -346,63 +346,45 @@ export function createApiClient({
     let missingMetricsCount = 0;
 
     let offset = 0;
-    let iosDone = platform === 'android';
-    let androidDone = platform === 'ios';
     let pageCount = 0;
+    let pending = ALL_PLATFORMS.filter((p) => !platform || p === platform);
 
-    while (!iosDone || !androidDone) {
+    while (pending.length > 0) {
       if (++pageCount > MAX_BUILD_PAGES) {
         throw new ApiError(
           `BuildsPage: exceeded ${MAX_BUILD_PAGES} pages for app ${appId} without pagination ending as expected`
         );
       }
-      const platforms = [];
-      if (!iosDone) platforms.push('ios');
-      if (!androidDone) platforms.push('android');
 
-      const data = await gql(buildsPageQuery(platforms), { appId, offset, limit: BUILD_PAGE_SIZE });
+      const data = await gql(buildsPageQuery(pending), { appId, offset, limit: BUILD_PAGE_SIZE });
       const page = data?.app?.byId;
-      if (!page || platforms.some((p) => !Array.isArray(page[p]))) {
+      if (!page || pending.some((p) => !Array.isArray(page[p]))) {
         throw new ApiError(`BuildsPage: unexpected response shape for app ${appId}`);
       }
-      const toBucketable = (b) => ({
-        ms: Date.parse(b.createdAt),
-        status: b.status,
-        durationMs: typeof b.metrics?.buildDuration === 'number' ? b.metrics.buildDuration : null,
-      });
-      const iosPage = iosDone ? [] : page.ios.map(toBucketable);
-      const androidPage = androidDone ? [] : page.android.map(toBucketable);
 
-      for (const { ms, status, durationMs } of iosPage) {
-        const i = monthIndexForBuild(ms, bounds);
-        if (i === -1) continue;
-        const key = STATUS_COUNT_KEY[status];
-        if (!key) continue;
-        counts[i].ios[key]++;
-        if (durationMs === null) missingMetricsCount++;
-        else counts[i].ios.buildDurationMs += durationMs;
-      }
-      for (const { ms, status, durationMs } of androidPage) {
-        const i = monthIndexForBuild(ms, bounds);
-        if (i === -1) continue;
-        const key = STATUS_COUNT_KEY[status];
-        if (!key) continue;
-        counts[i].android[key]++;
-        if (durationMs === null) missingMetricsCount++;
-        else counts[i].android.buildDurationMs += durationMs;
-      }
+      const stillPending = [];
+      for (const p of pending) {
+        const builds = page[p].map((b) => ({
+          ms: Date.parse(b.createdAt),
+          status: b.status,
+          durationMs: typeof b.metrics?.buildDuration === 'number' ? b.metrics.buildDuration : null,
+        }));
 
-      if (!iosDone) {
-        const exhausted = iosPage.length < BUILD_PAGE_SIZE;
-        const pastOldest = iosPage.length > 0 && iosPage.every(({ ms }) => ms < oldestStartMs);
-        if (exhausted || pastOldest) iosDone = true;
+        for (const { ms, status, durationMs } of builds) {
+          const i = monthIndexForBuild(ms, bounds);
+          if (i === -1) continue;
+          const key = STATUS_COUNT_KEY[status];
+          if (!key) continue;
+          counts[i][p][key]++;
+          if (durationMs === null) missingMetricsCount++;
+          else counts[i][p].buildDurationMs += durationMs;
+        }
+
+        const exhausted = builds.length < BUILD_PAGE_SIZE;
+        const pastOldest = builds.length > 0 && builds.every(({ ms }) => ms < oldestStartMs);
+        if (!exhausted && !pastOldest) stillPending.push(p);
       }
-      if (!androidDone) {
-        const exhausted = androidPage.length < BUILD_PAGE_SIZE;
-        const pastOldest =
-          androidPage.length > 0 && androidPage.every(({ ms }) => ms < oldestStartMs);
-        if (exhausted || pastOldest) androidDone = true;
-      }
+      pending = stillPending;
 
       offset += BUILD_PAGE_SIZE;
     }
@@ -437,7 +419,6 @@ export function createApiClient({
         result = {
           subscription: account.subscription ?? null,
           ownerUserActor: account.ownerUserActor ?? null,
-          totalMemberCount: account.memberStats?.totalCount ?? null,
         };
       }
 
